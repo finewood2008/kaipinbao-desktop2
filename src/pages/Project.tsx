@@ -19,6 +19,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   stage: number;
+  suggestions?: string[];
 }
 
 interface GeneratedImage {
@@ -338,6 +339,29 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     }
   };
 
+  // Parse suggestions from AI response
+  const parseSuggestions = (content: string): string[] => {
+    // Look for pattern: [建议1] | [建议2] | [建议3]
+    const suggestionMatch = content.match(/\[([^\]]+)\]\s*\|\s*\[([^\]]+)\](?:\s*\|\s*\[([^\]]+)\])?(?:\s*\|\s*\[([^\]]+)\])?(?:\s*\|\s*\[([^\]]+)\])?/);
+    if (suggestionMatch) {
+      return suggestionMatch.slice(1).filter(Boolean);
+    }
+    return [];
+  };
+
+  // Get suggestions for the last assistant message
+  const getLastMessageSuggestions = (): string[] => {
+    const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant");
+    if (lastAssistantMsg) {
+      return parseSuggestions(lastAssistantMsg.content);
+    }
+    return [];
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setInputValue(suggestion);
+  };
+
   const handleImageSelectionConfirm = () => {
     const selectedImage = generatedImages.find((img) => img.is_selected);
     if (selectedImage) {
@@ -421,14 +445,21 @@ ${proj.description ? `\n${proj.description}\n` : ""}
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
               <div className="max-w-3xl mx-auto space-y-4">
                 <AnimatePresence initial={false}>
-                  {messages.map((message) => (
-                    <ChatMessage
-                      key={message.id}
-                      role={message.role}
-                      content={message.content}
-                      isStreaming={isStreaming && message === messages[messages.length - 1]}
-                    />
-                  ))}
+                  {messages.map((message, index) => {
+                    const isLastAssistant = message.role === "assistant" && index === messages.length - 1;
+                    const suggestions = isLastAssistant && !isStreaming ? parseSuggestions(message.content) : [];
+                    
+                    return (
+                      <ChatMessage
+                        key={message.id}
+                        role={message.role}
+                        content={message.content}
+                        isStreaming={isStreaming && message === messages[messages.length - 1]}
+                        suggestions={suggestions}
+                        onSuggestionClick={handleSuggestionClick}
+                      />
+                    );
+                  })}
                 </AnimatePresence>
                 {isSending && !isStreaming && (
                   <motion.div
