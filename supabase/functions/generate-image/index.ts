@@ -22,8 +22,57 @@ serve(async (req) => {
       throw new Error("Prompt is required");
     }
 
-    // Enhance prompt for product rendering
-    const enhancedPrompt = `Professional product photography, studio lighting, white background, high-end commercial product shot: ${prompt}. Ultra high resolution, photorealistic, 4K quality, clean minimal composition.`;
+    // Professional product photography prompt engineering
+    const photographyParams = [
+      // Lighting setup
+      "three-point lighting setup with key light, fill light, and rim light",
+      "soft diffused studio lighting with subtle gradient shadows",
+      "professional product photography lighting with highlight control",
+      
+      // Background & Environment
+      "seamless pure white cyclorama background (RGB 255,255,255)",
+      "infinite white studio backdrop with subtle reflection plane",
+      
+      // Camera & Technical specs
+      "shot with Phase One IQ4 150MP medium format camera",
+      "100mm macro lens at f/11 for maximum sharpness",
+      "focus stacked for edge-to-edge clarity",
+      
+      // Rendering quality
+      "8K ultra high resolution render",
+      "photorealistic CGI quality matching real photography",
+      "ray-traced global illumination",
+      "subsurface scattering for realistic materials",
+      
+      // Composition
+      "hero product angle with 3/4 perspective view",
+      "centered composition with balanced negative space",
+      "product floating slightly with soft contact shadow",
+      
+      // Material rendering
+      "accurate material representation with realistic textures",
+      "subtle specular highlights showing surface quality",
+      "color-accurate rendering for e-commerce standards"
+    ];
+
+    const enhancedPrompt = `Create a professional e-commerce product photograph:
+
+PRODUCT: ${prompt}
+
+PHOTOGRAPHY SPECIFICATIONS:
+- ${photographyParams.slice(0, 3).join("\n- ")}
+
+BACKGROUND: ${photographyParams.slice(3, 5).join("; ")}
+
+CAMERA SETTINGS: ${photographyParams.slice(5, 8).join("; ")}
+
+RENDER QUALITY: ${photographyParams.slice(8, 12).join("; ")}
+
+COMPOSITION: ${photographyParams.slice(12, 15).join("; ")}
+
+MATERIALS: ${photographyParams.slice(15).join("; ")}
+
+OUTPUT: A single, clean, commercially-ready product image suitable for Amazon, Shopify, or premium e-commerce listings. The product should be the sole focus with no distracting elements, props, or text. Maintain accurate proportions and showcase the product's key design features and material quality.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
