@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Project from "./pages/Project";
+import LandingPage from "./pages/LandingPage";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
 
@@ -52,6 +53,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route path="/lp/:slug" element={<LandingPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
