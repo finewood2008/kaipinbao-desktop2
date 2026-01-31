@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { 
   Loader2, 
   Globe, 
@@ -11,10 +12,12 @@ import {
   Mail, 
   Eye, 
   Check,
-  Sparkles
+  Sparkles,
+  Megaphone
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AdStrategyPanel } from "./AdStrategyPanel";
 
 interface LandingPageData {
   id: string;
@@ -332,6 +335,26 @@ export function LandingPageBuilder({
           </CardContent>
         </Card>
       )}
+
+      {/* Ad Strategy Section */}
+      <Separator className="my-8" />
+      
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Megaphone className="w-6 h-6 text-accent-foreground" />
+          <h2 className="text-xl font-semibold">广告测款策略</h2>
+        </div>
+        <p className="text-muted-foreground">
+          AI 将根据您的产品信息生成受众画像、A/B测试文案和市场潜力评估
+        </p>
+        
+        <AdStrategyPanel
+          productName={projectName}
+          productDescription={landingPage.title}
+          painPoints={landingPage.pain_points as string[] | undefined}
+          sellingPoints={landingPage.selling_points as string[] | undefined}
+        />
+      </div>
     </div>
   );
 }
