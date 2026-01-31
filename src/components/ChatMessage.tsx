@@ -2,14 +2,23 @@ import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { Bot, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   isStreaming?: boolean;
+  suggestions?: string[];
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
-export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
+export function ChatMessage({ 
+  role, 
+  content, 
+  isStreaming, 
+  suggestions,
+  onSuggestionClick 
+}: ChatMessageProps) {
   const isAssistant = role === "assistant";
 
   return (
@@ -56,6 +65,28 @@ export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
             animate={{ opacity: [1, 0] }}
             transition={{ duration: 0.5, repeat: Infinity }}
           />
+        )}
+        
+        {/* Suggestion Chips */}
+        {isAssistant && suggestions && suggestions.length > 0 && !isStreaming && (
+          <motion.div 
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-4 flex flex-wrap gap-2"
+          >
+            {suggestions.map((suggestion, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                size="sm"
+                className="text-xs bg-background/50 hover:bg-primary/20 hover:border-primary/50 transition-all"
+                onClick={() => onSuggestionClick?.(suggestion)}
+              >
+                {suggestion}
+              </Button>
+            ))}
+          </motion.div>
         )}
       </div>
     </motion.div>
