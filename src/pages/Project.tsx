@@ -5,17 +5,40 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StageIndicator } from "@/components/StageIndicator";
 import { ChatMessage } from "@/components/ChatMessage";
+import { ImageGallery } from "@/components/ImageGallery";
+import { LandingPageBuilder } from "@/components/LandingPageBuilder";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Send, Loader2, Sparkles, ChevronRight } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Sparkles, ChevronRight, MessageSquare, Image, Globe } from "lucide-react";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   stage: number;
+}
+
+interface GeneratedImage {
+  id: string;
+  image_url: string;
+  prompt: string;
+  is_selected: boolean;
+  feedback: string | null;
+}
+
+interface LandingPageData {
+  id: string;
+  title: string;
+  slug: string;
+  hero_image_url: string | null;
+  pain_points: string[] | null;
+  selling_points: string[] | null;
+  trust_badges: string[] | null;
+  is_published: boolean;
+  view_count: number;
 }
 
 interface Project {
@@ -38,12 +61,17 @@ export default function ProjectPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [landingPage, setLandingPage] = useState<LandingPageData | null>(null);
+  const [activeTab, setActiveTab] = useState("chat");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (id) {
       fetchProject();
       fetchMessages();
+      fetchImages();
+      fetchLandingPage();
     }
   }, [id]);
 
@@ -52,6 +80,19 @@ export default function ProjectPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    // Auto-switch tabs based on stage
+    if (project) {
+      if (project.current_stage === 1) {
+        setActiveTab("chat");
+      } else if (project.current_stage === 2) {
+        setActiveTab("images");
+      } else if (project.current_stage === 3) {
+        setActiveTab("landing");
+      }
+    }
+  }, [project?.current_stage]);
 
   const fetchProject = async () => {
     const { data, error } = await supabase
@@ -89,6 +130,30 @@ export default function ProjectPage() {
           stage: m.stage,
         }))
       );
+    }
+  };
+
+  const fetchImages = async () => {
+    const { data, error } = await supabase
+      .from("generated_images")
+      .select("*")
+      .eq("project_id", id)
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setGeneratedImages(data as GeneratedImage[]);
+    }
+  };
+
+  const fetchLandingPage = async () => {
+    const { data, error } = await supabase
+      .from("landing_pages")
+      .select("*")
+      .eq("project_id", id)
+      .single();
+
+    if (!error && data) {
+      setLandingPage(data as unknown as LandingPageData);
     }
   };
 
@@ -254,10 +319,12 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     }
   };
 
-  const advanceStage = async () => {
-    if (!project || project.current_stage >= 3) return;
+  const advanceStage = async (targetStage?: number) => {
+    if (!project) return;
     
-    const newStage = project.current_stage + 1;
+    const newStage = targetStage || project.current_stage + 1;
+    if (newStage > 3) return;
+    
     const { error } = await supabase
       .from("projects")
       .update({ current_stage: newStage })
@@ -269,6 +336,18 @@ ${proj.description ? `\n${proj.description}\n` : ""}
       setProject((prev) => prev ? { ...prev, current_stage: newStage } : null);
       toast.success(`进入阶段 ${newStage}`);
     }
+  };
+
+  const handleImageSelectionConfirm = () => {
+    const selectedImage = generatedImages.find((img) => img.is_selected);
+    if (selectedImage) {
+      advanceStage(3);
+    }
+  };
+
+  const getSelectedImageUrl = () => {
+    const selected = generatedImages.find((img) => img.is_selected);
+    return selected?.image_url;
   };
 
   if (isLoading) {
@@ -300,7 +379,7 @@ ${proj.description ? `\n${proj.description}\n` : ""}
               </div>
             </div>
             {project && project.current_stage < 3 && (
-              <Button variant="outline" size="sm" onClick={advanceStage}>
+              <Button variant="outline" size="sm" onClick={() => advanceStage()}>
                 进入下一阶段 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             )}
@@ -309,59 +388,115 @@ ${proj.description ? `\n${proj.description}\n` : ""}
         </div>
       </header>
 
-      {/* Chat Area */}
+      {/* Content Area with Tabs */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-          <div className="max-w-3xl mx-auto space-y-4">
-            <AnimatePresence initial={false}>
-              {messages.map((message) => (
-                <ChatMessage
-                  key={message.id}
-                  role={message.role}
-                  content={message.content}
-                  isStreaming={isStreaming && message === messages[messages.length - 1]}
-                />
-              ))}
-            </AnimatePresence>
-            {isSending && !isStreaming && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-2 text-muted-foreground"
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+          <div className="border-b border-border/50 px-4">
+            <TabsList className="bg-transparent">
+              <TabsTrigger value="chat" className="data-[state=active]:bg-muted">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                对话
+              </TabsTrigger>
+              <TabsTrigger 
+                value="images" 
+                className="data-[state=active]:bg-muted"
+                disabled={project?.current_stage === 1}
               >
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">AI正在思考...</span>
-              </motion.div>
-            )}
+                <Image className="w-4 h-4 mr-2" />
+                视觉生成
+              </TabsTrigger>
+              <TabsTrigger 
+                value="landing" 
+                className="data-[state=active]:bg-muted"
+                disabled={project?.current_stage !== 3}
+              >
+                <Globe className="w-4 h-4 mr-2" />
+                落地页
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </ScrollArea>
 
-        {/* Input Area */}
-        <div className="border-t border-border/50 glass p-4">
-          <div className="max-w-3xl mx-auto">
-            <Card className="flex items-center gap-2 p-2 bg-secondary/50">
-              <Input
-                placeholder="输入您的回复..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isSending}
-                className="border-0 bg-transparent focus-visible:ring-0"
+          {/* Chat Tab */}
+          <TabsContent value="chat" className="flex-1 flex flex-col overflow-hidden m-0">
+            <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+              <div className="max-w-3xl mx-auto space-y-4">
+                <AnimatePresence initial={false}>
+                  {messages.map((message) => (
+                    <ChatMessage
+                      key={message.id}
+                      role={message.role}
+                      content={message.content}
+                      isStreaming={isStreaming && message === messages[messages.length - 1]}
+                    />
+                  ))}
+                </AnimatePresence>
+                {isSending && !isStreaming && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex items-center gap-2 text-muted-foreground"
+                  >
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">AI正在思考...</span>
+                  </motion.div>
+                )}
+              </div>
+            </ScrollArea>
+
+            {/* Input Area */}
+            <div className="border-t border-border/50 glass p-4">
+              <div className="max-w-3xl mx-auto">
+                <Card className="flex items-center gap-2 p-2 bg-secondary/50">
+                  <Input
+                    placeholder="输入您的回复..."
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={isSending}
+                    className="border-0 bg-transparent focus-visible:ring-0"
+                  />
+                  <Button
+                    size="icon"
+                    onClick={handleSendMessage}
+                    disabled={!inputValue.trim() || isSending}
+                    className="bg-gradient-primary glow-primary"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </Card>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  按 Enter 发送，Shift + Enter 换行
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Images Tab */}
+          <TabsContent value="images" className="flex-1 overflow-auto p-4 m-0">
+            <div className="max-w-4xl mx-auto">
+              <ImageGallery
+                projectId={id || ""}
+                images={generatedImages}
+                onImagesChange={setGeneratedImages}
+                onConfirmSelection={handleImageSelectionConfirm}
+                prdSummary={project?.name}
               />
-              <Button
-                size="icon"
-                onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isSending}
-                className="bg-gradient-primary glow-primary"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </Card>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              按 Enter 发送，Shift + Enter 换行
-            </p>
-          </div>
-        </div>
+            </div>
+          </TabsContent>
+
+          {/* Landing Page Tab */}
+          <TabsContent value="landing" className="flex-1 overflow-auto p-4 m-0">
+            <div className="max-w-4xl mx-auto">
+              <LandingPageBuilder
+                projectId={id || ""}
+                projectName={project?.name || ""}
+                selectedImageUrl={getSelectedImageUrl()}
+                landingPage={landingPage}
+                onLandingPageChange={setLandingPage}
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
