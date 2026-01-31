@@ -4,6 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { 
   Loader2, 
   Globe, 
@@ -13,7 +24,8 @@ import {
   Eye, 
   Check,
   Sparkles,
-  Megaphone
+  Megaphone,
+  RefreshCw
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -54,6 +66,7 @@ export function LandingPageBuilder({
 }: LandingPageBuilderProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const generateSlug = (name: string) => {
     return name
@@ -145,6 +158,67 @@ export function LandingPageBuilder({
     toast.success("链接已复制到剪贴板");
   };
 
+  const handleRegenerate = async () => {
+    if (!landingPage) return;
+    
+    setIsRegenerating(true);
+    try {
+      // Delete existing landing page
+      const { error: deleteError } = await supabase
+        .from("landing_pages")
+        .delete()
+        .eq("id", landingPage.id);
+
+      if (deleteError) throw deleteError;
+
+      // Generate new landing page
+      const slug = generateSlug(projectName);
+      
+      const painPoints = prdData?.pain_points || [
+        "传统产品使用不便",
+        "市场上缺乏创新解决方案",
+        "现有产品价格过高"
+      ];
+      
+      const sellingPoints = prdData?.selling_points || [
+        "创新设计，解决核心痛点",
+        "高品质材料，持久耐用",
+        "性价比超高，物超所值"
+      ];
+      
+      const trustBadges = [
+        "✓ 30天无理由退款",
+        "✓ 专业团队研发",
+        "✓ 全球用户信赖"
+      ];
+
+      const { data, error } = await supabase
+        .from("landing_pages")
+        .insert({
+          project_id: projectId,
+          title: projectName,
+          slug,
+          hero_image_url: selectedImageUrl || null,
+          pain_points: painPoints,
+          selling_points: sellingPoints,
+          trust_badges: trustBadges,
+          is_published: false,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      onLandingPageChange(data as unknown as LandingPageData);
+      toast.success("落地页重新生成成功！");
+    } catch (error) {
+      console.error(error);
+      toast.error("重新生成失败");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   if (!landingPage) {
     return (
       <Card className="glass border-border/50">
@@ -197,14 +271,47 @@ export function LandingPageBuilder({
               </div>
             </div>
             
-            {landingPage.is_published && (
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Eye className="w-4 h-4" />
-                  {landingPage.view_count} 次访问
-                </span>
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {landingPage.is_published && (
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-4 h-4" />
+                    {landingPage.view_count} 次访问
+                  </span>
+                </div>
+              )}
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isRegenerating}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                    )}
+                    重新生成
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>确认重新生成？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      这将删除当前的落地页并生成一个新的。如果落地页已发布，之前的链接将失效。此操作无法撤销。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRegenerate}>
+                      确认重新生成
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         </CardContent>
       </Card>
