@@ -35,7 +35,7 @@ interface AiProductManagerPanelProps {
   competitorProducts?: CompetitorProduct[];
   onInputChange: (value: string) => void;
   onSend: () => void;
-  onSuggestionClick: (suggestion: string) => void;
+  onSendDirect: (message: string) => void;
   onPrdComplete: () => void;
   showPrdReadyPrompt: boolean;
   onDismissPrdPrompt: () => void;
@@ -51,7 +51,7 @@ export function AiProductManagerPanel({
   competitorProducts = [],
   onInputChange,
   onSend,
-  onSuggestionClick,
+  onSendDirect,
   onPrdComplete,
   showPrdReadyPrompt,
   onDismissPrdPrompt,
@@ -201,7 +201,7 @@ export function AiProductManagerPanel({
                         isStreaming && message === messages[messages.length - 1]
                       }
                       suggestions={suggestions}
-                      onSuggestionClick={onSuggestionClick}
+                      onSuggestionClick={(suggestion) => onSendDirect(suggestion)}
                       showPmBadge={message.role === "assistant" && index === 0}
                     />
                   );
