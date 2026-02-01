@@ -365,8 +365,132 @@ export function PrdPhase({
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
+  // Direct send for suggestion clicks (submit immediately)
+  const handleSendDirect = async (message: string) => {
+    if (isSending) return;
+    
+    setIsSending(true);
+
+    const userMsg: Message = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: message,
+      stage: 1,
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    await supabase.from("chat_messages").insert({
+      project_id: projectId,
+      role: "user",
+      content: message,
+      stage: 1,
+    });
+
+    const chatHistory = [...messages, userMsg].map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    setIsStreaming(true);
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            messages: chatHistory,
+            projectId,
+            currentStage: 1,
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("AI请求失败");
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let assistantContent = "";
+      let assistantMsgId = crypto.randomUUID();
+
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantMsgId, role: "assistant", content: "", stage: 1 },
+      ]);
+
+      if (reader) {
+        let textBuffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          textBuffer += decoder.decode(value, { stream: true });
+
+          let newlineIndex: number;
+          while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+            let line = textBuffer.slice(0, newlineIndex);
+            textBuffer = textBuffer.slice(newlineIndex + 1);
+
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (line.startsWith(":") || line.trim() === "") continue;
+            if (!line.startsWith("data: ")) continue;
+
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === "[DONE]") break;
+
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                assistantContent += content;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsgId ? { ...m, content: assistantContent } : m
+                  )
+                );
+              }
+            } catch {
+              textBuffer = line + "\n" + textBuffer;
+              break;
+            }
+          }
+        }
+      }
+
+      if (assistantContent) {
+        await supabase.from("chat_messages").insert({
+          project_id: projectId,
+          role: "assistant",
+          content: assistantContent,
+          stage: 1,
+        });
+
+        const { data: updatedProject } = await supabase
+          .from("projects")
+          .select("prd_data")
+          .eq("id", projectId)
+          .single();
+
+        if (updatedProject?.prd_data) {
+          setPrdData(updatedProject.prd_data as PrdData);
+        }
+
+        if (assistantContent.includes("[PRD_READY]")) {
+          setPhase2Completed(true);
+          setTimeout(() => {
+            setShowPrdReadyPrompt(true);
+          }, 1000);
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("AI回复失败，请重试");
+    } finally {
+      setIsSending(false);
+      setIsStreaming(false);
+    }
   };
 
   const handlePhaseTransitionConfirm = () => {
@@ -576,7 +700,7 @@ export function PrdPhase({
                 competitorProducts={competitorProducts}
                 onInputChange={setInputValue}
                 onSend={handleSendMessage}
-                onSuggestionClick={handleSuggestionClick}
+                onSendDirect={handleSendDirect}
                 onPrdComplete={handlePrdComplete}
                 showPrdReadyPrompt={showPrdReadyPrompt}
                 onDismissPrdPrompt={handleDismissPrdPrompt}

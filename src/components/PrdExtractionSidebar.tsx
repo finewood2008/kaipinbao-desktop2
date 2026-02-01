@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { MapPin, Users, Palette, Zap, Check, Circle, Image as ImageIcon } from "lucide-react";
+import { MapPin, Users, Palette, Zap, Check, Circle, Image as ImageIcon, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,6 +13,12 @@ export interface PrdData {
   pricingRange?: string | null;
   painPoints?: string[] | null;
   sellingPoints?: string[] | null;
+  marketAnalysis?: {
+    competitorCount?: number | null;
+    priceRange?: string | null;
+    marketTrends?: string[] | null;
+    differentiationOpportunity?: string | null;
+  };
   marketingAssets?: {
     sceneDescription?: string | null;
     structureHighlights?: string[] | null;
@@ -46,23 +52,60 @@ interface PrdExtractionSidebarProps {
 }
 
 const progressItems = [
+  { key: "marketAnalysis", label: "市场分析", icon: TrendingUp },
   { key: "usageScenario", label: "使用场景", icon: MapPin },
   { key: "targetAudience", label: "目标用户", icon: Users },
   { key: "designStyle", label: "外观风格", icon: Palette },
   { key: "coreFeatures", label: "核心功能", icon: Zap },
 ] as const;
 
+// Helper function to get display value for progress item
+function getDisplayValue(prdData: PrdData | null, key: string): string | null {
+  if (!prdData) return null;
+  
+  switch (key) {
+    case "coreFeatures":
+      return prdData.coreFeatures?.join("、") || null;
+    case "marketAnalysis":
+      if (!prdData.marketAnalysis) return null;
+      const ma = prdData.marketAnalysis;
+      const parts: string[] = [];
+      if (ma.competitorCount) parts.push(`${ma.competitorCount}款竞品`);
+      if (ma.priceRange) parts.push(ma.priceRange);
+      if (ma.differentiationOpportunity) parts.push(ma.differentiationOpportunity);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    default:
+      const value = prdData[key as keyof PrdData];
+      return typeof value === "string" ? value : null;
+  }
+}
+
+// Helper function to check if progress item is completed
+function isItemCompleted(prdData: PrdData | null, key: string): boolean {
+  if (!prdData) return false;
+  
+  switch (key) {
+    case "coreFeatures":
+      return !!(prdData.coreFeatures && prdData.coreFeatures.length > 0);
+    case "marketAnalysis":
+      return !!(prdData.marketAnalysis && (
+        prdData.marketAnalysis.competitorCount ||
+        prdData.marketAnalysis.differentiationOpportunity ||
+        prdData.marketAnalysis.priceRange
+      ));
+    default:
+      return !!prdData[key as keyof PrdData];
+  }
+}
+
 export function PrdExtractionSidebar({
   prdData,
   competitorProducts = [],
   className,
 }: PrdExtractionSidebarProps) {
-  const completedCount = progressItems.filter((item) => {
-    if (item.key === "coreFeatures") {
-      return prdData?.coreFeatures && prdData.coreFeatures.length > 0;
-    }
-    return !!prdData?.[item.key];
-  }).length;
+  const completedCount = progressItems.filter((item) => 
+    isItemCompleted(prdData, item.key)
+  ).length;
 
   const progressPercent = (completedCount / progressItems.length) * 100;
 
@@ -96,15 +139,8 @@ export function PrdExtractionSidebar({
           <div className="space-y-3">
             {progressItems.map((item, index) => {
               const Icon = item.icon;
-              const isCompleted =
-                item.key === "coreFeatures"
-                  ? prdData?.coreFeatures && prdData.coreFeatures.length > 0
-                  : !!prdData?.[item.key];
-
-              const value =
-                item.key === "coreFeatures"
-                  ? prdData?.coreFeatures?.join("、")
-                  : prdData?.[item.key];
+              const isCompleted = isItemCompleted(prdData, item.key);
+              const value = getDisplayValue(prdData, item.key);
 
               return (
                 <motion.div
