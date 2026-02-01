@@ -1,11 +1,13 @@
 import { motion } from "framer-motion";
-import { MapPin, Users, Palette, Zap, Check, Circle, Image as ImageIcon } from "lucide-react";
+import { MapPin, Users, Palette, Zap, Check, Circle, Image as ImageIcon, Tag, DollarSign, Package, Lightbulb } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export interface PrdData {
+  // Core fields
   usageScenario?: string | null;
   targetAudience?: string | null;
   designStyle?: string | null;
@@ -13,6 +15,68 @@ export interface PrdData {
   pricingRange?: string | null;
   painPoints?: string[] | null;
   sellingPoints?: string[] | null;
+  
+  // Enhanced fields
+  productName?: string | null;
+  productTagline?: string | null;
+  productCategory?: string | null;
+  dialoguePhase?: "direction-exploration" | "direction-confirmed" | "details-refinement" | "prd-ready";
+  selectedDirection?: string | null;
+  
+  // Specifications
+  specifications?: {
+    dimensions?: string | null;
+    weight?: string | null;
+    materials?: string[] | null;
+    colors?: string[] | null;
+    powerSource?: string | null;
+    connectivity?: string | null;
+  } | null;
+  
+  // CMF Design
+  cmfDesign?: {
+    primaryColor?: string | null;
+    secondaryColor?: string | null;
+    accentColor?: string | null;
+    surfaceFinish?: string | null;
+    textureDetails?: string | null;
+    materialBreakdown?: { material: string; percentage: number; location: string }[] | null;
+  } | null;
+  
+  // User Experience
+  userExperience?: {
+    unboxingExperience?: string | null;
+    firstUseFlow?: string[] | null;
+    dailyUseScenarios?: string[] | null;
+    painPointsSolved?: { painPoint: string; solution: string }[] | null;
+  } | null;
+  
+  // Feature Matrix
+  featureMatrix?: {
+    feature: string;
+    priority: "must-have" | "important" | "nice-to-have";
+    painPointAddressed: string;
+    differentiator: string;
+    implementationNote: string;
+  }[] | null;
+  
+  // Market Positioning
+  marketPositioning?: {
+    priceTier?: "budget" | "mid-range" | "premium" | "luxury";
+    primaryCompetitors?: string[] | null;
+    uniqueSellingPoints?: string[] | null;
+    competitiveAdvantages?: string[] | null;
+    targetMarketSize?: string | null;
+  } | null;
+  
+  // Packaging
+  packaging?: {
+    packageType?: string | null;
+    includedAccessories?: string[] | null;
+    specialPackagingFeatures?: string | null;
+    sustainabilityFeatures?: string | null;
+  } | null;
+  
   marketAnalysis?: {
     competitorCount?: number | null;
     priceRange?: string | null;
@@ -52,10 +116,12 @@ interface PrdExtractionSidebarProps {
 }
 
 const progressItems = [
+  { key: "selectedDirection", label: "产品方向", icon: Lightbulb },
   { key: "usageScenario", label: "使用场景", icon: MapPin },
   { key: "targetAudience", label: "目标用户", icon: Users },
   { key: "designStyle", label: "外观风格", icon: Palette },
   { key: "coreFeatures", label: "核心功能", icon: Zap },
+  { key: "pricingRange", label: "定价策略", icon: DollarSign },
 ] as const;
 
 // Helper function to get display value for progress item
@@ -64,7 +130,9 @@ function getDisplayValue(prdData: PrdData | null, key: string): string | null {
   
   switch (key) {
     case "coreFeatures":
-      return prdData.coreFeatures?.join("、") || null;
+      return prdData.coreFeatures?.slice(0, 3).join("、") || null;
+    case "selectedDirection":
+      return prdData.selectedDirection || null;
     default:
       const value = prdData[key as keyof PrdData];
       return typeof value === "string" ? value : null;
@@ -78,8 +146,26 @@ function isItemCompleted(prdData: PrdData | null, key: string): boolean {
   switch (key) {
     case "coreFeatures":
       return !!(prdData.coreFeatures && prdData.coreFeatures.length > 0);
+    case "selectedDirection":
+      return !!prdData.selectedDirection;
     default:
       return !!prdData[key as keyof PrdData];
+  }
+}
+
+// Get phase label
+function getPhaseLabel(phase: string | undefined): { label: string; color: string } {
+  switch (phase) {
+    case "direction-exploration":
+      return { label: "探索方向", color: "bg-blue-500/20 text-blue-400" };
+    case "direction-confirmed":
+      return { label: "方向已确认", color: "bg-yellow-500/20 text-yellow-400" };
+    case "details-refinement":
+      return { label: "细化细节", color: "bg-orange-500/20 text-orange-400" };
+    case "prd-ready":
+      return { label: "PRD完成", color: "bg-green-500/20 text-green-400" };
+    default:
+      return { label: "开始对话", color: "bg-muted text-muted-foreground" };
   }
 }
 
@@ -93,6 +179,7 @@ export function PrdExtractionSidebar({
   ).length;
 
   const progressPercent = (completedCount / progressItems.length) * 100;
+  const phase = getPhaseLabel(prdData?.dialoguePhase);
 
   // Get competitor images
   const competitorImages = competitorProducts
@@ -109,6 +196,30 @@ export function PrdExtractionSidebar({
     <div className={cn("flex flex-col h-full border-r border-border/50 bg-card/30", className)}>
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
+          {/* Phase Indicator */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">对话阶段</h3>
+              <Badge className={cn("text-xs", phase.color)}>
+                {phase.label}
+              </Badge>
+            </div>
+            
+            {/* Product Name if available */}
+            {prdData?.productName && (
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <Tag className="w-3 h-3 text-primary" />
+                  <span className="text-xs text-muted-foreground">产品名称</span>
+                </div>
+                <p className="text-sm font-medium text-foreground">{prdData.productName}</p>
+                {prdData.productTagline && (
+                  <p className="text-xs text-muted-foreground mt-1">{prdData.productTagline}</p>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Progress Header */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -217,7 +328,7 @@ export function PrdExtractionSidebar({
           )}
 
           {/* Completion Status */}
-          {completedCount === progressItems.length && (
+          {prdData?.dialoguePhase === "prd-ready" && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -225,10 +336,10 @@ export function PrdExtractionSidebar({
             >
               <div className="flex items-center gap-2 mb-2">
                 <Check className="w-5 h-5 text-primary" />
-                <span className="font-semibold text-foreground">信息收集完成</span>
+                <span className="font-semibold text-foreground">PRD 已完成</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                所有核心信息已收集，可以生成完整 PRD 文档
+                所有核心信息已收集，可以进入 PRD 审核页面查看和编辑
               </p>
             </motion.div>
           )}
