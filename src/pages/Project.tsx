@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -11,14 +11,11 @@ import { StageTransitionPrompt } from "@/components/StageTransitionPrompt";
 import { ChatMessage } from "@/components/ChatMessage";
 import { VisualGenerationPhase } from "@/components/VisualGenerationPhase";
 import { LandingPageBuilder } from "@/components/LandingPageBuilder";
-import { CompetitorResearch } from "@/components/CompetitorResearch";
-import { PrdSidebar, calculatePrdProgress, PrdProgress, PrdData } from "@/components/PrdSidebar";
-import { PrdChatPanel } from "@/components/PrdChatPanel";
-import { PrdReviewPanel } from "@/components/PrdReviewPanel";
-import { PrdCompletionCard } from "@/components/PrdCompletionCard";
+import { PrdPhase } from "@/components/PrdPhase";
+import { PrdData } from "@/components/PrdExtractionSidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, PanelLeftClose, PanelLeft, Check } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe } from "lucide-react";
 
 interface Message {
   id: string;
@@ -60,21 +57,6 @@ interface LandingPageData {
   view_count: number;
 }
 
-interface CompetitorInsight {
-  positivePoints: string[];
-  negativePoints: string[];
-  totalReviews: number;
-  productsAnalyzed: number;
-  products?: Array<{
-    id: string;
-    title: string;
-    rating: number;
-    reviewCount: number;
-    product_images?: string[];
-  }>;
-  actionableInsights?: string[];
-}
-
 interface Project {
   id: string;
   name: string;
@@ -85,7 +67,6 @@ interface Project {
   visual_data: unknown;
   landing_page_data: unknown;
   competitor_research_completed?: boolean;
-  prd_progress?: PrdProgress;
 }
 
 export default function ProjectPage() {
@@ -103,20 +84,7 @@ export default function ProjectPage() {
   const [landingPage, setLandingPage] = useState<LandingPageData | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
   const [showTransitionPrompt, setShowTransitionPrompt] = useState(false);
-  const [showCompetitorResearch, setShowCompetitorResearch] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [prdReviewMode, setPrdReviewMode] = useState(false);
-  const [showPrdReadyPrompt, setShowPrdReadyPrompt] = useState(false);
-  const [prdProgress, setPrdProgress] = useState<PrdProgress>({
-    usageScenario: false,
-    targetAudience: false,
-    designStyle: false,
-    coreFeatures: false,
-    confirmed: false,
-  });
   const [prdData, setPrdData] = useState<PrdData | null>(null);
-  const [competitorInsight, setCompetitorInsight] = useState<CompetitorInsight | null>(null);
-  const [competitorProducts, setCompetitorProducts] = useState<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -126,7 +94,6 @@ export default function ProjectPage() {
       fetchImages();
       fetchVideos();
       fetchLandingPage();
-      fetchCompetitorInsight();
     }
   }, [id]);
 
@@ -170,7 +137,6 @@ export default function ProjectPage() {
         visual_data: data.visual_data,
         landing_page_data: data.landing_page_data,
         competitor_research_completed: data.competitor_research_completed,
-        prd_progress: undefined,
       };
       
       // Parse PRD data
@@ -178,31 +144,7 @@ export default function ProjectPage() {
         setPrdData(data.prd_data as PrdData);
       }
       
-      if (data.prd_progress && typeof data.prd_progress === 'object' && !Array.isArray(data.prd_progress)) {
-        const progressData = data.prd_progress as Record<string, boolean>;
-        projectData.prd_progress = {
-          usageScenario: progressData.usageScenario ?? false,
-          targetAudience: progressData.targetAudience ?? false,
-          designStyle: progressData.designStyle ?? false,
-          coreFeatures: progressData.coreFeatures ?? false,
-          confirmed: progressData.confirmed ?? false,
-        };
-      }
       setProject(projectData);
-      
-      if (data.current_stage === 1 && !data.competitor_research_completed) {
-        setShowCompetitorResearch(true);
-      }
-      if (data.prd_progress && typeof data.prd_progress === 'object' && !Array.isArray(data.prd_progress)) {
-        const progressData = data.prd_progress as Record<string, boolean>;
-        setPrdProgress({
-          usageScenario: progressData.usageScenario ?? false,
-          targetAudience: progressData.targetAudience ?? false,
-          designStyle: progressData.designStyle ?? false,
-          coreFeatures: progressData.coreFeatures ?? false,
-          confirmed: progressData.confirmed ?? false,
-        });
-      }
     }
     setIsLoading(false);
   };
@@ -262,81 +204,6 @@ export default function ProjectPage() {
 
     if (!error && data) {
       setLandingPage(data as unknown as LandingPageData);
-    }
-  };
-
-  const fetchCompetitorInsight = async () => {
-    try {
-      // Fetch competitor products
-      const { data: products } = await supabase
-        .from("competitor_products")
-        .select("*")
-        .eq("project_id", id)
-        .eq("status", "completed");
-
-      if (!products || products.length === 0) return;
-
-      // Save products for PrdReviewPanel
-      setCompetitorProducts(products.map(p => ({
-        id: p.id,
-        product_title: p.product_title,
-        product_images: p.product_images as string[] | undefined,
-        price: p.price,
-        rating: Number(p.rating) || 0,
-      })));
-
-      // Fetch reviews
-      const productIds = products.map(p => p.id);
-      const { data: reviews } = await supabase
-        .from("competitor_reviews")
-        .select("*")
-        .in("competitor_product_id", productIds);
-
-      // Simple analysis
-      const positiveKeywords = ["quality", "great", "love", "excellent", "perfect", "好", "不错", "满意", "喜欢"];
-      const negativeKeywords = ["bad", "poor", "broken", "issue", "problem", "差", "失望", "坏", "问题"];
-
-      const positivePoints: string[] = [];
-      const negativePoints: string[] = [];
-
-      (reviews || []).forEach((r: any) => {
-        const text = r.review_text?.toLowerCase() || "";
-        if (positiveKeywords.some(kw => text.includes(kw)) || r.rating >= 4) {
-          // Extract key phrases (simplified)
-          if (text.includes("quality")) positivePoints.push("质量好");
-          if (text.includes("design") || text.includes("look")) positivePoints.push("设计美观");
-          if (text.includes("easy")) positivePoints.push("易于使用");
-        }
-        if (negativeKeywords.some(kw => text.includes(kw)) || r.rating <= 2) {
-          if (text.includes("battery") || text.includes("电池")) negativePoints.push("续航不足");
-          if (text.includes("price") || text.includes("贵")) negativePoints.push("价格偏高");
-          if (text.includes("quality") || text.includes("质量")) negativePoints.push("质量问题");
-        }
-      });
-
-      // Dedupe
-      const uniquePositive = [...new Set(positivePoints)].slice(0, 5);
-      const uniqueNegative = [...new Set(negativePoints)].slice(0, 5);
-
-      setCompetitorInsight({
-        positivePoints: uniquePositive.length > 0 ? uniquePositive : ["产品质量", "外观设计"],
-        negativePoints: uniqueNegative.length > 0 ? uniqueNegative : ["价格竞争力", "功能创新"],
-        totalReviews: reviews?.length || 0,
-        productsAnalyzed: products.length,
-        products: products.map(p => ({
-          id: p.id,
-          title: p.product_title || "未知产品",
-          rating: Number(p.rating) || 0,
-          reviewCount: p.review_count || 0,
-          product_images: p.product_images as string[] | undefined,
-        })),
-        actionableInsights: [
-          "基于竞品痛点，建议突出产品差异化优势",
-          "用户最关注的是产品质量和使用体验",
-        ],
-      });
-    } catch (error) {
-      console.error("Failed to fetch competitor insight:", error);
     }
   };
 
@@ -445,42 +312,10 @@ export default function ProjectPage() {
           stage: project?.current_stage || 1,
         });
 
-        const updatedMessages = [...messages, userMsg, { id: assistantMsgId, role: "assistant" as const, content: assistantContent, stage: project?.current_stage || 1 }];
-        const newProgress = calculatePrdProgress(updatedMessages);
-        setPrdProgress(newProgress);
-        
-        // Refetch project to get updated PRD data from backend
-        const { data: updatedProject } = await supabase
-          .from("projects")
-          .select("prd_data, prd_progress")
-          .eq("id", id)
-          .single();
-        
-        if (updatedProject?.prd_data) {
-          setPrdData(updatedProject.prd_data as PrdData);
-        }
-        if (updatedProject?.prd_progress && typeof updatedProject.prd_progress === 'object') {
-          const progressData = updatedProject.prd_progress as Record<string, boolean>;
-          setPrdProgress({
-            usageScenario: progressData.usageScenario ?? newProgress.usageScenario,
-            targetAudience: progressData.targetAudience ?? newProgress.targetAudience,
-            designStyle: progressData.designStyle ?? newProgress.designStyle,
-            coreFeatures: progressData.coreFeatures ?? newProgress.coreFeatures,
-            confirmed: progressData.confirmed ?? newProgress.confirmed,
-          });
-        }
-
         const stageCompleteSignal = detectStageCompletion(assistantContent, project?.current_stage || 1);
         if (stageCompleteSignal) {
           setTimeout(() => {
             setShowTransitionPrompt(true);
-          }, 1000);
-        }
-        
-        // Detect PRD_READY signal
-        if (assistantContent.includes("[PRD_READY]")) {
-          setTimeout(() => {
-            setShowPrdReadyPrompt(true);
           }, 1000);
         }
       }
@@ -544,44 +379,10 @@ export default function ProjectPage() {
     return false;
   };
 
-  const handleEnterPrdReview = useCallback(() => {
-    setShowPrdReadyPrompt(false);
-    setPrdReviewMode(true);
-  }, []);
-
-  const handleDismissPrdPrompt = useCallback(() => {
-    setShowPrdReadyPrompt(false);
-  }, []);
-
-  const handleExitPrdReview = () => {
-    setPrdReviewMode(false);
-  };
-
-  const handleSavePrdData = async (data: PrdData) => {
-    setPrdData(data);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await supabase
-      .from("projects")
-      .update({ prd_data: JSON.parse(JSON.stringify(data)) })
-      .eq("id", id);
-  };
-
-  const handleConfirmPrd = async () => {
-    // Update progress to confirmed
-    const newProgress = { ...prdProgress, confirmed: true };
-    setPrdProgress(newProgress);
-    await supabase
-      .from("projects")
-      .update({ 
-        prd_progress: newProgress,
-        current_stage: 2 
-      })
-      .eq("id", id);
-    
-    setProject(prev => prev ? { ...prev, current_stage: 2 } : null);
-    setPrdReviewMode(false);
+  const handlePrdPhaseComplete = async () => {
+    // Refetch project to get updated stage
+    await fetchProject();
     setActiveTab("images");
-    toast.success("🎉 PRD 已确认，进入视觉生成阶段！");
   };
 
   const handleVisualPhaseConfirm = () => {
@@ -594,133 +395,12 @@ export default function ProjectPage() {
   };
 
   const getPrdData = () => {
-    const prdData = project?.prd_data as any;
+    const data = project?.prd_data as any;
     return {
-      usageScenarios: prdData?.usageScenarios || [],
-      targetAudience: prdData?.targetAudience || "",
-      coreFeatures: prdData?.coreFeatures || [],
+      usageScenarios: data?.usageScenarios || [],
+      targetAudience: data?.targetAudience || "",
+      coreFeatures: data?.coreFeatures || [],
     };
-  };
-
-  const handleCompetitorResearchComplete = async (hasResearch: boolean) => {
-    setShowCompetitorResearch(false);
-    await fetchCompetitorInsight();
-    
-    // Auto-start conversation with AI
-    if (messages.length === 0) {
-      // Send initial message to trigger AI response
-      setIsSending(true);
-      setIsStreaming(true);
-      
-      try {
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({
-              messages: [{ role: "user", content: "开始PRD细化对话" }],
-              projectId: id,
-              currentStage: 1,
-            }),
-          }
-        );
-
-        if (!response.ok) throw new Error("AI请求失败");
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let assistantContent = "";
-        let assistantMsgId = crypto.randomUUID();
-
-        setMessages([
-          { id: assistantMsgId, role: "assistant", content: "", stage: 1 },
-        ]);
-
-        if (reader) {
-          let textBuffer = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            textBuffer += decoder.decode(value, { stream: true });
-
-            let newlineIndex: number;
-            while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-              let line = textBuffer.slice(0, newlineIndex);
-              textBuffer = textBuffer.slice(newlineIndex + 1);
-
-              if (line.endsWith("\r")) line = line.slice(0, -1);
-              if (line.startsWith(":") || line.trim() === "") continue;
-              if (!line.startsWith("data: ")) continue;
-
-              const jsonStr = line.slice(6).trim();
-              if (jsonStr === "[DONE]") break;
-
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const content = parsed.choices?.[0]?.delta?.content;
-                if (content) {
-                  assistantContent += content;
-                  setMessages([
-                    { id: assistantMsgId, role: "assistant", content: assistantContent, stage: 1 },
-                  ]);
-                }
-              } catch {
-                textBuffer = line + "\n" + textBuffer;
-                break;
-              }
-            }
-          }
-        }
-
-        if (assistantContent) {
-          await supabase.from("chat_messages").insert({
-            project_id: id,
-            role: "assistant",
-            content: assistantContent,
-            stage: 1,
-          });
-        }
-      } catch (error) {
-        console.error(error);
-        toast.error("AI初始化失败，请刷新重试");
-      } finally {
-        setIsSending(false);
-        setIsStreaming(false);
-      }
-    }
-    
-    if (hasResearch) {
-      toast.success("竞品研究完成，AI将基于数据开始对话");
-    }
-  };
-
-  const handleCompetitorResearchSkip = async () => {
-    setShowCompetitorResearch(false);
-    await supabase
-      .from("projects")
-      .update({ competitor_research_completed: true })
-      .eq("id", id);
-    
-    handleCompetitorResearchComplete(false);
-  };
-
-  const handlePrdProgressItemClick = (item: keyof PrdProgress) => {
-    const prompts: Record<keyof PrdProgress, string> = {
-      usageScenario: "我想补充产品的使用场景信息",
-      targetAudience: "我想描述目标用户群体",
-      designStyle: "我想确定产品的外观风格",
-      coreFeatures: "我想明确产品的核心功能和卖点",
-      confirmed: "请帮我总结确认已收集的信息",
-    };
-    setInputValue(prompts[item]);
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
   };
 
   if (isLoading) {
@@ -770,18 +450,6 @@ export default function ProjectPage() {
                 </div>
               </div>
             </div>
-
-            {/* Sidebar Toggle for Stage 1 */}
-            {project?.current_stage === 1 && !showCompetitorResearch && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowSidebar(!showSidebar)}
-                className="md:hidden"
-              >
-                {showSidebar ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeft className="w-5 h-5" />}
-              </Button>
-            )}
           </div>
           <StageIndicator currentStage={project?.current_stage || 1} />
         </div>
@@ -794,7 +462,7 @@ export default function ProjectPage() {
             <TabsList className="bg-transparent">
               <TabsTrigger value="chat" className="data-[state=active]:bg-muted gap-2">
                 <MessageSquare className="w-4 h-4" />
-                对话
+                PRD 定义
               </TabsTrigger>
               <TabsTrigger 
                 value="images" 
@@ -804,7 +472,7 @@ export default function ProjectPage() {
                 <Image className="w-4 h-4" />
                 视觉生成
                 {project?.current_stage === 1 && (
-                  <span className="text-xs text-muted-foreground ml-1">(完成对话解锁)</span>
+                  <span className="text-xs text-muted-foreground ml-1">(完成PRD解锁)</span>
                 )}
               </TabsTrigger>
               <TabsTrigger 
@@ -821,143 +489,71 @@ export default function ProjectPage() {
             </TabsList>
           </div>
 
-          {/* Chat Tab */}
+          {/* PRD Tab - Using new PrdPhase component */}
           <TabsContent value="chat" className="flex-1 flex overflow-hidden m-0">
-            {/* Show Competitor Research if not completed */}
-            {showCompetitorResearch ? (
-              <ScrollArea className="flex-1">
-                <CompetitorResearch
-                  projectId={id || ""}
-                  onComplete={handleCompetitorResearchComplete}
-                  onSkip={handleCompetitorResearchSkip}
-                />
-              </ScrollArea>
+            {project?.current_stage === 1 ? (
+              <PrdPhase
+                projectId={id || ""}
+                onComplete={handlePrdPhaseComplete}
+                competitorResearchCompleted={project?.competitor_research_completed}
+              />
             ) : (
+              /* Non-PRD stages: Original chat layout */
               <>
-                {/* PRD Stage with Sidebar Layout */}
-                {project?.current_stage === 1 ? (
-                  prdReviewMode ? (
-                    /* PRD Review Mode */
-                    <PrdReviewPanel
-                      prdData={prdData}
-                      competitorProducts={competitorProducts}
-                      projectId={id || ""}
-                      onSave={handleSavePrdData}
-                      onConfirm={handleConfirmPrd}
-                      onBack={handleExitPrdReview}
-                    />
-                  ) : (
-                    /* Chat Mode */
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                      {/* PRD Completion Card (Modal with countdown) */}
-                      <AnimatePresence>
-                        {showPrdReadyPrompt && (
-                          <PrdCompletionCard
-                            onViewPrd={handleEnterPrdReview}
-                            onContinueChat={handleDismissPrdPrompt}
-                            autoNavigateDelay={5}
-                          />
-                        )}
-                      </AnimatePresence>
-
-                      <div className="flex-1 flex overflow-hidden">
-                        {/* Sidebar */}
-                        <AnimatePresence>
-                          {showSidebar && (
-                            <motion.div
-                              initial={{ width: 0, opacity: 0 }}
-                              animate={{ width: 280, opacity: 1 }}
-                              exit={{ width: 0, opacity: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="hidden md:block flex-shrink-0 overflow-hidden"
-                            >
-                              <PrdSidebar
-                                progress={prdProgress}
-                                prdData={prdData}
-                                competitorInsight={competitorInsight}
-                                onItemClick={handlePrdProgressItemClick}
-                                onViewPrd={prdData ? handleEnterPrdReview : undefined}
-                                className="w-[280px] h-full"
-                              />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {/* Chat Panel */}
-                        <PrdChatPanel
-                          messages={messages}
-                          isStreaming={isStreaming}
-                          isSending={isSending}
-                          inputValue={inputValue}
-                          competitorInsight={competitorInsight}
-                          showInsightCard={messages.length <= 2}
-                          prdData={prdData}
-                          onInputChange={setInputValue}
-                          onSend={handleSendMessage}
-                          onSuggestionClick={handleSuggestionClick}
+                <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+                  <div className="max-w-3xl mx-auto space-y-4">
+                    <AnimatePresence initial={false}>
+                      {messages.map((message) => (
+                        <ChatMessage
+                          key={message.id}
+                          role={message.role}
+                          content={message.content}
+                          isStreaming={isStreaming && message === messages[messages.length - 1]}
                         />
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  /* Non-PRD stages: Original chat layout */
-                  <>
-                    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-                      <div className="max-w-3xl mx-auto space-y-4">
-                        <AnimatePresence initial={false}>
-                          {messages.map((message) => (
-                            <ChatMessage
-                              key={message.id}
-                              role={message.role}
-                              content={message.content}
-                              isStreaming={isStreaming && message === messages[messages.length - 1]}
-                            />
-                          ))}
-                        </AnimatePresence>
-                        {isSending && !isStreaming && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex items-center gap-2 text-muted-foreground"
-                          >
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span className="text-sm">AI正在思考...</span>
-                          </motion.div>
-                        )}
-                      </div>
-                    </ScrollArea>
+                      ))}
+                    </AnimatePresence>
+                    {isSending && !isStreaming && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex items-center gap-2 text-muted-foreground"
+                      >
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">AI正在思考...</span>
+                      </motion.div>
+                    )}
+                  </div>
+                </ScrollArea>
 
-                    {/* Input Area */}
-                    <div className="border-t border-border/50 glass p-4">
-                      <div className="max-w-3xl mx-auto">
-                        <Card className="flex items-center gap-2 p-2 bg-secondary/50">
-                          <Input
-                            placeholder="输入您的回复..."
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSendMessage();
-                              }
-                            }}
-                            disabled={isSending}
-                            className="border-0 bg-transparent focus-visible:ring-0"
-                          />
-                          <Button
-                            size="icon"
-                            onClick={handleSendMessage}
-                            disabled={!inputValue.trim() || isSending}
-                            className="bg-gradient-primary glow-primary"
-                          >
-                            <Loader2 className={`w-4 h-4 ${isSending ? 'animate-spin' : 'hidden'}`} />
-                            <MessageSquare className={`w-4 h-4 ${isSending ? 'hidden' : ''}`} />
-                          </Button>
-                        </Card>
-                      </div>
-                    </div>
-                  </>
-                )}
+                {/* Input Area */}
+                <div className="border-t border-border/50 glass p-4">
+                  <div className="max-w-3xl mx-auto">
+                    <Card className="flex items-center gap-2 p-2 bg-secondary/50">
+                      <Input
+                        placeholder="输入您的回复..."
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                        disabled={isSending}
+                        className="border-0 bg-transparent focus-visible:ring-0"
+                      />
+                      <Button
+                        size="icon"
+                        onClick={handleSendMessage}
+                        disabled={!inputValue.trim() || isSending}
+                        className="bg-gradient-primary glow-primary"
+                      >
+                        <Loader2 className={`w-4 h-4 ${isSending ? 'animate-spin' : 'hidden'}`} />
+                        <MessageSquare className={`w-4 h-4 ${isSending ? 'hidden' : ''}`} />
+                      </Button>
+                    </Card>
+                  </div>
+                </div>
               </>
             )}
           </TabsContent>
