@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Check, ChevronRight, ArrowLeft, Sparkles } from "lucide-react";
+import { MarketAnalysisPhase } from "@/components/MarketAnalysisPhase";
 import { CompetitorResearch } from "@/components/CompetitorResearch";
 import { AiProductManagerPanel } from "@/components/AiProductManagerPanel";
 import { PrdDocumentPanel } from "@/components/PrdDocumentPanel";
@@ -31,7 +31,7 @@ interface CompetitorProduct {
 interface PrdPhaseProps {
   projectId: string;
   onComplete: () => void;
-  initialPhase?: 1 | 2 | 3;
+  initialPhase?: 1 | 2 | 3 | 4;
   competitorResearchCompleted?: boolean;
 }
 
@@ -41,9 +41,7 @@ export function PrdPhase({
   initialPhase = 1,
   competitorResearchCompleted = false,
 }: PrdPhaseProps) {
-  const [currentPhase, setCurrentPhase] = useState<1 | 2 | 3>(
-    competitorResearchCompleted && initialPhase === 1 ? 2 : initialPhase
-  );
+  const [currentPhase, setCurrentPhase] = useState<1 | 2 | 3 | 4>(initialPhase);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -51,10 +49,11 @@ export function PrdPhase({
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [competitorProducts, setCompetitorProducts] = useState<CompetitorProduct[]>([]);
   const [showTransition, setShowTransition] = useState(false);
-  const [transitionTarget, setTransitionTarget] = useState<2 | 3>(2);
+  const [transitionTarget, setTransitionTarget] = useState<2 | 3 | 4>(2);
   const [showPrdReadyPrompt, setShowPrdReadyPrompt] = useState(false);
-  const [phase1Completed, setPhase1Completed] = useState(competitorResearchCompleted);
-  const [phase2Completed, setPhase2Completed] = useState(false);
+  const [phase1Completed, setPhase1Completed] = useState(false);
+  const [phase2Completed, setPhase2Completed] = useState(competitorResearchCompleted);
+  const [phase3Completed, setPhase3Completed] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -71,13 +70,15 @@ export function PrdPhase({
       .single();
 
     if (data?.prd_data) {
-      setPrdData(data.prd_data as PrdData);
+      const prd = data.prd_data as PrdData & { initialMarketAnalysis?: unknown };
+      setPrdData(prd);
+      // Check if market analysis is completed
+      if (prd.initialMarketAnalysis) {
+        setPhase1Completed(true);
+      }
     }
     if (data?.competitor_research_completed) {
-      setPhase1Completed(true);
-      if (currentPhase === 1) {
-        setCurrentPhase(2);
-      }
+      setPhase2Completed(true);
     }
   };
 
@@ -121,18 +122,30 @@ export function PrdPhase({
     }
   };
 
-  // Handle competitor research completion
+  // Handle market analysis completion (Phase 1 -> Phase 2)
+  const handleMarketAnalysisComplete = () => {
+    setPhase1Completed(true);
+    setTransitionTarget(2);
+    setShowTransition(true);
+  };
+
+  const handleMarketAnalysisSkip = () => {
+    setPhase1Completed(true);
+    setCurrentPhase(2);
+  };
+
+  // Handle competitor research completion (Phase 2 -> Phase 3)
   const handleCompetitorResearchComplete = async (hasResearch: boolean) => {
     await supabase
       .from("projects")
       .update({ competitor_research_completed: true })
       .eq("id", projectId);
 
-    setPhase1Completed(true);
+    setPhase2Completed(true);
     await loadCompetitorProducts();
     
     // Show transition animation
-    setTransitionTarget(2);
+    setTransitionTarget(3);
     setShowTransition(true);
   };
 
@@ -142,8 +155,8 @@ export function PrdPhase({
       .update({ competitor_research_completed: true })
       .eq("id", projectId);
 
-    setPhase1Completed(true);
-    setCurrentPhase(2);
+    setPhase2Completed(true);
+    setCurrentPhase(3);
     startAiConversation();
   };
 
@@ -350,7 +363,7 @@ export function PrdPhase({
 
         // Detect PRD_READY signal
         if (assistantContent.includes("[PRD_READY]")) {
-          setPhase2Completed(true);
+          setPhase3Completed(true);
           setTimeout(() => {
             setShowPrdReadyPrompt(true);
           }, 1000);
@@ -478,7 +491,7 @@ export function PrdPhase({
         }
 
         if (assistantContent.includes("[PRD_READY]")) {
-          setPhase2Completed(true);
+          setPhase3Completed(true);
           setTimeout(() => {
             setShowPrdReadyPrompt(true);
           }, 1000);
@@ -496,14 +509,14 @@ export function PrdPhase({
   const handlePhaseTransitionConfirm = () => {
     setShowTransition(false);
     setCurrentPhase(transitionTarget);
-    if (transitionTarget === 2) {
+    if (transitionTarget === 3) {
       startAiConversation();
     }
   };
 
   const handlePrdComplete = () => {
     setShowPrdReadyPrompt(false);
-    setTransitionTarget(3);
+    setTransitionTarget(4);
     setShowTransition(true);
   };
 
@@ -532,18 +545,20 @@ export function PrdPhase({
     onComplete();
   };
 
-  const handlePhaseClick = (phase: 1 | 2 | 3) => {
-    if (phase === 1 && phase1Completed) {
+  const handlePhaseClick = (phase: 1 | 2 | 3 | 4) => {
+    if (phase === 1) {
       setCurrentPhase(1);
     } else if (phase === 2 && phase1Completed) {
       setCurrentPhase(2);
     } else if (phase === 3 && phase2Completed) {
       setCurrentPhase(3);
+    } else if (phase === 4 && phase3Completed) {
+      setCurrentPhase(4);
     }
   };
 
-  const handleBackToPhase2 = () => {
-    setCurrentPhase(2);
+  const handleBackToPhase3 = () => {
+    setCurrentPhase(3);
   };
 
   return (
@@ -617,6 +632,8 @@ export function PrdPhase({
                   >
                     {transitionTarget === 2 ? (
                       <Sparkles className="w-10 h-10 text-primary-foreground" />
+                    ) : transitionTarget === 3 ? (
+                      <Sparkles className="w-10 h-10 text-primary-foreground" />
                     ) : (
                       <Check className="w-10 h-10 text-primary-foreground" />
                     )}
@@ -628,10 +645,16 @@ export function PrdPhase({
                     transition={{ delay: 0.3 }}
                   >
                     <h3 className="text-xl font-bold mb-2">
-                      {transitionTarget === 2 ? "🎉 竞品分析完成！" : "✅ PRD 信息收集完成！"}
+                      {transitionTarget === 2
+                        ? "🎯 市场分析完成！"
+                        : transitionTarget === 3
+                        ? "🎉 竞品分析完成！"
+                        : "✅ PRD 信息收集完成！"}
                     </h3>
                     <p className="text-muted-foreground mb-6">
                       {transitionTarget === 2
+                        ? "接下来添加 Amazon 竞品链接，获取真实用户反馈"
+                        : transitionTarget === 3
                         ? `已分析 ${competitorProducts.length} 款竞品，AI 产品经理将基于这些数据与您对话`
                         : "您可以在文档页面查看详情并进行修改"}
                     </p>
@@ -650,7 +673,11 @@ export function PrdPhase({
                       onClick={handlePhaseTransitionConfirm}
                       className="flex-1 bg-gradient-to-r from-primary to-accent animate-glow-pulse"
                     >
-                      {transitionTarget === 2 ? "开始对话" : "查看 PRD 文档"}
+                      {transitionTarget === 2
+                        ? "进入竞品分析"
+                        : transitionTarget === 3
+                        ? "开始对话"
+                        : "查看 PRD 文档"}
                       <ChevronRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
@@ -673,6 +700,23 @@ export function PrdPhase({
               transition={{ duration: 0.3 }}
               className="h-full"
             >
+              <MarketAnalysisPhase
+                projectId={projectId}
+                onComplete={handleMarketAnalysisComplete}
+                onSkip={handleMarketAnalysisSkip}
+              />
+            </motion.div>
+          )}
+
+          {currentPhase === 2 && (
+            <motion.div
+              key="phase2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="h-full"
+            >
               <CompetitorResearch
                 projectId={projectId}
                 onComplete={handleCompetitorResearchComplete}
@@ -681,9 +725,9 @@ export function PrdPhase({
             </motion.div>
           )}
 
-          {currentPhase === 2 && (
+          {currentPhase === 3 && (
             <motion.div
-              key="phase2"
+              key="phase3"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -708,9 +752,9 @@ export function PrdPhase({
             </motion.div>
           )}
 
-          {currentPhase === 3 && (
+          {currentPhase === 4 && (
             <motion.div
-              key="phase3"
+              key="phase4"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
@@ -723,7 +767,7 @@ export function PrdPhase({
                 projectId={projectId}
                 onSave={handleSavePrdData}
                 onConfirm={handleConfirmPrd}
-                onBack={handleBackToPhase2}
+                onBack={handleBackToPhase3}
               />
             </motion.div>
           )}

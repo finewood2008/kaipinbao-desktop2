@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.market-analysis]
 verify_jwt = false
+
+[functions.initial-market-analysis]
+verify_jwt = false
