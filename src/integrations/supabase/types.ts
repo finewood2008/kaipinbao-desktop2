@@ -366,6 +366,7 @@ export type Database = {
       projects: {
         Row: {
           competitor_research_completed: boolean | null
+          cover_image_url: string | null
           created_at: string
           current_stage: number
           description: string | null
@@ -381,6 +382,7 @@ export type Database = {
         }
         Insert: {
           competitor_research_completed?: boolean | null
+          cover_image_url?: string | null
           created_at?: string
           current_stage?: number
           description?: string | null
@@ -396,6 +398,7 @@ export type Database = {
         }
         Update: {
           competitor_research_completed?: boolean | null
+          cover_image_url?: string | null
           created_at?: string
           current_stage?: number
           description?: string | null

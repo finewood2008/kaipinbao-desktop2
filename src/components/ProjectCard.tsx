@@ -14,6 +14,7 @@ interface ProjectCardProps {
   currentStage: number;
   status: string;
   createdAt: string;
+  coverImage?: string;
   onClick: () => void;
 }
 
@@ -29,8 +30,11 @@ export function ProjectCard({
   currentStage,
   status,
   createdAt,
+  coverImage,
   onClick,
 }: ProjectCardProps) {
+  // Get initials for placeholder
+  const initials = name.slice(0, 2).toUpperCase();
   const stage = stageInfo[currentStage - 1];
   const StageIcon = stage?.icon || MessageSquare;
 
@@ -46,25 +50,46 @@ export function ProjectCard({
         onClick={onClick}
       >
         <CardHeader className="pb-2">
-          <div className="flex items-start justify-between">
-            <CardTitle className="text-lg font-semibold line-clamp-1">{name}</CardTitle>
-            <Badge
-              variant={status === "completed" ? "default" : "secondary"}
-              className={cn(
-                status === "completed" && "bg-stage-3",
-                status === "active" && "bg-primary"
+          <div className="flex gap-4">
+            {/* Cover Image / Placeholder */}
+            <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-primary/5">
+              {coverImage ? (
+                <img 
+                  src={coverImage} 
+                  alt={name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/30 to-accent/30">
+                  <span className="text-2xl font-bold text-primary/70">{initials}</span>
+                </div>
               )}
-            >
-              {status === "completed" ? "已完成" : status === "active" ? "进行中" : "已归档"}
-            </Badge>
+            </div>
+            
+            {/* Title and Badge */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <CardTitle className="text-lg font-semibold line-clamp-1">{name}</CardTitle>
+                <Badge
+                  variant={status === "completed" ? "default" : "secondary"}
+                  className={cn(
+                    "flex-shrink-0",
+                    status === "completed" && "bg-stage-3",
+                    status === "active" && "bg-primary"
+                  )}
+                >
+                  {status === "completed" ? "已完成" : status === "active" ? "进行中" : "已归档"}
+                </Badge>
+              </div>
+              {description && (
+                <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                  {description}
+                </p>
+              )}
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
-          {description && (
-            <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-              {description}
-            </p>
-          )}
+        <CardContent className="pt-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className={cn("p-1.5 rounded-md", stage?.color || "bg-muted")}>

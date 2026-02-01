@@ -26,6 +26,7 @@ interface Project {
   current_stage: number;
   status: string;
   created_at: string;
+  cover_image_url: string | null;
 }
 
 export default function Dashboard() {
@@ -42,16 +43,33 @@ export default function Dashboard() {
   }, []);
 
   const fetchProjects = async () => {
+    // Fetch projects with cover images
     const { data, error } = await supabase
       .from("projects")
-      .select("*")
+      .select(`
+        *,
+        generated_images!generated_images_project_id_fkey (
+          image_url
+        )
+      `)
+      .eq("generated_images.is_selected", true)
       .order("created_at", { ascending: false });
 
     if (error) {
       toast.error("获取项目失败");
       console.error(error);
     } else {
-      setProjects(data || []);
+      // Map projects with cover images
+      const projectsWithCovers: Project[] = (data || []).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        current_stage: p.current_stage,
+        status: p.status,
+        created_at: p.created_at,
+        cover_image_url: p.cover_image_url || p.generated_images?.[0]?.image_url || null,
+      }));
+      setProjects(projectsWithCovers);
     }
     setIsLoading(false);
   };
@@ -238,6 +256,7 @@ export default function Dashboard() {
                   currentStage={project.current_stage}
                   status={project.status}
                   createdAt={project.created_at}
+                  coverImage={project.cover_image_url || undefined}
                   onClick={() => navigate(`/project/${project.id}`)}
                 />
               </motion.div>
