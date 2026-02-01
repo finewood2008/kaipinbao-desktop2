@@ -42,7 +42,11 @@ serve(async (req) => {
 
     console.log("Scraping URL:", url);
 
-    // Call Firecrawl API
+    // Detect platform and check if it's Amazon
+    const isAmazon = url.toLowerCase().includes("amazon");
+    const asin = isAmazon ? extractAsin(url) : null;
+
+    // Step 1: Scrape product page
     const scrapeResponse = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
       headers: {
@@ -53,7 +57,7 @@ serve(async (req) => {
         url,
         formats: ["markdown", "html", "links"],
         onlyMainContent: true,
-        waitFor: 3000,
+        waitFor: 5000,
       }),
     });
 
@@ -72,17 +76,42 @@ serve(async (req) => {
       );
     }
 
-    // Extract product info from scraped data
     const markdown = scrapeData.data?.markdown || "";
     const metadata = scrapeData.data?.metadata || {};
     const links = scrapeData.data?.links || [];
 
-    // Try to extract product details
+    // Extract product info
     const productInfo = extractProductInfo(markdown, metadata, url);
     
-    // Extract product images
-    const productImages = extractProductImages(markdown, links, url);
-    console.log(`Extracted ${productImages.length} product images`);
+    // Extract ONLY main product image (first large image)
+    const mainImage = extractMainProductImage(markdown, url);
+    console.log("Main image extracted:", mainImage ? "yes" : "no");
+    
+    // Extract review summary from product page
+    const reviewSummary = extractReviewSummary(markdown);
+    console.log("Review summary extracted:", JSON.stringify(reviewSummary));
+
+    // Step 2: If Amazon, scrape dedicated reviews page with screenshot
+    let reviews: Array<{ text: string; rating?: number }> = [];
+    let reviewScreenshotUrl: string | null = null;
+
+    if (isAmazon && asin) {
+      console.log("Amazon product detected, ASIN:", asin);
+      
+      try {
+        const reviewsResult = await scrapeAmazonReviewsPage(asin, FIRECRAWL_API_KEY, supabase, productId);
+        reviews = reviewsResult.reviews;
+        reviewScreenshotUrl = reviewsResult.screenshotUrl;
+        console.log(`Scraped ${reviews.length} reviews from dedicated page, screenshot: ${reviewScreenshotUrl ? 'yes' : 'no'}`);
+      } catch (reviewError) {
+        console.error("Error scraping reviews page:", reviewError);
+        // Fall back to extracting from main page
+        reviews = extractReviewsFromMarkdown(markdown);
+      }
+    } else {
+      // Non-Amazon: extract reviews from main page
+      reviews = extractReviewsFromMarkdown(markdown);
+    }
 
     // Update product with scraped data
     const { error: updateError } = await supabase
@@ -93,11 +122,15 @@ serve(async (req) => {
         price: productInfo.price,
         rating: productInfo.rating,
         review_count: productInfo.reviewCount,
-        product_images: productImages,
+        main_image: mainImage,
+        product_images: mainImage ? [mainImage] : [],
+        review_summary: reviewSummary,
+        review_screenshot_url: reviewScreenshotUrl,
         scraped_data: {
-          markdown: markdown.slice(0, 50000), // Limit size
+          markdown: markdown.slice(0, 50000),
           metadata,
           extractedAt: new Date().toISOString(),
+          asin: asin,
         },
         status: "completed",
       })
@@ -108,8 +141,7 @@ serve(async (req) => {
       throw updateError;
     }
 
-    // Extract and save reviews
-    const reviews = extractReviews(markdown);
+    // Save reviews
     if (reviews.length > 0) {
       const reviewsToInsert = reviews.slice(0, 100).map((review) => ({
         competitor_product_id: productId,
@@ -129,6 +161,8 @@ serve(async (req) => {
         success: true,
         productInfo,
         reviewCount: reviews.length,
+        hasScreenshot: !!reviewScreenshotUrl,
+        hasReviewSummary: !!(reviewSummary.topPositives.length || reviewSummary.topNegatives.length),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -141,15 +175,375 @@ serve(async (req) => {
   }
 });
 
-function extractProductInfo(markdown: string, metadata: any, url: string) {
+// Extract ASIN from Amazon URL
+function extractAsin(url: string): string | null {
+  const patterns = [
+    /\/dp\/([A-Z0-9]{10})/i,
+    /\/gp\/product\/([A-Z0-9]{10})/i,
+    /\/product\/([A-Z0-9]{10})/i,
+    /\/ASIN\/([A-Z0-9]{10})/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1].toUpperCase();
+  }
+  return null;
+}
+
+// Extract only the main product image (first large image)
+function extractMainProductImage(markdown: string, url: string): string | null {
   const lowerUrl = url.toLowerCase();
+  
+  if (lowerUrl.includes("amazon")) {
+    // Amazon main image patterns - prioritize large images
+    const patterns = [
+      // High-res images with size indicators
+      /https?:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9+%-]+\._AC_SL1500_[^"'\s\)]*\.(jpg|png|webp)/gi,
+      /https?:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9+%-]+\._SL1500_[^"'\s\)]*\.(jpg|png|webp)/gi,
+      /https?:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9+%-]+\._AC_SL1200_[^"'\s\)]*\.(jpg|png|webp)/gi,
+      // General Amazon images
+      /https?:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9+%-]+[^"'\s\)]*\.(jpg|png|webp)/gi,
+    ];
+    
+    for (const pattern of patterns) {
+      const matches = markdown.match(pattern);
+      if (matches && matches.length > 0) {
+        // Return the first match (usually the main product image)
+        return matches[0];
+      }
+    }
+  } else if (lowerUrl.includes("aliexpress")) {
+    const pattern = /https?:\/\/[^"'\s]+alicdn\.com[^"'\s]+\.(jpg|png|webp)/gi;
+    const matches = markdown.match(pattern);
+    if (matches && matches.length > 0) {
+      return matches[0];
+    }
+  }
+  
+  // Fallback: any large image
+  const generalPattern = /https?:\/\/[^"'\s]+\.(jpg|jpeg|png|webp)/gi;
+  const matches = markdown.match(generalPattern);
+  if (matches && matches.length > 0) {
+    return matches[0];
+  }
+  
+  return null;
+}
+
+// Extract review summary from product page (Amazon's "Customer reviews" section)
+function extractReviewSummary(markdown: string): {
+  overallRating: number | null;
+  totalReviews: number | null;
+  ratingBreakdown: { stars: number; percentage: number }[];
+  topPositives: string[];
+  topNegatives: string[];
+} {
+  const result = {
+    overallRating: null as number | null,
+    totalReviews: null as number | null,
+    ratingBreakdown: [] as { stars: number; percentage: number }[],
+    topPositives: [] as string[],
+    topNegatives: [] as string[],
+  };
+
+  // Extract overall rating
+  const ratingMatch = markdown.match(/(\d+\.?\d*)\s*out of\s*5\s*stars?/i);
+  if (ratingMatch) {
+    result.overallRating = parseFloat(ratingMatch[1]);
+  }
+
+  // Extract total reviews
+  const reviewCountMatch = markdown.match(/([\d,]+)\s*(?:global\s+)?(?:ratings?|reviews?|customer\s+reviews?)/i);
+  if (reviewCountMatch) {
+    result.totalReviews = parseInt(reviewCountMatch[1].replace(/,/g, ""), 10);
+  }
+
+  // Extract rating breakdown (5 star XX%, 4 star YY%, etc.)
+  const breakdownPattern = /(\d)\s*star[s]?\s*(\d+)%/gi;
+  let breakdownMatch;
+  while ((breakdownMatch = breakdownPattern.exec(markdown)) !== null) {
+    result.ratingBreakdown.push({
+      stars: parseInt(breakdownMatch[1], 10),
+      percentage: parseInt(breakdownMatch[2], 10),
+    });
+  }
+
+  // Extract "Customers say" or top review highlights
+  // Amazon often has "Customers like..." or "Customers mention..." sections
+  const positivePatterns = [
+    /customers\s+(?:like|love|mention|say)[^.]*?(?:quality|durable|value|great|excellent|good|perfect|easy)[^.]*\./gi,
+    /positive[^:]*:\s*([^.]+\.)/gi,
+    /pros?[^:]*:\s*([^.]+\.)/gi,
+  ];
+  
+  for (const pattern of positivePatterns) {
+    const matches = markdown.match(pattern);
+    if (matches) {
+      for (const match of matches.slice(0, 3)) {
+        const cleaned = match.replace(/^(customers\s+(?:like|love|mention|say)|positive[^:]*:|pros?[^:]*:)\s*/i, "").trim();
+        if (cleaned.length > 10 && cleaned.length < 200) {
+          result.topPositives.push(cleaned);
+        }
+      }
+    }
+  }
+
+  // Extract negative mentions
+  const negativePatterns = [
+    /customers\s+(?:dislike|complain|mention)[^.]*?(?:issue|problem|broke|poor|cheap|flimsy|difficult)[^.]*\./gi,
+    /negative[^:]*:\s*([^.]+\.)/gi,
+    /cons?[^:]*:\s*([^.]+\.)/gi,
+  ];
+  
+  for (const pattern of negativePatterns) {
+    const matches = markdown.match(pattern);
+    if (matches) {
+      for (const match of matches.slice(0, 3)) {
+        const cleaned = match.replace(/^(customers\s+(?:dislike|complain|mention)|negative[^:]*:|cons?[^:]*:)\s*/i, "").trim();
+        if (cleaned.length > 10 && cleaned.length < 200) {
+          result.topNegatives.push(cleaned);
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+// Scrape Amazon's dedicated reviews page with screenshot
+async function scrapeAmazonReviewsPage(
+  asin: string,
+  apiKey: string,
+  supabase: any,
+  productId: string
+): Promise<{ reviews: Array<{ text: string; rating?: number }>; screenshotUrl: string | null }> {
+  // Construct reviews page URL
+  const reviewUrl = `https://www.amazon.com/product-reviews/${asin}/?sortBy=recent&pageNumber=1`;
+  
+  console.log("Scraping reviews page:", reviewUrl);
+
+  const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url: reviewUrl,
+      formats: ["markdown", "screenshot"],
+      waitFor: 5000,
+      actions: [
+        { type: "wait", milliseconds: 2000 },
+        { type: "scroll", direction: "down" },
+        { type: "wait", milliseconds: 1500 },
+        { type: "scroll", direction: "down" },
+        { type: "wait", milliseconds: 1000 },
+      ],
+    }),
+  });
+
+  const data = await response.json();
+  
+  if (!response.ok || !data.success) {
+    console.error("Reviews page scrape error:", data);
+    return { reviews: [], screenshotUrl: null };
+  }
+
+  const reviewsMarkdown = data.data?.markdown || "";
+  const screenshotBase64 = data.data?.screenshot;
+
+  // Extract reviews from reviews page
+  const reviews = extractReviewsFromReviewPage(reviewsMarkdown);
+
+  // Upload screenshot to Supabase Storage if available
+  let screenshotUrl: string | null = null;
+  if (screenshotBase64) {
+    try {
+      screenshotUrl = await uploadScreenshotToStorage(supabase, productId, screenshotBase64);
+      console.log("Screenshot uploaded:", screenshotUrl);
+    } catch (uploadError) {
+      console.error("Screenshot upload error:", uploadError);
+    }
+  }
+
+  return { reviews, screenshotUrl };
+}
+
+// Upload screenshot to Supabase Storage (NOT storing base64 in database)
+async function uploadScreenshotToStorage(
+  supabase: any,
+  productId: string,
+  base64Data: string
+): Promise<string | null> {
+  try {
+    // Remove data URL prefix if present
+    const base64Clean = base64Data.replace(/^data:image\/\w+;base64,/, "");
+    
+    // Convert base64 to Uint8Array
+    const binaryString = atob(base64Clean);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    const fileName = `${productId}-${Date.now()}.png`;
+    
+    const { data, error } = await supabase.storage
+      .from("review-screenshots")
+      .upload(fileName, bytes, {
+        contentType: "image/png",
+        upsert: true,
+      });
+
+    if (error) {
+      console.error("Storage upload error:", error);
+      return null;
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from("review-screenshots")
+      .getPublicUrl(fileName);
+
+    return urlData?.publicUrl || null;
+  } catch (error) {
+    console.error("Screenshot processing error:", error);
+    return null;
+  }
+}
+
+// Extract reviews from Amazon's dedicated reviews page
+function extractReviewsFromReviewPage(markdown: string): Array<{ text: string; rating?: number }> {
+  const reviews: Array<{ text: string; rating?: number }> = [];
+  
+  // Reviews page has a more consistent format
+  // Look for patterns like "X out of 5 stars" followed by review text
+  
+  // Split by review blocks (each review typically starts with rating)
+  const blocks = markdown.split(/(?=\d\s*out of\s*5\s*stars)/i);
+  
+  for (const block of blocks) {
+    if (block.length < 50) continue;
+    
+    // Extract rating
+    const ratingMatch = block.match(/^(\d)\s*out of\s*5\s*stars/i);
+    const rating = ratingMatch ? parseInt(ratingMatch[1], 10) : undefined;
+    
+    // Look for review content after "Verified Purchase" or date
+    const contentPatterns = [
+      /Verified Purchase\s*\n+([\s\S]+?)(?=\n\n|\d+\s*people found|Helpful|Report abuse|$)/i,
+      /Reviewed in[^]*?\d{4}\s*\n+([\s\S]+?)(?=\n\n|\d+\s*people found|Helpful|Report abuse|$)/i,
+    ];
+    
+    for (const pattern of contentPatterns) {
+      const contentMatch = block.match(pattern);
+      if (contentMatch && contentMatch[1]) {
+        const text = contentMatch[1]
+          .trim()
+          .replace(/\n+/g, " ")
+          .replace(/\s+/g, " ");
+        
+        // Validate: must be actual text, not URL fragments or short UI elements
+        if (isValidReviewText(text)) {
+          reviews.push({ text, rating });
+          break;
+        }
+      }
+    }
+  }
+  
+  // If block-based extraction failed, try line-based
+  if (reviews.length === 0) {
+    const lines = markdown.split(/\n+/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Skip if it looks like a URL or UI element
+      if (!isValidReviewText(line)) continue;
+      
+      // Look for review-like content (longer sentences)
+      if (line.length >= 80 && line.length <= 2000) {
+        // Try to find associated rating
+        let rating: number | undefined;
+        for (let j = Math.max(0, i - 5); j < i; j++) {
+          const ratingMatch = lines[j].match(/(\d)\s*out of\s*5/i);
+          if (ratingMatch) {
+            rating = parseInt(ratingMatch[1], 10);
+            break;
+          }
+        }
+        
+        reviews.push({ text: line, rating });
+      }
+    }
+  }
+  
+  return reviews.slice(0, 100); // Limit to 100 reviews
+}
+
+// Validate that text is actual review content, not URL fragments or UI elements
+function isValidReviewText(text: string): boolean {
+  if (!text || text.length < 30) return false;
+  if (text.length > 3000) return false;
+  
+  // Reject URL fragments
+  if (/reviews?\/R[A-Z0-9]+/i.test(text)) return false;
+  if (text.includes("amazon.com")) return false;
+  if (text.includes("http://") || text.includes("https://")) return false;
+  
+  // Reject common UI elements
+  const uiPatterns = [
+    /^(see|read|show)\s+(more|all|full)/i,
+    /^(helpful|report|share)/i,
+    /^\d+\s*(people|person)\s+found/i,
+    /^verified purchase$/i,
+    /^reviewed in/i,
+    /^\d+\s*out of\s*\d+/i,
+  ];
+  
+  if (uiPatterns.some(p => p.test(text.trim()))) return false;
+  
+  // Must contain actual words (not just numbers/punctuation)
+  if (!/[a-zA-Z]{4,}/.test(text)) return false;
+  
+  return true;
+}
+
+// Fallback: extract reviews from main page markdown
+function extractReviewsFromMarkdown(markdown: string): Array<{ text: string; rating?: number }> {
+  const reviews: Array<{ text: string; rating?: number }> = [];
+  
+  const lines = markdown.split(/\n+/);
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    if (!isValidReviewText(line)) continue;
+    
+    if (line.length >= 50 && line.length <= 2000) {
+      // Try to find associated rating
+      let rating: number | undefined;
+      const ratingMatch = line.match(/(\d)\s*(?:star|★|⭐)/i);
+      if (ratingMatch) {
+        rating = parseInt(ratingMatch[1], 10);
+      }
+      
+      reviews.push({ text: line, rating });
+    }
+  }
+  
+  return reviews.slice(0, 50);
+}
+
+function extractProductInfo(markdown: string, metadata: any, url: string) {
   let title = metadata.title || "";
   let description = metadata.description || "";
   let price = "";
   let rating = null;
   let reviewCount = null;
 
-  // Try to extract price
+  // Extract price
   const pricePatterns = [
     /\$[\d,]+\.?\d*/g,
     /￥[\d,]+\.?\d*/g,
@@ -165,12 +559,11 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
     }
   }
 
-  // Try to extract rating
+  // Extract rating
   const ratingPatterns = [
     /(\d+\.?\d*)\s*out of\s*5/i,
     /Rating:\s*(\d+\.?\d*)/i,
     /(\d+\.?\d*)\s*stars?/i,
-    /★\s*(\d+\.?\d*)/,
   ];
 
   for (const pattern of ratingPatterns) {
@@ -184,9 +577,9 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
     }
   }
 
-  // Try to extract review count
+  // Extract review count
   const reviewPatterns = [
-    /([\d,]+)\s*(?:reviews?|ratings?|评价|评论)/i,
+    /([\d,]+)\s*(?:global\s+)?(?:ratings?|reviews?)/i,
     /(\d+)\s*customer\s*reviews?/i,
   ];
 
@@ -200,147 +593,10 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
 
   // Clean up title
   if (title) {
-    // Remove common suffixes
     title = title
       .replace(/\s*[-|:]\s*(Amazon|AliExpress|eBay|淘宝|天猫).*$/i, "")
       .trim();
   }
 
   return { title, description, price, rating, reviewCount };
-}
-
-function extractProductImages(markdown: string, links: string[], url: string): string[] {
-  const images: Set<string> = new Set();
-  const lowerUrl = url.toLowerCase();
-  
-  // Extract image URLs from markdown (![alt](url) format)
-  const markdownImagePattern = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/gi;
-  let match;
-  while ((match = markdownImagePattern.exec(markdown)) !== null) {
-    const imgUrl = match[1];
-    if (isProductImage(imgUrl, lowerUrl)) {
-      images.add(imgUrl);
-    }
-  }
-  
-  // Extract from HTML img tags in markdown
-  const htmlImagePattern = /<img[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
-  while ((match = htmlImagePattern.exec(markdown)) !== null) {
-    const imgUrl = match[1];
-    if (isProductImage(imgUrl, lowerUrl)) {
-      images.add(imgUrl);
-    }
-  }
-  
-  // Extract from links array (filter for image URLs)
-  for (const link of links) {
-    if (/\.(jpg|jpeg|png|webp|gif)/i.test(link) && isProductImage(link, lowerUrl)) {
-      images.add(link);
-    }
-  }
-  
-  // Convert to array and limit to first 10 images
-  return Array.from(images).slice(0, 10);
-}
-
-function isProductImage(imgUrl: string, sourceUrl: string): boolean {
-  const lowerImg = imgUrl.toLowerCase();
-  
-  // Exclude common non-product images
-  const excludePatterns = [
-    /logo/i,
-    /icon/i,
-    /favicon/i,
-    /avatar/i,
-    /banner/i,
-    /ad[_-]/i,
-    /advertisement/i,
-    /sprite/i,
-    /button/i,
-    /arrow/i,
-    /loader/i,
-    /loading/i,
-    /placeholder/i,
-    /1x1/,
-    /transparent/i,
-    /pixel/i,
-  ];
-  
-  if (excludePatterns.some(pattern => pattern.test(lowerImg))) {
-    return false;
-  }
-  
-  // For Amazon, look for product images
-  if (sourceUrl.includes("amazon")) {
-    // Amazon product images typically contain these patterns
-    if (lowerImg.includes("images-amazon") || lowerImg.includes("m.media-amazon")) {
-      // Filter for larger images (product photos are usually larger)
-      if (lowerImg.includes("._sl") || lowerImg.includes("._ac_") || lowerImg.includes("._ss")) {
-        return true;
-      }
-      // Include if it looks like a product image size
-      if (/\d{3,4}x\d{3,4}|_\d{3,4}_/i.test(lowerImg)) {
-        return true;
-      }
-      return true; // Include most Amazon images by default
-    }
-  }
-  
-  // For AliExpress
-  if (sourceUrl.includes("aliexpress")) {
-    if (lowerImg.includes("ae01.alicdn") || lowerImg.includes("ae04.alicdn")) {
-      return true;
-    }
-  }
-  
-  // For eBay
-  if (sourceUrl.includes("ebay")) {
-    if (lowerImg.includes("ebayimg.com")) {
-      return true;
-    }
-  }
-  
-  // General: include if it's a large enough image URL
-  if (/\.(jpg|jpeg|png|webp)/i.test(lowerImg)) {
-    return true;
-  }
-  
-  return false;
-}
-
-function extractReviews(markdown: string): Array<{ text: string; rating?: number }> {
-  const reviews: Array<{ text: string; rating?: number }> = [];
-  
-  // Look for review sections
-  const reviewSectionPatterns = [
-    /(?:Customer Reviews?|Reviews?|评价|评论)[\s\S]*?(?=\n\n|\Z)/gi,
-    /(?:★{1,5}|⭐{1,5})[\s\S]*?(?=(?:★{1,5}|⭐{1,5})|\n\n|\Z)/g,
-  ];
-
-  for (const pattern of reviewSectionPatterns) {
-    const matches = markdown.match(pattern);
-    if (matches) {
-      for (const match of matches) {
-        // Split into individual reviews
-        const lines = match.split(/\n+/).filter(line => line.trim().length > 20);
-        for (const line of lines) {
-          if (line.length > 20 && line.length < 2000) {
-            // Try to extract rating from the review
-            let rating: number | undefined;
-            const ratingMatch = line.match(/(\d+)\s*(?:star|★|⭐)/i);
-            if (ratingMatch) {
-              rating = parseInt(ratingMatch[1], 10);
-            }
-            
-            reviews.push({
-              text: line.trim(),
-              rating,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  return reviews;
 }
