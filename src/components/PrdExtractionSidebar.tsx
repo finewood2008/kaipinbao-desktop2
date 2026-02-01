@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { MapPin, Users, Palette, Zap, Check, Circle, Image as ImageIcon, TrendingUp } from "lucide-react";
+import { MapPin, Users, Palette, Zap, Check, Circle, Image as ImageIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -52,7 +52,6 @@ interface PrdExtractionSidebarProps {
 }
 
 const progressItems = [
-  { key: "marketAnalysis", label: "市场分析", icon: TrendingUp },
   { key: "usageScenario", label: "使用场景", icon: MapPin },
   { key: "targetAudience", label: "目标用户", icon: Users },
   { key: "designStyle", label: "外观风格", icon: Palette },
@@ -66,14 +65,6 @@ function getDisplayValue(prdData: PrdData | null, key: string): string | null {
   switch (key) {
     case "coreFeatures":
       return prdData.coreFeatures?.join("、") || null;
-    case "marketAnalysis":
-      if (!prdData.marketAnalysis) return null;
-      const ma = prdData.marketAnalysis;
-      const parts: string[] = [];
-      if (ma.competitorCount) parts.push(`${ma.competitorCount}款竞品`);
-      if (ma.priceRange) parts.push(ma.priceRange);
-      if (ma.differentiationOpportunity) parts.push(ma.differentiationOpportunity);
-      return parts.length > 0 ? parts.join(" · ") : null;
     default:
       const value = prdData[key as keyof PrdData];
       return typeof value === "string" ? value : null;
@@ -87,12 +78,6 @@ function isItemCompleted(prdData: PrdData | null, key: string): boolean {
   switch (key) {
     case "coreFeatures":
       return !!(prdData.coreFeatures && prdData.coreFeatures.length > 0);
-    case "marketAnalysis":
-      return !!(prdData.marketAnalysis && (
-        prdData.marketAnalysis.competitorCount ||
-        prdData.marketAnalysis.differentiationOpportunity ||
-        prdData.marketAnalysis.priceRange
-      ));
     default:
       return !!prdData[key as keyof PrdData];
   }

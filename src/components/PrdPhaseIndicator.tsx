@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Search, MessageSquare, FileText, Check } from "lucide-react";
+import { TrendingUp, MessageSquare, FileText, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface PrdPhaseIndicatorProps {
@@ -10,7 +10,7 @@ interface PrdPhaseIndicatorProps {
 }
 
 const phases = [
-  { id: 1 as const, label: "竞品分析", icon: Search },
+  { id: 1 as const, label: "市场分析", icon: TrendingUp },
   { id: 2 as const, label: "AI产品经理", icon: MessageSquare },
   { id: 3 as const, label: "产品PRD文档", icon: FileText },
 ];
