@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, Loader2, ArrowRight, SkipForward, Link } from "lucide-react";
+import { Search, Plus, Loader2, ArrowRight, SkipForward, Link, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { CompetitorCard, CompetitorProduct } from "@/components/CompetitorCard";
 import { ReviewAnalysisSummary, ReviewAnalysis } from "@/components/ReviewAnalysisSummary";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,7 +34,9 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
   const [products, setProducts] = useState<CompetitorProduct[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<ReviewAnalysis | null>(null);
+  const [scrapeProgress, setScrapeProgress] = useState(0);
 
   // Load existing competitor products
   useEffect(() => {
@@ -131,15 +134,30 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       prev.map(p => (p.id === productId ? { ...p, status: "scraping" as const } : p))
     );
     setIsScraping(true);
+    setScrapeProgress(10); // Start progress
 
     try {
+      // Simulate progress during scraping
+      const progressInterval = setInterval(() => {
+        setScrapeProgress(prev => {
+          if (prev >= 85) {
+            clearInterval(progressInterval);
+            return 85;
+          }
+          return prev + Math.random() * 15;
+        });
+      }, 800);
+
       const { data, error } = await supabase.functions.invoke("scrape-competitor", {
         body: { productId, url },
       });
 
+      clearInterval(progressInterval);
+
       if (error) throw error;
 
       if (data.success) {
+        setScrapeProgress(100);
         // Reload products to get updated data
         await loadProducts();
         toast.success("产品信息抓取成功");
@@ -160,6 +178,7 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       toast.error("抓取失败，请检查链接是否正确");
     } finally {
       setIsScraping(false);
+      setTimeout(() => setScrapeProgress(0), 500);
     }
   };
 
@@ -182,6 +201,7 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
   };
 
   const generateAnalysis = async () => {
+    setIsAnalyzing(true);
     try {
       const { data, error } = await supabase.functions.invoke("analyze-reviews", {
         body: { projectId },
@@ -194,6 +214,8 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       }
     } catch (error) {
       console.error("Analysis failed:", error);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -249,6 +271,41 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
           <span className="ml-1">添加</span>
         </Button>
       </div>
+
+      {/* Progress indicator for scraping */}
+      <AnimatePresence>
+        {(isScraping || isAnalyzing) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-muted/30 rounded-lg p-4 border border-border/50"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              {isScraping ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm font-medium">正在抓取产品信息与评论...</span>
+                </>
+              ) : (
+                <>
+                  <BarChart3 className="w-4 h-4 animate-pulse text-primary" />
+                  <span className="text-sm font-medium">正在分析评论数据...</span>
+                </>
+              )}
+            </div>
+            <Progress 
+              value={isScraping ? scrapeProgress : 50} 
+              className="h-2"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              {isScraping 
+                ? "正在从 Amazon 抓取产品信息和用户评论（最多100条）" 
+                : "AI 正在分析用户评论，提取痛点与需求洞察"}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Product list */}
       <AnimatePresence mode="popLayout">
