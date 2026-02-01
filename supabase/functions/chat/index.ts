@@ -406,9 +406,37 @@ async function getCompetitorData(supabase: any, projectId: string) {
   }
 }
 
-// Build dynamic system prompt with competitor insights
-function buildDynamicSystemPrompt(competitorData: any, projectName: string, projectDescription: string | null, existingPrdData: Partial<PrdData> | null): string {
+// Build dynamic system prompt with competitor insights and initial market analysis
+function buildDynamicSystemPrompt(
+  competitorData: any, 
+  projectName: string, 
+  projectDescription: string | null, 
+  existingPrdData: Partial<PrdData> | null,
+  initialMarketAnalysis: any | null
+): string {
   let prompt = BASE_SYSTEM_PROMPT;
+
+  // Add initial market analysis context if available
+  if (initialMarketAnalysis) {
+    prompt += `
+
+## 初始市场分析报告（已通过AI市场专家生成）
+
+请基于这份市场分析报告来制定产品策略：
+
+**市场规模评估**：${initialMarketAnalysis.marketSize || "暂无"}
+
+**目标用户画像**：${initialMarketAnalysis.targetUserProfile || "暂无"}
+
+**竞争格局预判**：${initialMarketAnalysis.competitionLandscape || "暂无"}
+
+**定价策略建议**：${initialMarketAnalysis.pricingStrategy || "暂无"}
+
+**差异化机会**：
+${initialMarketAnalysis.differentiationOpportunities?.map((opp: string) => `- ${opp}`).join("\n") || "暂无"}
+
+**重要**：在产品设计提案中，必须结合这份市场分析报告的洞察，让用户感受到数据驱动的专业性。`;
+  }
 
   // Add existing PRD data context
   if (existingPrdData && Object.keys(existingPrdData).some(k => existingPrdData[k as keyof PrdData])) {
@@ -510,7 +538,9 @@ serve(async (req) => {
       .eq("id", projectId)
       .single();
 
-    const existingPrdData = project?.prd_data as Partial<PrdData> | null;
+    const prdDataRaw = project?.prd_data as Record<string, any> | null;
+    const existingPrdData = prdDataRaw as Partial<PrdData> | null;
+    const initialMarketAnalysis = prdDataRaw?.initialMarketAnalysis || null;
 
     // Get competitor data if in stage 1
     let competitorData = null;
@@ -526,7 +556,8 @@ serve(async (req) => {
       competitorData, 
       project?.name || "未命名项目",
       project?.description,
-      existingPrdData
+      existingPrdData,
+      initialMarketAnalysis
     );
     
     const systemPromptWithStage = `${dynamicSystemPrompt}\n\n当前阶段：${currentStage} - ${stageName}`;
