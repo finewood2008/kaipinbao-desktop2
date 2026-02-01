@@ -914,8 +914,8 @@ serve(async (req) => {
     // Get existing PRD data from database or use provided current data
     const existingPrdData = currentPrdData || (project.prd_data as Partial<PrdData>) || null;
 
-    // Get initial market analysis from project
-    const initialMarketAnalysis = project.landing_page_data?.initialMarketAnalysis || null;
+    // Get initial market analysis from project (check both locations)
+    const initialMarketAnalysis = project.prd_data?.initialMarketAnalysis || project.landing_page_data?.initialMarketAnalysis || null;
 
     // Build dynamic system prompt
     const systemPrompt = buildDynamicSystemPrompt(
