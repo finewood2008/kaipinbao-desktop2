@@ -343,19 +343,65 @@ async function scrapeAmazonReviewsWithOCR(
         continue;
       }
 
-      const screenshotBase64 = data.data?.screenshot;
+      const screenshotData = data.data?.screenshot;
       const markdown = data.data?.markdown || "";
       
-      if (!screenshotBase64) {
+      if (!screenshotData) {
         console.log("No screenshot captured, falling back to markdown extraction");
         const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
         allReviews.push(...markdownReviews);
         continue;
       }
 
-      console.log("Screenshot captured, sending to Gemini for OCR...");
+      console.log("Screenshot captured, type:", typeof screenshotData);
+      console.log("Screenshot data prefix:", String(screenshotData).substring(0, 80));
 
-      // Step 2: Send screenshot to Gemini for OCR extraction
+      // Step 2: Convert screenshot to base64 if it's a URL
+      let imageBase64: string;
+      
+      if (screenshotData.startsWith('http')) {
+        // Firecrawl returned a URL, we need to download and convert to base64
+        console.log("Screenshot is a URL, downloading...");
+        try {
+          const imageResponse = await fetch(screenshotData);
+          if (!imageResponse.ok) {
+            console.error("Failed to download screenshot:", imageResponse.status);
+            const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
+            allReviews.push(...markdownReviews);
+            continue;
+          }
+          
+          const imageArrayBuffer = await imageResponse.arrayBuffer();
+          const imageBytes = new Uint8Array(imageArrayBuffer);
+          
+          // Convert to base64
+          let binary = '';
+          const chunkSize = 8192;
+          for (let i = 0; i < imageBytes.length; i += chunkSize) {
+            const chunk = imageBytes.slice(i, i + chunkSize);
+            binary += String.fromCharCode(...chunk);
+          }
+          imageBase64 = btoa(binary);
+          console.log("Image downloaded and converted, base64 length:", imageBase64.length);
+        } catch (downloadError) {
+          console.error("Error downloading screenshot:", downloadError);
+          const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
+          allReviews.push(...markdownReviews);
+          continue;
+        }
+      } else if (screenshotData.startsWith('data:')) {
+        // Already a data URL, extract base64 part
+        imageBase64 = screenshotData.split(',')[1] || screenshotData;
+      } else {
+        // Assume it's raw base64
+        imageBase64 = screenshotData;
+      }
+
+      // Build the proper data URL for Gemini
+      const imageDataUrl = `data:image/png;base64,${imageBase64}`;
+      console.log("Sending to Gemini, base64 length:", imageBase64.length);
+      
+      // Use google/gemini-2.5-pro for multimodal (vision) capabilities
       const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -363,13 +409,16 @@ async function scrapeAmazonReviewsWithOCR(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-pro-preview",
+          model: "google/gemini-2.5-pro",
           messages: [
             {
-              role: "system",
-              content: `You are an expert OCR and review extraction specialist. Extract ALL user reviews visible in this Amazon reviews page screenshot.
+              role: "user",
+              content: [
+                { 
+                  type: "text", 
+                  text: `You are an expert OCR specialist. Extract ALL user reviews from this Amazon reviews page screenshot.
 
-Return a JSON array with this exact format (no markdown code blocks):
+Return a JSON array with this exact format (no markdown code blocks, just raw JSON):
 [
   { "text": "Full review content", "rating": 5, "title": "Review title if visible" },
   { "text": "Another review", "rating": 4, "title": "Title" }
@@ -381,23 +430,25 @@ IMPORTANT:
 - Rating should be 1-5 based on the star icons visible
 - If rating or title is not visible, omit that field
 - Return an empty array [] if no reviews are visible
-- Do NOT wrap the JSON in markdown code blocks`
-            },
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "Please extract all user reviews from this Amazon reviews page screenshot:" },
-                { type: "image_url", image_url: { url: `data:image/png;base64,${screenshotBase64}` } }
+- Return ONLY the JSON array, no explanations or markdown`
+                },
+                { 
+                  type: "image_url", 
+                  image_url: { 
+                    url: imageDataUrl
+                  } 
+                }
               ]
             }
           ],
-          temperature: 0.2,
+          temperature: 0.1,
           max_tokens: 8000,
         }),
       });
 
       if (!ocrResponse.ok) {
-        console.error("OCR API error:", ocrResponse.status);
+        const errorText = await ocrResponse.text();
+        console.error("OCR API error:", ocrResponse.status, errorText);
         // Fallback to markdown extraction
         const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
         allReviews.push(...markdownReviews);
@@ -448,11 +499,10 @@ IMPORTANT:
       }
 
       // Save first screenshot URL (upload to storage if needed)
-      if (!screenshotUrl && screenshotBase64) {
+      if (!screenshotUrl && imageBase64) {
         try {
           const filename = `review-screenshot-${productId}-${Date.now()}.png`;
-          const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, "");
-          const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+          const binaryData = Uint8Array.from(atob(imageBase64), c => c.charCodeAt(0));
           
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from("review-screenshots")
