@@ -22,10 +22,20 @@ serve(async (req) => {
     }
 
     const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
     if (!FIRECRAWL_API_KEY) {
       console.error("FIRECRAWL_API_KEY not configured");
       return new Response(
         JSON.stringify({ success: false, error: "Firecrawl not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY not configured");
+      return new Response(
+        JSON.stringify({ success: false, error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -56,7 +66,7 @@ serve(async (req) => {
       body: JSON.stringify({
         url,
         formats: ["markdown", "html", "links"],
-        onlyMainContent: false, // Get full page for better extraction
+        onlyMainContent: false,
         waitFor: 5000,
       }),
     });
@@ -91,23 +101,29 @@ serve(async (req) => {
     const reviewSummary = extractReviewSummary(markdown);
     console.log("Review summary extracted:", JSON.stringify(reviewSummary));
 
-    // Step 2: If Amazon, scrape dedicated reviews page
-    let reviews: Array<{ text: string; rating?: number }> = [];
+    // Step 2: If Amazon, scrape reviews using screenshot + OCR
+    let reviews: Array<{ text: string; rating?: number; title?: string }> = [];
     let reviewScreenshotUrl: string | null = null;
 
     if (isAmazon && asin) {
       console.log("Amazon product detected, ASIN:", asin);
       
       try {
-        const reviewsResult = await scrapeAmazonReviewsPage(asin, FIRECRAWL_API_KEY, supabase, productId);
+        const reviewsResult = await scrapeAmazonReviewsWithOCR(
+          asin, 
+          FIRECRAWL_API_KEY, 
+          LOVABLE_API_KEY,
+          supabase, 
+          productId
+        );
         reviews = reviewsResult.reviews;
         reviewScreenshotUrl = reviewsResult.screenshotUrl;
-        console.log(`Scraped ${reviews.length} reviews from dedicated page`);
+        console.log(`Scraped ${reviews.length} reviews via screenshot+OCR`);
       } catch (reviewError) {
-        console.error("Error scraping reviews page:", reviewError);
-        // Fall back to extracting from main page HTML
+        console.error("Error scraping reviews with OCR:", reviewError);
+        // Fall back to HTML extraction
         reviews = extractReviewsFromHtml(html);
-        console.log(`Fallback: extracted ${reviews.length} reviews from main page HTML`);
+        console.log(`Fallback: extracted ${reviews.length} reviews from HTML`);
       }
     } else {
       // Non-Amazon: extract reviews from main page
@@ -131,6 +147,7 @@ serve(async (req) => {
           markdown: markdown.slice(0, 50000),
           extractedAt: new Date().toISOString(),
           asin: asin,
+          ocrUsed: true,
         },
         status: "completed",
       })
@@ -163,6 +180,7 @@ serve(async (req) => {
         reviewCount: reviews.length,
         hasScreenshot: !!reviewScreenshotUrl,
         hasReviewSummary: !!(reviewSummary.topPositives.length || reviewSummary.topNegatives.length),
+        ocrUsed: true,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -196,7 +214,6 @@ function extractMainProductImage(markdown: string, url: string): string | null {
   const lowerUrl = url.toLowerCase();
   
   if (lowerUrl.includes("amazon")) {
-    // Amazon main image patterns - prioritize large images
     const patterns = [
       /https?:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9+%-]+\._AC_SL1500_[^"'\s\)]*\.(jpg|png|webp)/gi,
       /https?:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9+%-]+\._SL1500_[^"'\s\)]*\.(jpg|png|webp)/gi,
@@ -212,7 +229,6 @@ function extractMainProductImage(markdown: string, url: string): string | null {
     }
   }
   
-  // Fallback: any large image
   const generalPattern = /https?:\/\/[^"'\s]+\.(jpg|jpeg|png|webp)/gi;
   const matches = markdown.match(generalPattern);
   if (matches && matches.length > 0) {
@@ -238,19 +254,16 @@ function extractReviewSummary(markdown: string): {
     topNegatives: [] as string[],
   };
 
-  // Extract overall rating
   const ratingMatch = markdown.match(/(\d+\.?\d*)\s*out of\s*5\s*stars?/i);
   if (ratingMatch) {
     result.overallRating = parseFloat(ratingMatch[1]);
   }
 
-  // Extract total reviews
   const reviewCountMatch = markdown.match(/([\d,]+)\s*(?:global\s+)?(?:ratings?|reviews?|customer\s+reviews?)/i);
   if (reviewCountMatch) {
     result.totalReviews = parseInt(reviewCountMatch[1].replace(/,/g, ""), 10);
   }
 
-  // Extract rating breakdown
   const breakdownPattern = /(\d)\s*star[s]?\s*(\d+)%/gi;
   let breakdownMatch;
   while ((breakdownMatch = breakdownPattern.exec(markdown)) !== null) {
@@ -260,7 +273,6 @@ function extractReviewSummary(markdown: string): {
     });
   }
 
-  // Extract "Customers say" highlights
   const positivePatterns = [
     /customers\s+(?:like|love|mention|say)[^.]*?(?:quality|durable|value|great|excellent|good|perfect|easy)[^.]*\./gi,
   ];
@@ -280,48 +292,45 @@ function extractReviewSummary(markdown: string): {
   return result;
 }
 
-// Scrape Amazon's dedicated reviews page
-async function scrapeAmazonReviewsPage(
+// NEW: Screenshot + OCR approach for Amazon reviews
+async function scrapeAmazonReviewsWithOCR(
   asin: string,
-  apiKey: string,
+  firecrawlApiKey: string,
+  lovableApiKey: string,
   supabase: any,
   productId: string
-): Promise<{ reviews: Array<{ text: string; rating?: number }>; screenshotUrl: string | null }> {
-  // Scrape multiple pages for more reviews
+): Promise<{ reviews: Array<{ text: string; rating?: number; title?: string }>; screenshotUrl: string | null }> {
   const reviewUrls = [
     `https://www.amazon.com/product-reviews/${asin}/?sortBy=recent&pageNumber=1`,
-    `https://www.amazon.com/product-reviews/${asin}/?sortBy=recent&pageNumber=2`,
     `https://www.amazon.com/product-reviews/${asin}/?sortBy=helpful&pageNumber=1`,
   ];
   
-  let allReviews: Array<{ text: string; rating?: number }> = [];
+  let allReviews: Array<{ text: string; rating?: number; title?: string }> = [];
   let screenshotUrl: string | null = null;
 
   for (const reviewUrl of reviewUrls) {
-    if (allReviews.length >= 80) break;
+    if (allReviews.length >= 50) break;
     
-    console.log("Scraping reviews page:", reviewUrl);
+    console.log("Taking screenshot of reviews page:", reviewUrl);
 
     try {
-      // Use HTML format for better structured extraction
+      // Step 1: Take screenshot of reviews page
       const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${firecrawlApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           url: reviewUrl,
-          formats: ["html", "markdown"],
+          formats: ["screenshot", "markdown"],
           onlyMainContent: false,
-          waitFor: 10000, // Wait longer for reviews to load
+          waitFor: 8000,
           actions: [
             { type: "wait", milliseconds: 3000 },
-            { type: "scroll", direction: "down", amount: 500 },
+            { type: "scroll", direction: "down", amount: 800 },
             { type: "wait", milliseconds: 2000 },
-            { type: "scroll", direction: "down", amount: 500 },
-            { type: "wait", milliseconds: 2000 },
-            { type: "scroll", direction: "down", amount: 500 },
+            { type: "scroll", direction: "down", amount: 800 },
             { type: "wait", milliseconds: 2000 },
           ],
         }),
@@ -330,96 +339,166 @@ async function scrapeAmazonReviewsPage(
       const data = await response.json();
       
       if (!response.ok || !data.success) {
-        console.error("Reviews page scrape error:", data.error || data);
+        console.error("Screenshot error:", data.error || data);
         continue;
       }
 
-      const reviewsHtml = data.data?.html || "";
-      const reviewsMarkdown = data.data?.markdown || "";
+      const screenshotBase64 = data.data?.screenshot;
+      const markdown = data.data?.markdown || "";
       
-      console.log("HTML length:", reviewsHtml.length, "Markdown length:", reviewsMarkdown.length);
+      if (!screenshotBase64) {
+        console.log("No screenshot captured, falling back to markdown extraction");
+        const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
+        allReviews.push(...markdownReviews);
+        continue;
+      }
 
-      // Extract reviews from HTML (more reliable)
-      let pageReviews = extractReviewsFromHtml(reviewsHtml);
-      console.log(`Extracted ${pageReviews.length} reviews from HTML`);
+      console.log("Screenshot captured, sending to Gemini for OCR...");
+
+      // Step 2: Send screenshot to Gemini for OCR extraction
+      const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-pro-preview",
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert OCR and review extraction specialist. Extract ALL user reviews visible in this Amazon reviews page screenshot.
+
+Return a JSON array with this exact format (no markdown code blocks):
+[
+  { "text": "Full review content", "rating": 5, "title": "Review title if visible" },
+  { "text": "Another review", "rating": 4, "title": "Title" }
+]
+
+IMPORTANT:
+- Extract ONLY actual user reviews, not product descriptions or UI elements
+- Include the complete review text, not truncated
+- Rating should be 1-5 based on the star icons visible
+- If rating or title is not visible, omit that field
+- Return an empty array [] if no reviews are visible
+- Do NOT wrap the JSON in markdown code blocks`
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Please extract all user reviews from this Amazon reviews page screenshot:" },
+                { type: "image_url", image_url: { url: `data:image/png;base64,${screenshotBase64}` } }
+              ]
+            }
+          ],
+          temperature: 0.2,
+          max_tokens: 8000,
+        }),
+      });
+
+      if (!ocrResponse.ok) {
+        console.error("OCR API error:", ocrResponse.status);
+        // Fallback to markdown extraction
+        const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
+        allReviews.push(...markdownReviews);
+        continue;
+      }
+
+      const ocrData = await ocrResponse.json();
+      const ocrContent = ocrData.choices?.[0]?.message?.content || "";
       
-      // If HTML extraction fails, try markdown
-      if (pageReviews.length < 3) {
-        const markdownReviews = extractReviewsFromMarkdownAdvanced(reviewsMarkdown);
-        console.log(`Extracted ${markdownReviews.length} reviews from markdown`);
-        if (markdownReviews.length > pageReviews.length) {
-          pageReviews = markdownReviews;
+      console.log("OCR response received, length:", ocrContent.length);
+
+      // Parse OCR results
+      try {
+        let jsonStr = ocrContent;
+        const jsonMatch = ocrContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          jsonStr = jsonMatch[1].trim();
+        }
+        
+        const extractedReviews = JSON.parse(jsonStr);
+        
+        if (Array.isArray(extractedReviews)) {
+          console.log(`OCR extracted ${extractedReviews.length} reviews`);
+          
+          for (const review of extractedReviews) {
+            if (review.text && review.text.length >= 20) {
+              // Check for duplicates
+              const isDuplicate = allReviews.some(r => 
+                r.text.substring(0, 50) === review.text.substring(0, 50)
+              );
+              if (!isDuplicate) {
+                allReviews.push({
+                  text: review.text,
+                  rating: review.rating,
+                  title: review.title,
+                });
+              }
+            }
+          }
+        }
+      } catch (parseError) {
+        console.error("Failed to parse OCR response:", parseError);
+        console.log("OCR content:", ocrContent.substring(0, 500));
+        
+        // Fallback to markdown extraction
+        const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
+        allReviews.push(...markdownReviews);
+      }
+
+      // Save first screenshot URL (upload to storage if needed)
+      if (!screenshotUrl && screenshotBase64) {
+        try {
+          const filename = `review-screenshot-${productId}-${Date.now()}.png`;
+          const base64Data = screenshotBase64.replace(/^data:image\/\w+;base64,/, "");
+          const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from("review-screenshots")
+            .upload(filename, binaryData, {
+              contentType: "image/png",
+            });
+
+          if (!uploadError && uploadData) {
+            const { data: urlData } = supabase.storage
+              .from("review-screenshots")
+              .getPublicUrl(filename);
+            screenshotUrl = urlData?.publicUrl || null;
+            console.log("Screenshot uploaded:", screenshotUrl);
+          }
+        } catch (uploadErr) {
+          console.error("Screenshot upload failed:", uploadErr);
         }
       }
-      
-      // Merge reviews (avoid duplicates)
-      for (const review of pageReviews) {
-        const isDuplicate = allReviews.some(r => 
-          r.text.length > 50 && review.text.length > 50 &&
-          (r.text.substring(0, 80) === review.text.substring(0, 80) ||
-           r.text.includes(review.text.substring(0, 50)))
-        );
-        if (!isDuplicate) {
-          allReviews.push(review);
-        }
-      }
-      
+
       console.log(`Total reviews so far: ${allReviews.length}`);
     } catch (error) {
-      console.error("Error scraping review page:", error);
+      console.error("Error in screenshot+OCR flow:", error);
     }
   }
 
   return { reviews: allReviews, screenshotUrl };
 }
 
-// Extract reviews from HTML (more reliable than markdown)
+// Extract reviews from HTML (fallback)
 function extractReviewsFromHtml(html: string): Array<{ text: string; rating?: number }> {
   const reviews: Array<{ text: string; rating?: number }> = [];
   
   if (!html || html.length < 100) return reviews;
 
-  // Pattern 1: Amazon review body with data-hook attribute
-  // data-hook="review-body"
   const reviewBodyPattern = /<span[^>]*data-hook="review-body"[^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/gi;
   let match;
   while ((match = reviewBodyPattern.exec(html)) !== null) {
     const content = cleanHtmlText(match[1]);
     if (isValidReviewContent(content)) {
-      // Try to find rating near this review
       const rating = findNearbyRating(html, match.index);
       reviews.push({ text: content, rating });
     }
   }
 
-  // Pattern 2: Review text in div with specific class patterns
   const reviewDivPattern = /<div[^>]*class="[^"]*review-text[^"]*"[^>]*>([\s\S]*?)<\/div>/gi;
   while ((match = reviewDivPattern.exec(html)) !== null) {
-    const content = cleanHtmlText(match[1]);
-    if (isValidReviewContent(content) && !reviews.some(r => r.text.includes(content.substring(0, 50)))) {
-      const rating = findNearbyRating(html, match.index);
-      reviews.push({ text: content, rating });
-    }
-  }
-
-  // Pattern 3: Look for review content in span tags with substantial text
-  const spanPattern = /<span[^>]*>([\s\S]{100,2000}?)<\/span>/gi;
-  while ((match = spanPattern.exec(html)) !== null) {
-    const content = cleanHtmlText(match[1]);
-    // Check if this looks like a review (not a product description, not HTML)
-    if (isValidReviewContent(content) && 
-        !content.includes("Add to Cart") &&
-        !content.includes("Buy Now") &&
-        !content.includes("customers mention") &&
-        !reviews.some(r => r.text.includes(content.substring(0, 50)))) {
-      const rating = findNearbyRating(html, match.index);
-      reviews.push({ text: content, rating });
-    }
-  }
-
-  // Pattern 4: Look for paragraphs that might be reviews
-  const pPattern = /<p[^>]*>([\s\S]{80,1500}?)<\/p>/gi;
-  while ((match = pPattern.exec(html)) !== null) {
     const content = cleanHtmlText(match[1]);
     if (isValidReviewContent(content) && !reviews.some(r => r.text.includes(content.substring(0, 50)))) {
       const rating = findNearbyRating(html, match.index);
@@ -431,10 +510,9 @@ function extractReviewsFromHtml(html: string): Array<{ text: string; rating?: nu
   return reviews.slice(0, 100);
 }
 
-// Clean HTML text
 function cleanHtmlText(html: string): string {
   return html
-    .replace(/<[^>]+>/g, ' ') // Remove HTML tags
+    .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -445,13 +523,10 @@ function cleanHtmlText(html: string): string {
     .trim();
 }
 
-// Find rating near a position in HTML
 function findNearbyRating(html: string, position: number): number | undefined {
-  // Look backwards up to 500 characters for a rating
   const searchStart = Math.max(0, position - 500);
   const searchText = html.substring(searchStart, position);
   
-  // Look for "X out of 5 stars" pattern
   const patterns = [
     /(\d)\.0 out of 5 stars/gi,
     /(\d) out of 5 stars/gi,
@@ -469,15 +544,11 @@ function findNearbyRating(html: string, position: number): number | undefined {
   return undefined;
 }
 
-// Validate review content
 function isValidReviewContent(text: string): boolean {
   if (!text || text.length < 50 || text.length > 3000) return false;
-  
-  // Reject URL fragments
   if (/https?:\/\//i.test(text)) return false;
   if (text.includes("amazon.com")) return false;
   
-  // Reject UI elements
   const uiPatterns = [
     /^(see|read|show)\s+(more|all|full)/i,
     /^(helpful|report|share)/i,
@@ -495,55 +566,43 @@ function isValidReviewContent(text: string): boolean {
   
   if (uiPatterns.some(p => p.test(text))) return false;
   
-  // Must have at least 3 words
   const wordCount = text.split(/\s+/).filter(w => w.length >= 3).length;
   if (wordCount < 5) return false;
   
-  // Must contain actual sentences (letters, not just numbers)
   if (!/[a-zA-Z]{5,}/.test(text)) return false;
   
   return true;
 }
 
-// Advanced markdown extraction
 function extractReviewsFromMarkdownAdvanced(markdown: string): Array<{ text: string; rating?: number }> {
   const reviews: Array<{ text: string; rating?: number }> = [];
   
   if (!markdown || markdown.length < 100) return reviews;
 
-  // Split by potential review boundaries
   const sections = markdown.split(/(?=\d\.0 out of 5 stars)/gi);
   
   for (const section of sections) {
     if (section.length < 100) continue;
     
-    // Extract rating from section start
     const ratingMatch = section.match(/^(\d)\.0 out of 5 stars/i);
     const rating = ratingMatch ? parseInt(ratingMatch[1], 10) : undefined;
     
-    // Find review content (skip headers, find substantial text)
     const lines = section.split(/\n+/);
     let reviewText = '';
     let foundVerified = false;
     
     for (const line of lines) {
       const trimmed = line.trim();
-      
-      // Skip empty and short lines
       if (trimmed.length < 20) continue;
       
-      // Mark when we've passed "Verified Purchase"
       if (/verified purchase/i.test(trimmed)) {
         foundVerified = true;
         continue;
       }
       
-      // Skip UI elements
       if (isUiLine(trimmed)) continue;
       
-      // After "Verified Purchase", collect review content
       if (foundVerified && trimmed.length >= 30) {
-        // Stop if we hit "Helpful" or "Report"
         if (/^\d+ people found this helpful/i.test(trimmed)) break;
         if (/^(helpful|report)$/i.test(trimmed)) break;
         
@@ -557,23 +616,9 @@ function extractReviewsFromMarkdownAdvanced(markdown: string): Array<{ text: str
     }
   }
   
-  // Also try paragraph-based extraction
-  const paragraphs = markdown.split(/\n\n+/);
-  for (const para of paragraphs) {
-    const cleaned = para.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-    
-    if (cleaned.length >= 80 && 
-        cleaned.length <= 2000 && 
-        isValidReviewContent(cleaned) &&
-        !reviews.some(r => r.text.includes(cleaned.substring(0, 50)))) {
-      reviews.push({ text: cleaned });
-    }
-  }
-  
   return reviews;
 }
 
-// Check if a line is UI element
 function isUiLine(line: string): boolean {
   const patterns = [
     /^(see|read|show)\s+(more|all|full)/i,
@@ -606,7 +651,6 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
   let rating = null;
   let reviewCount = null;
 
-  // Extract price
   const pricePatterns = [
     /\$[\d,]+\.?\d*/g,
     /￥[\d,]+\.?\d*/g,
@@ -621,7 +665,6 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
     }
   }
 
-  // Extract rating
   const ratingPatterns = [
     /(\d+\.?\d*)\s*out of\s*5/i,
     /Rating:\s*(\d+\.?\d*)/i,
@@ -638,7 +681,6 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
     }
   }
 
-  // Extract review count
   const reviewPatterns = [
     /([\d,]+)\s*(?:global\s+)?(?:ratings?|reviews?)/i,
     /(\d+)\s*customer\s*reviews?/i,
@@ -652,7 +694,6 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
     }
   }
 
-  // Clean up title
   if (title) {
     title = title
       .replace(/\s*[-|:]\s*(Amazon|AliExpress|eBay).*$/i, "")

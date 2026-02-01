@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, Loader2, ArrowRight, SkipForward, Link, BarChart3 } from "lucide-react";
+import { TrendingUp, Plus, Loader2, ArrowRight, SkipForward, Link, BarChart3, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { CompetitorCard, CompetitorProduct } from "@/components/CompetitorCard";
 import { ReviewAnalysisSummary, ReviewAnalysis } from "@/components/ReviewAnalysisSummary";
+import { MarketAnalysisReport, MarketAnalysisData } from "@/components/MarketAnalysisReport";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -35,7 +36,9 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
   const [isAdding, setIsAdding] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isMarketAnalyzing, setIsMarketAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<ReviewAnalysis | null>(null);
+  const [marketAnalysis, setMarketAnalysis] = useState<MarketAnalysisData | null>(null);
   const [scrapeProgress, setScrapeProgress] = useState(0);
 
   // Load existing competitor products
@@ -73,6 +76,20 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
     const completedProducts = (data || []).filter(p => p.status === "completed");
     if (completedProducts.length > 0) {
       await generateAnalysis();
+    }
+
+    // Check if we already have market analysis
+    const { data: projectData } = await supabase
+      .from("projects")
+      .select("prd_data")
+      .eq("id", projectId)
+      .single();
+
+    if (projectData?.prd_data && typeof projectData.prd_data === 'object') {
+      const prdData = projectData.prd_data as Record<string, unknown>;
+      if (prdData.marketAnalysis) {
+        setMarketAnalysis(prdData.marketAnalysis as MarketAnalysisData);
+      }
     }
   };
 
@@ -219,6 +236,29 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
     }
   };
 
+  const handleStartMarketAnalysis = async () => {
+    setIsMarketAnalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("market-analysis", {
+        body: { projectId },
+      });
+
+      if (error) throw error;
+
+      if (data.success && data.analysis) {
+        setMarketAnalysis(data.analysis);
+        toast.success("市场分析完成");
+      } else {
+        throw new Error(data.error || "Analysis failed");
+      }
+    } catch (error) {
+      console.error("Market analysis failed:", error);
+      toast.error("市场分析失败，请重试");
+    } finally {
+      setIsMarketAnalyzing(false);
+    }
+  };
+
   const handleComplete = async () => {
     // Mark competitor research as completed
     await supabase
@@ -246,11 +286,11 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
           animate={{ scale: 1 }}
           className="w-16 h-16 mx-auto bg-primary/20 rounded-full flex items-center justify-center"
         >
-          <Search className="w-8 h-8 text-primary" />
+          <TrendingUp className="w-8 h-8 text-primary" />
         </motion.div>
-        <h2 className="text-xl font-semibold text-foreground">竞品研究 <span className="text-muted-foreground text-sm">(可选)</span></h2>
+        <h2 className="text-xl font-semibold text-foreground">市场分析 <span className="text-muted-foreground text-sm">(可选)</span></h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          添加 Amazon 竞品链接，我们将抓取产品信息和评论，帮助您了解市场需求和用户痛点
+          添加 Amazon 竞品链接，AI 市场分析专家将帮您了解市场格局、价格策略和用户真实需求
         </p>
       </div>
 
@@ -274,7 +314,7 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
 
       {/* Progress indicator for scraping */}
       <AnimatePresence>
-        {(isScraping || isAnalyzing) && (
+        {(isScraping || isAnalyzing || isMarketAnalyzing) && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -287,6 +327,11 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm font-medium">正在抓取产品信息与评论...</span>
                 </>
+              ) : isMarketAnalyzing ? (
+                <>
+                  <Sparkles className="w-4 h-4 animate-pulse text-primary" />
+                  <span className="text-sm font-medium">AI 市场分析专家正在分析数据...</span>
+                </>
               ) : (
                 <>
                   <BarChart3 className="w-4 h-4 animate-pulse text-primary" />
@@ -295,12 +340,14 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
               )}
             </div>
             <Progress 
-              value={isScraping ? scrapeProgress : 50} 
+              value={isScraping ? scrapeProgress : isMarketAnalyzing ? 60 : 50} 
               className="h-2"
             />
             <p className="text-xs text-muted-foreground mt-2">
               {isScraping 
-                ? "正在从 Amazon 抓取产品信息和用户评论（最多100条）" 
+                ? "正在从 Amazon 抓取产品信息和用户评论" 
+                : isMarketAnalyzing
+                ? "正在生成市场格局、价格策略、差异化机会等专业分析报告"
                 : "AI 正在分析用户评论，提取痛点与需求洞察"}
             </p>
           </motion.div>
@@ -333,6 +380,27 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       {/* Analysis summary */}
       {analysis && <ReviewAnalysisSummary analysis={analysis} />}
 
+      {/* Market Analysis Button */}
+      {completedCount > 0 && !marketAnalysis && !isMarketAnalyzing && scrapingCount === 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex justify-center"
+        >
+          <Button
+            onClick={handleStartMarketAnalysis}
+            variant="outline"
+            className="border-primary/50 hover:bg-primary/10"
+          >
+            <Sparkles className="w-4 h-4 mr-2 text-primary" />
+            开始 AI 市场分析
+          </Button>
+        </motion.div>
+      )}
+
+      {/* Market Analysis Report */}
+      {marketAnalysis && <MarketAnalysisReport analysis={marketAnalysis} />}
+
       {/* Actions */}
       <div className="flex justify-between pt-4 border-t border-border/30">
         <Button variant="ghost" onClick={onSkip} className="text-muted-foreground">
@@ -341,17 +409,17 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
         </Button>
         <Button
           onClick={handleComplete}
-          disabled={scrapingCount > 0}
+          disabled={scrapingCount > 0 || isMarketAnalyzing}
           className="bg-primary hover:bg-primary/90"
         >
-          {scrapingCount > 0 ? (
+          {scrapingCount > 0 || isMarketAnalyzing ? (
             <>
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-              正在抓取 ({scrapingCount})
+              {isMarketAnalyzing ? "分析中..." : `正在抓取 (${scrapingCount})`}
             </>
           ) : (
             <>
-              {completedCount > 0 ? "完成研究" : "开始PRD对话"}
+              {completedCount > 0 ? "进入AI产品经理" : "开始PRD对话"}
               <ArrowRight className="w-4 h-4 ml-1" />
             </>
           )}
