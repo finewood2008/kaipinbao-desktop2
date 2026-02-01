@@ -1,393 +1,270 @@
 
-# PRD 智能生成与审核系统重构计划
 
-## 项目概览
+# Amazon 抓取优化计划
 
-将 PRD 流程重构为三个核心阶段：
-1. **智能对话阶段** - AI 基于产品初步定义 + 竞品分析（含图片）动态生成方向性选择
-2. **PRD 审核编辑板块** - 独立页面完整展示 PRD，支持逐条编辑和维度重新生成
-3. **最终确认** - 用户确认后进入视觉生成阶段
+## 问题诊断
 
----
+### 当前问题
+1. **评论抓取不完整** - Amazon 产品页评论是动态加载的，Firecrawl 默认只能获取部分预览
+2. **图片抓取过多** - 当前抓取了太多图片（广告、缩略图等），只需要商品主图
+3. **缺少置顶评论摘要** - Amazon 商品页顶部有"客户评论摘要"（Customer Review Summary），是最有价值的评论洞察
 
-## 核心改动
-
-### 第一部分：竞品抓取增强 - 包含产品图片
-
-#### 1.1 数据库扩展
-
-为 `competitor_products` 表新增字段：
-
-| 字段名 | 类型 | 描述 |
-|--------|------|------|
-| `product_images` | `jsonb` | 产品图片URL数组 |
-
-#### 1.2 修改 scrape-competitor Edge Function
-
-**文件**: `supabase/functions/scrape-competitor/index.ts`
-
-当前 Firecrawl 配置：
-```typescript
-formats: ["markdown", "html"]
-```
-
-改为抓取图片链接：
-```typescript
-formats: ["markdown", "html", "links"]
-```
-
-新增 `extractProductImages` 函数：
-- 从 markdown 中提取图片 URL（Amazon 产品图）
-- 过滤非产品图片（广告、logo 等）
-- 保存到 `product_images` 字段
-
-#### 1.3 更新 CompetitorCard 组件
-
-展示抓取到的产品图片缩略图。
+### 优化目标
+1. 通过 Firecrawl 截图功能获取评论页面视觉信息
+2. 抓取 Amazon 置顶的产品综合评论摘要
+3. 只抓取商品主图（第一张大图）
 
 ---
 
-### 第二部分：PRD 数据结构增强
+## 解决方案
 
-#### 2.1 修改 PrdData 接口
-
-新增竞品图片引用：
-
-```typescript
-interface PrdData {
-  // 现有字段...
-  
-  // 新增：竞品参考图片
-  competitorImages?: {
-    productId: string;
-    productTitle: string;
-    images: string[];
-  }[];
-}
-```
-
----
-
-### 第三部分：对话策略重构 - 动态方向性选择
-
-#### 3.1 修改 Chat Edge Function 系统提示词
-
-**文件**: `supabase/functions/chat/index.ts`
-
-**当前模式**：
-- 固定的信息采集流程
-- 逐项询问使用场景、目标用户等
-
-**新模式**：
-
-**核心原则**：
-1. 首先理解用户的产品初步定义（最重要输入）
-2. 结合竞品分析数据（产品外观图片 + 评论分析）
-3. 动态生成 2-4 个方向性选择题
-4. 根据用户选择，AI 综合所有已知信息自动填充完整 PRD
-5. 营销素材和视频数据基于使用场景自动推断，无需询问
-
-**提示词改动要点**：
-
-```
-## 对话策略（智能方向引导模式）
-
-### 信息优先级
-1. **用户产品定义**（最重要）- 用户描述的产品想法
-2. **竞品外观分析** - 从抓取的产品图片分析设计趋势
-3. **竞品评论洞察** - 好评要点和差评痛点
-
-### 对话流程
-
-**开场**：
-如果有竞品数据，展示：
-- 竞品图片分析（外观趋势、设计风格）
-- 评论痛点分析
-- 基于以上，提出2-3个产品方向供选择
-
-**方向性选择（动态生成）**：
-根据产品类型和竞品分析，动态生成2-4轮选择：
-- 不是固定的5个问题
-- 每个选择都基于上下文动态生成
-- 选择题格式，用户只需选A/B/C
-
-**PRD自动填充**：
-当收集到足够方向信息后（通常2-4轮选择）：
-- 自动生成完整PRD
-- 包含竞品参考图片
-- 营销素材和视频数据自动推断
-- 输出 [PRD_READY] 信号
-
-### 禁止行为
-- ❌ 不要问固定的5个问题
-- ❌ 不要询问营销图片素材信息
-- ❌ 不要询问视频场景信息
-- ✅ 基于产品使用场景自动推断所有素材需求
-```
-
-#### 3.2 竞品图片传递给 AI
-
-修改 `buildDynamicSystemPrompt` 函数：
-- 获取竞品产品图片 URL
-- 在系统提示词中包含图片分析要求
-- AI 分析外观趋势作为建议依据
-
----
-
-### 第四部分：PRD 审核编辑板块
-
-#### 4.1 新建 PrdReviewPanel 组件
-
-**文件**: `src/components/PrdReviewPanel.tsx`
-
-**完整页面布局**（非左右分栏，而是完整展开）：
+### 方案一：截图 + 评论页抓取
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│ 📋 PRD 文档审核                              [返回对话]         │
+│                    两步抓取策略                                 │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
-│ ━━━ 📍 使用场景 ━━━━━━━━━━━━━━━━━━━━ [编辑] [AI重新生成]        │
-│ • 室内办公环境，桌面使用                                        │
-│ • 咖啡厅临时办公                                               │
-│ • 机场候机厅工作                                               │
+│  步骤1: 抓取产品页                                              │
+│  ├─ 获取产品标题、价格、评分                                    │
+│  ├─ 提取商品主图（仅第一张）                                    │
+│  └─ 提取置顶评论摘要（Review Summary）                          │
 │                                                                │
-│ ━━━ 👥 目标用户 ━━━━━━━━━━━━━━━━━━━━ [编辑] [AI重新生成]        │
-│ 25-40岁商务差旅人士，年出差10+次，追求效率与品质                  │
-│                                                                │
-│ ━━━ 🎨 外观风格 ━━━━━━━━━━━━━━━━━━━━ [编辑] [AI重新生成]        │
-│ 极简商务风格，深空灰/银色，航空铝合金材质                        │
-│                                                                │
-│ ━━━ ⚡ 核心功能 ━━━━━━━━━━━━━━━━━━━━ [编辑] [AI重新生成]        │
-│ ☐ 3秒折叠展开             [删除] [替换]                        │
-│ ☐ 超轻材质 280g           [删除] [替换]                        │
-│ ☐ 无级角度调节            [删除] [替换]                        │
-│ [+ 添加功能]                                                   │
-│                                                                │
-│ ━━━ 📸 竞品参考图片 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
-│ ┌─────────┐ ┌─────────┐ ┌─────────┐                          │
-│ │ 竞品A图 │ │ 竞品B图 │ │ 竞品C图 │                          │
-│ │ (缩略图) │ │ (缩略图) │ │ (缩略图) │                          │
-│ └─────────┘ └─────────┘ └─────────┘                          │
-│ 产品A标题   产品B标题    产品C标题                              │
-│                                                                │
-│ ━━━ 🎬 营销素材方案（AI自动生成）━━━━━━━━━━ [AI重新生成]        │
-│ 场景图：现代办公室，柔和自然光，桌面简洁                         │
-│ 使用图：30岁商务人士，专注表情，笔记本+产品组合                   │
-│ 视频故事线：展开→使用→收纳 的6秒展示                            │
-│                                                                │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│    [返回对话继续调整]            [确认PRD并进入视觉生成]          │
+│  步骤2: 抓取评论页 + 截图                                       │
+│  ├─ 构建评论页 URL: /product-reviews/{ASIN}                    │
+│  ├─ 使用 Firecrawl screenshot 格式获取截图                      │
+│  ├─ 使用 actions 滚动页面加载更多评论                           │
+│  └─ 存储截图用于 AI 视觉分析                                    │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-**核心功能**：
-1. 完整展开所有 PRD 维度，一目了然
-2. 每个维度右侧有 [编辑] 和 [AI重新生成] 按钮
-3. 列表项（如核心功能）支持单项操作
-4. 竞品参考图片区域展示抓取的图片
-5. 底部有确认按钮进入下一阶段
-
-#### 4.2 编辑模式
-
-**手动编辑**：
-- 点击 [编辑] 进入编辑模式
-- textarea 直接修改内容
-- 保存后更新数据库
-
-**AI重新生成**：
-- 点击 [AI重新生成] 调用后端
-- 传入当前上下文，只重新生成该维度
-- 返回后替换显示
-
-#### 4.3 新建 regenerate-prd-section Edge Function
-
-**文件**: `supabase/functions/regenerate-prd-section/index.ts`
-
-**功能**：
-- 接收参数：projectId, section（维度名称）, context（上下文）
-- 调用 AI 只重新生成指定维度
-- 返回新生成的数据
-
 ---
 
-### 第五部分：前端状态管理
+## 技术实现
 
-#### 5.1 修改 Project.tsx
+### 1. 修改 scrape-competitor Edge Function
 
-新增状态：
+**文件**：`supabase/functions/scrape-competitor/index.ts`
+
+#### 1.1 新增 ASIN 提取函数
+
 ```typescript
-const [prdReviewMode, setPrdReviewMode] = useState(false);
-const [editingPrdData, setEditingPrdData] = useState<PrdData | null>(null);
-```
-
-新增信号检测：
-```typescript
-// 检测 PRD 完成信号
-if (assistantContent.includes("[PRD_READY]")) {
-  setShowPrdReadyPrompt(true);
+function extractAsin(url: string): string | null {
+  // 匹配 Amazon URL 中的 ASIN
+  // 格式: /dp/B0CFQ7BGPT/ 或 /gp/product/B0CFQ7BGPT/
+  const patterns = [
+    /\/dp\/([A-Z0-9]{10})/i,
+    /\/gp\/product\/([A-Z0-9]{10})/i,
+    /\/product\/([A-Z0-9]{10})/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
 }
 ```
 
-条件渲染：
+#### 1.2 修改主图抓取逻辑
+
+只抓取商品主图（Amazon 主图通常是第一张大尺寸图片）：
+
 ```typescript
-{project?.current_stage === 1 && (
-  prdReviewMode ? (
-    <PrdReviewPanel 
-      prdData={prdData}
-      competitorProducts={competitorProducts}
-      onSave={handleSavePrdData}
-      onRegenerate={handleRegenerateSection}
-      onConfirm={handleConfirmPrd}
-      onBack={() => setPrdReviewMode(false)}
-    />
-  ) : (
-    // 原有的 PrdChatPanel + PrdSidebar
-  )
-)}
+function extractMainProductImage(markdown: string, url: string): string | null {
+  // Amazon 主图特征：
+  // 1. 包含 m.media-amazon.com 或 images-amazon.com
+  // 2. 尺寸标识为 _SL1500_ 或 _SL1200_ 等大尺寸
+  // 3. 通常是第一张出现的产品图
+  
+  const amazonImagePattern = /https?:\/\/m\.media-amazon\.com\/images\/I\/[^"'\s]+(?:_SL\d{3,4}_|_AC_SL\d{3,4}_)[^"'\s]*/gi;
+  const matches = markdown.match(amazonImagePattern);
+  
+  if (matches && matches.length > 0) {
+    // 返回第一张（主图）
+    return matches[0];
+  }
+  return null;
+}
 ```
 
-#### 5.2 修改 PrdSidebar
+#### 1.3 新增置顶评论摘要提取
 
-- 移除"素材数据采集"区域（因为不再询问用户）
-- 改为显示"AI 素材方案"状态（已生成/未生成）
-- 添加"查看完整PRD"按钮（当 PRD 基本完成时显示）
+Amazon 产品页有 "Customer reviews" 置顶摘要区域：
+
+```typescript
+function extractReviewSummary(markdown: string): {
+  overallRating: number | null;
+  totalReviews: number | null;
+  ratingBreakdown: { stars: number; percentage: number }[];
+  topPositives: string[];
+  topNegatives: string[];
+} {
+  // 提取总体评分和评论数
+  // 提取星级分布（5星 xx%，4星 xx%...）
+  // 提取 "Customers say" 或 "Top positive/critical reviews" 摘要
+}
+```
+
+#### 1.4 新增评论页截图抓取
+
+使用 Firecrawl 的 `screenshot` 格式 + `actions` 滚动：
+
+```typescript
+async function scrapeReviewsWithScreenshot(asin: string, apiKey: string) {
+  const reviewUrl = `https://www.amazon.com/product-reviews/${asin}/?sortBy=recent`;
+  
+  const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url: reviewUrl,
+      formats: ["markdown", "screenshot"],
+      waitFor: 5000,
+      actions: [
+        { type: "wait", milliseconds: 2000 },
+        { type: "scroll", direction: "down" },
+        { type: "wait", milliseconds: 1000 },
+        { type: "scroll", direction: "down" },
+        { type: "wait", milliseconds: 1000 },
+      ],
+    }),
+  });
+  
+  const data = await response.json();
+  
+  return {
+    markdown: data.data?.markdown,
+    screenshot: data.data?.screenshot, // base64 编码的截图
+  };
+}
+```
+
+### 2. 数据库更新
+
+新增字段存储截图和评论摘要：
+
+| 表 | 字段 | 类型 | 描述 |
+|---|------|------|------|
+| `competitor_products` | `review_screenshot` | `text` | 评论页截图（base64） |
+| `competitor_products` | `review_summary` | `jsonb` | 置顶评论摘要数据 |
+| `competitor_products` | `main_image` | `text` | 商品主图 URL |
+
+### 3. 改进评论提取逻辑
+
+从评论页 markdown 提取真实评论：
+
+```typescript
+function extractReviewsFromReviewPage(markdown: string): Review[] {
+  const reviews: Review[] = [];
+  
+  // 评论页格式更规范，通常包含：
+  // - "X out of 5 stars"
+  // - "Reviewed in [country] on [date]"
+  // - "Verified Purchase"
+  // - 评论正文
+  
+  const reviewBlockPattern = /(\d)\s*out of\s*5\s*stars[\s\S]*?Reviewed in[\s\S]*?(?=\d\s*out of\s*5\s*stars|$)/gi;
+  
+  let match;
+  while ((match = reviewBlockPattern.exec(markdown)) !== null) {
+    const rating = parseInt(match[1], 10);
+    const block = match[0];
+    
+    // 提取评论标题和正文
+    const textMatch = block.match(/Verified Purchase\s*\n+([\s\S]+?)(?:\n\n|Helpful|Report)/i);
+    if (textMatch && textMatch[1].length > 30) {
+      reviews.push({
+        text: textMatch[1].trim(),
+        rating,
+      });
+    }
+  }
+  
+  return reviews;
+}
+```
 
 ---
 
-## 技术实现清单
+## 完整抓取流程
+
+```
+用户提交 Amazon URL
+        │
+        ▼
+┌───────────────────────────────────────┐
+│  步骤1: 抓取产品页                     │
+│  ─────────────────────────────────    │
+│  • 产品标题、价格、总评分              │
+│  • 商品主图（仅第一张）                │
+│  • 置顶评论摘要（Rating Breakdown）    │
+│  • 提取 ASIN                          │
+└───────────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────────┐
+│  步骤2: 抓取评论页                     │
+│  ─────────────────────────────────    │
+│  URL: /product-reviews/{ASIN}         │
+│  • 启用 screenshot 格式               │
+│  • 使用 actions 滚动加载评论           │
+│  • 提取完整评论文本                    │
+│  • 保存页面截图                        │
+└───────────────────────────────────────┘
+        │
+        ▼
+┌───────────────────────────────────────┐
+│  保存数据                              │
+│  ─────────────────────────────────    │
+│  competitor_products:                 │
+│  • main_image: 主图 URL               │
+│  • review_summary: 评论摘要 JSON       │
+│  • review_screenshot: base64 截图     │
+│                                       │
+│  competitor_reviews:                  │
+│  • 真实评论文本 + 星级                 │
+└───────────────────────────────────────┘
+```
+
+---
+
+## 截图的用途
+
+### 为什么需要截图？
+
+1. **AI 视觉分析** - 截图可以发送给 AI（如 Gemini Pro Vision）进行视觉分析
+2. **评论布局理解** - 截图能捕获评论的完整视觉布局，包括：
+   - 星级分布图表
+   - 置顶好评/差评卡片
+   - 用户头像和验证标识
+3. **备用数据源** - 当文本提取失败时，可以通过截图进行 OCR 或视觉分析
+
+### 截图存储方式
+
+- 方案A：存储 base64 到数据库（简单，但占空间）
+- 方案B：上传到 Supabase Storage，存储 URL（推荐）
+
+---
+
+## 文件变更清单
 
 | 文件路径 | 操作 | 描述 |
 |---------|------|------|
-| 数据库迁移 | 新建 | competitor_products 增加 product_images 字段 |
-| `supabase/functions/scrape-competitor/index.ts` | 修改 | 抓取产品图片 |
-| `supabase/functions/chat/index.ts` | 重构 | 动态方向选择模式，含图片分析 |
-| `supabase/functions/regenerate-prd-section/index.ts` | 新建 | 单维度重新生成 |
-| `src/components/PrdReviewPanel.tsx` | 新建 | PRD 完整审核编辑面板 |
-| `src/components/PrdSidebar.tsx` | 修改 | 移除素材采集，添加审核入口 |
-| `src/components/CompetitorCard.tsx` | 修改 | 展示产品图片缩略图 |
-| `src/pages/Project.tsx` | 修改 | 添加审核模式状态管理 |
-| `supabase/config.toml` | 修改 | 注册新 Edge Function |
-
----
-
-## 对话流程示例
-
-### 场景：用户完成竞品研究后开始 PRD 对话
-
-```
-[用户完成竞品研究，添加了2款 Amazon 产品]
-
-AI: 🔍 竞品分析洞察
-
-我分析了2款竞品的产品图片和156条用户评论：
-
-**📸 外观趋势分析**
-[竞品图片1] [竞品图片2]
-- 主流设计：金属材质、极简线条
-- 常见配色：银色、深空灰
-- 形态：折叠便携为主
-
-**💬 评论洞察**
-好评要点：便携性(45%)、做工质量(38%)
-差评痛点：角度调节不便(32%)、收纳复杂(28%)
-
----
-
-现在请告诉我您的产品想法：
-您想做一款怎样的产品？有什么初步的定位或特色吗？
-
-💡 [轻便商务款] | [多功能居家款] | [我有具体想法]
-```
-
-```
-用户: 我想做一款针对经常出差的人用的，需要特别轻便，收起来要很快
-```
-
-```
-AI: 明白了！轻便+快速收纳是您的核心诉求。
-
-基于您的方向，结合竞品痛点（收纳复杂占28%差评），
-我有几个产品定位建议：
-
-**方向选择 1/3：便携性级别**
-A. 极致便携 - 重量<250g，比手机还轻
-B. 轻便均衡 - 重量<400g，兼顾稳定性
-C. 功能优先 - 重量不限，功能全面
-
-💡 [选A极致便携] | [选B轻便均衡] | [选C功能优先]
-```
-
-```
-用户: A
-```
-
-```
-AI: 好的！极致便携款。
-
-**方向选择 2/3：外观风格**
-基于竞品图片分析，市场主流是金属极简风。
-您的偏好是：
-
-A. 商务金属 - 铝合金、深空灰/银色
-B. 活力轻盈 - 高强塑料、多彩配色
-C. 科技质感 - 碳纤维纹理、磨砂黑
-
-💡 [选A商务金属] | [选B活力轻盈] | [选C科技质感]
-```
-
-```
-用户: A
-```
-
-```
-AI: ✅ PRD 已生成完成！
-
-基于您的选择，我已生成完整的产品需求文档：
-
-━━━━━━━ 📋 产品定义 ━━━━━━━
-
-**使用场景**
-• 机场候机厅办公
-• 高铁商务座工作
-• 咖啡厅临时办公
-
-**目标用户**
-25-40岁商务差旅人士，年出差10+次
-
-**外观风格**
-极简商务风，深空灰/银色，航空铝合金
-
-**核心功能**
-1. 3秒单手折叠展开（解决收纳复杂痛点）
-2. 超轻材质 <250g
-3. 无级角度调节
-
-**营销素材方案（自动生成）**
-• 场景图：机场贵宾厅，自然采光
-• 使用图：商务人士专注工作中
-• 视频：展开→使用→收纳的6秒故事线
-
-**参考竞品图片**
-[竞品A图] [竞品B图]
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-[PRD_READY]
-
-点击下方"查看完整PRD"进入审核编辑模式。
-您可以手动修改任何内容，或要求AI重新生成某个维度。
-```
+| 数据库迁移 | 新建 | 添加 main_image, review_summary, review_screenshot 字段 |
+| `supabase/functions/scrape-competitor/index.ts` | 修改 | 实现两步抓取、截图、主图提取 |
+| `src/components/CompetitorCard.tsx` | 修改 | 显示主图和评论摘要 |
 
 ---
 
 ## 预期效果
 
-1. **对话更智能** - 基于产品定义+竞品图片+评论动态生成问题，而非固定模板
-2. **用户操作更简单** - 只需做几个选择题，AI 自动填充完整 PRD
-3. **素材无需询问** - 营销图片和视频数据基于场景自动推断
-4. **审核更直观** - 完整 PRD 在一个页面展开，逐条可编辑
-5. **竞品图片可视化** - PRD 中包含抓取的竞品图片作为参考
-6. **迭代更高效** - 支持单维度/单项重新生成，无需从头开始
+1. **准确的评论数据** - 从评论专页抓取真实评论内容，而非 URL 碎片
+2. **商品主图清晰** - 只抓取一张主图，用于 PRD 参考
+3. **评论摘要可视化** - 置顶评论摘要包含好评/差评要点，一目了然
+4. **截图备用分析** - 评论页截图可用于 AI 视觉分析，提取更丰富的洞察
+
