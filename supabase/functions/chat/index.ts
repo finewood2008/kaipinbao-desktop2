@@ -38,6 +38,45 @@ interface PrdData {
   };
 }
 
+// OpenAI message format
+interface OpenAIMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+// Gemini content format
+interface GeminiContent {
+  role: "user" | "model";
+  parts: { text: string }[];
+}
+
+// Convert OpenAI messages to Gemini format
+function convertToGeminiFormat(messages: OpenAIMessage[], systemPrompt: string): {
+  system_instruction: { parts: { text: string }[] };
+  contents: GeminiContent[];
+} {
+  const contents: GeminiContent[] = [];
+  
+  for (const msg of messages) {
+    if (msg.role === "system") {
+      // System messages are handled separately
+      continue;
+    }
+    
+    contents.push({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    });
+  }
+  
+  return {
+    system_instruction: {
+      parts: [{ text: systemPrompt }],
+    },
+    contents,
+  };
+}
+
 const BASE_SYSTEM_PROMPT = `你是"开品宝"的资深产品经理顾问，一位真正的产品设计专家。你拥有15年消费品产品开发经验，曾任职于Apple、小米、Dyson等顶级消费品公司，擅长从零散信息中洞察产品机会并主动设计完整产品方案。
 
 # 核心理念
@@ -520,10 +559,10 @@ serve(async (req) => {
 
   try {
     const { messages, projectId, currentStage } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_API_KEY) {
+      throw new Error("GOOGLE_API_KEY is not configured");
     }
 
     // Initialize Supabase client
@@ -562,27 +601,24 @@ serve(async (req) => {
     
     const systemPromptWithStage = `${dynamicSystemPrompt}\n\n当前阶段：${currentStage} - ${stageName}`;
 
-    // Use Lovable AI Gateway with google/gemini-3-pro-preview model
+    // Convert messages to Gemini format
+    const geminiPayload = convertToGeminiFormat(messages, systemPromptWithStage);
+
+    // Call Google Gemini API directly with streaming
     const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
+          "x-goog-api-key": GOOGLE_API_KEY,
         },
         body: JSON.stringify({
-          model: "google/gemini-3-pro-preview",
-          messages: [
-            { role: "system", content: systemPromptWithStage },
-            ...messages.map((msg: { role: string; content: string }) => ({
-              role: msg.role,
-              content: msg.content,
-            })),
-          ],
-          stream: true,
-          temperature: 0.85,
-          max_tokens: 16384,
+          ...geminiPayload,
+          generationConfig: {
+            temperature: 0.85,
+            maxOutputTokens: 16384,
+          },
         }),
       }
     );
@@ -594,15 +630,15 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI 额度已用完，请充值后再试" }), {
+      if (response.status === 402 || response.status === 403) {
+        return new Response(JSON.stringify({ error: "API 密钥无效或额度已用完" }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const text = await response.text();
-      console.error("Lovable AI Gateway error:", response.status, text);
-      return new Response(JSON.stringify({ error: "AI 服务暂时不可用" }), {
+      console.error("Google Gemini API error:", response.status, text);
+      return new Response(JSON.stringify({ error: "AI 服务暂时不可用", details: text }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -611,7 +647,7 @@ serve(async (req) => {
     // Collect full response for PRD extraction
     let fullResponse = "";
 
-    // Stream is already OpenAI-compatible from Lovable AI Gateway, just extract PRD data
+    // Transform Gemini SSE stream to OpenAI format for frontend compatibility
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const text = new TextDecoder().decode(chunk);
@@ -620,27 +656,46 @@ serve(async (req) => {
         for (const line of lines) {
           if (line.startsWith("data: ")) {
             const jsonStr = line.slice(6).trim();
-            if (jsonStr === "[DONE]") {
-              controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+            
+            // Skip empty data
+            if (!jsonStr || jsonStr === "") {
               continue;
             }
             
             try {
               const data = JSON.parse(jsonStr);
-              const content = data.choices?.[0]?.delta?.content || "";
+              
+              // Extract text from Gemini format
+              const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
               
               if (content) {
                 fullResponse += content;
+                
+                // Convert to OpenAI format for frontend compatibility
+                const openAIFormat = {
+                  choices: [{
+                    index: 0,
+                    delta: { content },
+                  }],
+                };
+                
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(openAIFormat)}\n\n`));
               }
-              // Pass through unchanged (already OpenAI format)
-              controller.enqueue(chunk);
+              
+              // Check for finish reason
+              const finishReason = data.candidates?.[0]?.finishReason;
+              if (finishReason && finishReason !== "STOP" && finishReason !== null) {
+                console.log("Gemini finish reason:", finishReason);
+              }
+              
+              // If this is the last chunk, send [DONE]
+              if (finishReason === "STOP") {
+                controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              }
             } catch (e) {
-              // Pass through unchanged for partial chunks
-              controller.enqueue(chunk);
+              // Log parse errors but continue
+              console.error("Failed to parse Gemini SSE chunk:", e, "Raw:", jsonStr);
             }
-          } else if (line.trim()) {
-            // Pass through non-data lines
-            controller.enqueue(new TextEncoder().encode(line + "\n"));
           }
         }
       },
