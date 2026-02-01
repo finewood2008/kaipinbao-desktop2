@@ -1,128 +1,196 @@
 
-
-# 开品宝 UI/UX 重构与 AI 模型升级计划
+# 视觉生成阶段重构计划
 
 ## 项目概览
 
-本计划将对开品宝平台进行全面的 UI/UX 重新设计，增强阶段过渡动画，优化视觉生成体验，并升级 AI 模型配置以使用 Google Nano Banana Pro 进行图像生成。
+将视觉生成阶段拆分为两个明确的板块：
+1. **板块一：产品造型设计** - 基于PRD生成产品造型，用户选择确认后进入第二板块
+2. **板块二：营销素材生成** - 基于选定造型生成各类营销图片和视频
 
 ---
 
-## 第一部分：UI/UX 整体美化
+## 第一部分：数据库架构调整
 
-### 1.1 增强现有设计系统
+### 1.1 扩展 `generated_images` 表
 
-**更新 `tailwind.config.ts` 和 `src/index.css`：**
-- 添加更丰富的动画关键帧（弹跳、滑入、脉冲闪烁等）
-- 引入微交互动画样式
-- 优化玻璃拟态效果的层次感
+新增字段区分图片类型：
 
-**新增动画效果：**
-- `bounce-in`：用于重要元素的入场
-- `slide-in-from-bottom`：阶段切换卡片入场
-- `glow-pulse`：用于引导用户注意力
-- `confetti`：确认选择时的庆祝动效
+| 字段名 | 类型 | 描述 |
+|--------|------|------|
+| `image_type` | `text` | 图片类型: `product` (产品造型), `scene` (场景图), `structure` (结构图), `exploded` (爆炸图), `usage` (使用图), `lifestyle` (生活方式图) |
+| `phase` | `integer` | 所属板块: 1 (造型设计), 2 (营销素材) |
+| `parent_image_id` | `uuid` | 关联的选定产品图ID (仅板块二) |
 
-### 1.2 重构阶段指示器 (StageIndicator)
+### 1.2 新建 `generated_videos` 表
 
-**更新 `src/components/StageIndicator.tsx`：**
-- 增加阶段完成时的动画反馈
-- 添加可点击进入已解锁阶段的功能
-- 增强视觉层次和颜色区分
-
----
-
-## 第二部分：阶段过渡动画与手动确认机制
-
-### 2.1 新增阶段过渡提示组件
-
-**创建 `src/components/StageTransitionPrompt.tsx`：**
-- 当 AI 判断可以进入下一阶段时显示
-- 包含动画引导提示
-- 需要用户手动点击确认才能进入下一阶段
-- 使用 Framer Motion 实现流畅的入场/出场动画
-
-**组件特性：**
-- 渐变背景卡片
-- 脉冲动画的 CTA 按钮
-- 阶段图标的放大动画
-
-### 2.2 更新项目页面逻辑
-
-**修改 `src/pages/Project.tsx`：**
-- 添加 `showTransitionPrompt` 状态控制
-- 在对话中检测阶段完成的信号
-- 显示过渡提示动画，等待用户确认
-- 确认后播放过渡动画，切换到下一阶段
+| 字段名 | 类型 | 描述 |
+|--------|------|------|
+| `id` | `uuid` | 主键 |
+| `project_id` | `uuid` | 关联项目 |
+| `video_url` | `text` | 视频URL |
+| `prompt` | `text` | 生成提示词 |
+| `scene_description` | `text` | 场景描述 |
+| `duration_seconds` | `integer` | 视频时长 (默认6秒) |
+| `status` | `text` | 状态: `pending`, `processing`, `completed`, `failed` |
+| `created_at` | `timestamp` | 创建时间 |
 
 ---
 
-## 第三部分：视觉生成阶段增强
+## 第二部分：前端组件重构
 
-### 3.1 产品大图预览功能
+### 2.1 创建阶段二子板块管理器
 
-**创建 `src/components/ImageLightbox.tsx`：**
-- 全屏模态查看产品图
-- 支持缩放和平移
-- 左右滑动切换多张图片
-- 键盘快捷键支持（ESC关闭，箭头切换）
+**新建 `src/components/VisualGenerationPhase.tsx`**
 
-### 3.2 产品选择增强
+```text
+VisualGenerationPhase
+├── PhaseIndicator (板块1/板块2指示器)
+├── Phase 1: ProductDesignPhase
+│   ├── ProductDesignGallery (产品造型画廊)
+│   └── ConfirmDesignButton (确认选择)
+└── Phase 2: MarketingAssetsPhase
+    ├── ImageTypeSelector (图片类型选择器)
+    ├── MarketingImageGallery (营销图片画廊)
+    └── VideoGenerationSection (视频生成区)
+```
 
-**更新 `src/components/ImageGallery.tsx`：**
-- 放大图片预览尺寸（从正方形改为更大的展示区域）
-- 选中产品时播放确认动画
-- 添加明确的"选择此产品"按钮
-- 选择后显示动画提示进入下一阶段
-- 集成 Lightbox 组件
+### 2.2 图片类型选择器组件
 
-**选择流程优化：**
-1. 用户点击图片 -> 打开大图预览
-2. 在大图预览中点击"选择此设计" -> 触发选中动画
-3. 返回列表视图，显示已选中状态
-4. 显示"进入下一阶段"的动画提示按钮
+**新建 `src/components/ImageTypeSelector.tsx`**
 
-### 3.3 更新图像生成模型
+可选图片类型（用户可多选）：
 
-**修改 `supabase/functions/generate-image/index.ts`：**
-- 将模型从 `gemini-2.0-flash-exp-image-generation` 更换为 `google/gemini-3-pro-image-preview`（Nano Banana Pro）
-- 调整 API 调用格式以适配新模型
+| 类型ID | 显示名称 | 描述 |
+|--------|----------|------|
+| `scene` | 场景图 | 产品在使用环境中的展示 |
+| `structure` | 结构图 | 展示产品内部结构 |
+| `exploded` | 爆炸图 | 零部件分解展示 |
+| `usage` | 使用图 | 用户使用产品的场景 |
+| `lifestyle` | 生活方式图 | 融入生活场景的品牌形象 |
+| `detail` | 细节特写 | 产品细节放大展示 |
+| `comparison` | 对比图 | 与竞品或问题场景对比 |
+| `custom` | 自定义 | 用户输入自定义描述 |
+
+### 2.3 视频生成组件
+
+**新建 `src/components/VideoGenerationSection.tsx`**
+
+功能：
+- 基于PRD中的使用场景定义生成视频
+- 支持自定义场景描述
+- 调用Google Veo 2 API生成6秒视频
+- 显示生成进度和预览
+
+### 2.4 更新 ImageGallery 组件
+
+**修改 `src/components/ImageGallery.tsx`**
+
+- 重命名为 `ProductDesignGallery.tsx` 专注板块一
+- 选择产品后显示动画过渡到板块二
+
+### 2.5 营销图片画廊组件
+
+**新建 `src/components/MarketingImageGallery.tsx`**
+
+- 按图片类型分组展示
+- 支持批量生成
+- 每种类型可独立重新生成
 
 ---
 
-## 第四部分：营销落地页 AI 生成
+## 第三部分：后端 Edge Function
 
-### 4.1 创建落地页生成 Edge Function
+### 3.1 更新图片生成函数
 
-**创建 `supabase/functions/generate-landing-page/index.ts`：**
-- 接收 PRD 数据和目标市场信息
-- 调用 Gemini 2.5 Flash 分析产品定位和市场特点
-- 生成落地页设计思路（结构、文案、配色建议）
-- 调用 Nano Banana Pro 生成营销图片（场景图、使用图、多角度图）
-- 返回完整的落地页数据结构
+**修改 `supabase/functions/generate-image/index.ts`**
 
-**生成内容包含：**
-- Hero 区域设计（主图 + 标题 + 副标题）
-- 痛点解决方案对比
-- 产品特性展示（带场景图）
-- 用户见证/信任背书
-- CTA 区域
-- 所有营销图片均由 AI 生成
+新增参数：
+- `imageType`: 图片类型
+- `phase`: 板块 (1 或 2)
+- `parentImageId`: 选定产品图ID (板块二必需)
 
-### 4.2 更新落地页构建器
+根据不同类型应用不同的Prompt工程：
 
-**修改 `src/components/LandingPageBuilder.tsx`：**
-- 集成 AI 生成流程
-- 显示生成进度（分步骤：分析中 -> 设计中 -> 生成图片中）
-- 预览 AI 生成的落地页
-- 支持重新生成指定部分
+```text
+产品造型 (product): 纯净白底产品渲染
+场景图 (scene): 产品在自然环境中
+结构图 (structure): 工程透视图展示内部
+爆炸图 (exploded): 零部件分解
+使用图 (usage): 用户与产品互动
+生活方式图 (lifestyle): 融入生活场景
+```
 
-### 4.3 增强落地页预览
+### 3.2 创建视频生成函数
 
-**创建 `src/components/LandingPagePreview.tsx`：**
-- 专业的落地页预览组件
-- 响应式设计预览
-- 实时编辑能力
+**新建 `supabase/functions/generate-video/index.ts`**
+
+使用 Lovable AI Gateway 调用 Google Veo 2 模型：
+- 端点: `https://ai.gateway.lovable.dev/v1/video/generate`
+- 模型: `google/veo-2`
+- 输入: 产品图片 + 场景描述
+- 输出: 6秒MP4视频
+
+注意：由于视频生成是异步长时操作：
+1. 创建任务记录，状态设为 `pending`
+2. 返回任务ID给前端
+3. 前端轮询状态直到完成
+
+---
+
+## 第四部分：用户交互流程
+
+### 4.1 板块一：产品造型设计
+
+```text
+用户进入视觉生成阶段
+        |
+        v
+[显示板块指示器: 板块1 ● — ○ 板块2]
+        |
+        v
+"基于PRD生成产品造型" 按钮
+        |
+        v
+生成多个产品造型方案
+        |
+        v
+用户浏览、反馈、重新生成
+        |
+        v
+用户选择一个方案 ✓
+        |
+        v
+[动画过渡] "您已选定产品造型，准备生成营销素材？"
+        |
+        v
+确认按钮 → 进入板块二
+```
+
+### 4.2 板块二：营销素材生成
+
+```text
+显示选定的产品造型（固定在顶部）
+        |
+        v
+[图片类型选择器] (多选)
+☑ 场景图  ☑ 使用图  ☐ 结构图  ☐ 爆炸图...
+        |
+        v
+"生成选中类型的图片" 按钮
+        |
+        v
+按类型分组展示生成结果
+        |
+        v
+[视频生成区域]
+"基于使用场景生成6秒产品视频"
+        |
+        v
+选择/自定义场景 → 生成视频
+        |
+        v
+所有素材完成 → 显示"进入落地页阶段"
+```
 
 ---
 
@@ -132,90 +200,70 @@
 
 | 文件路径 | 操作 | 描述 |
 |---------|------|------|
-| `src/index.css` | 修改 | 添加新动画和样式 |
-| `tailwind.config.ts` | 修改 | 扩展动画配置 |
-| `src/components/StageIndicator.tsx` | 修改 | 增强阶段指示器 |
-| `src/components/StageTransitionPrompt.tsx` | 新建 | 阶段过渡提示组件 |
-| `src/components/ImageLightbox.tsx` | 新建 | 图片大图预览 |
-| `src/components/ImageGallery.tsx` | 修改 | 增强图片展示和选择 |
-| `src/components/LandingPageBuilder.tsx` | 修改 | 集成 AI 生成 |
-| `src/components/LandingPagePreview.tsx` | 新建 | 落地页预览组件 |
-| `src/pages/Project.tsx` | 修改 | 集成过渡动画和新流程 |
-| `supabase/functions/generate-image/index.ts` | 修改 | 更换为 Nano Banana Pro 模型 |
-| `supabase/functions/generate-landing-page/index.ts` | 新建 | 落地页 AI 生成服务 |
-| `supabase/config.toml` | 修改 | 注册新的 Edge Function |
+| `src/components/ImageGallery.tsx` | 重命名 | 改为 `ProductDesignGallery.tsx` |
+| `src/components/VisualGenerationPhase.tsx` | 新建 | 视觉阶段主组件 |
+| `src/components/ImageTypeSelector.tsx` | 新建 | 图片类型多选器 |
+| `src/components/MarketingImageGallery.tsx` | 新建 | 营销图片画廊 |
+| `src/components/VideoGenerationSection.tsx` | 新建 | 视频生成组件 |
+| `src/pages/Project.tsx` | 修改 | 集成新的视觉阶段组件 |
+| `supabase/functions/generate-image/index.ts` | 修改 | 支持多类型图片生成 |
+| `supabase/functions/generate-video/index.ts` | 新建 | 视频生成Edge Function |
+| `supabase/config.toml` | 修改 | 注册视频生成函数 |
+| 数据库迁移 | 新建 | 添加新字段和新表 |
 
-### 5.2 图像生成模型配置
+### 5.2 Prompt工程模板
 
+**产品造型 (Phase 1)**
 ```text
-当前模型: gemini-2.0-flash-exp-image-generation
-目标模型: google/gemini-3-pro-image-preview (Nano Banana Pro)
-
-API 端点保持不变，需调整:
-- model 参数
-- 响应解析逻辑（如有差异）
+专业产品渲染图，纯白背景，商业级品质...
 ```
 
-### 5.3 落地页生成流程
+**场景图 (Phase 2)**
+```text
+产品自然地放置在 [场景] 环境中，
+柔和的自然光，生活化的氛围...
+```
+
+**结构图**
+```text
+工程透视图，展示产品内部结构，
+半透明外壳，标注关键组件...
+```
+
+**爆炸图**
+```text
+产品零部件分解图，所有组件沿中轴线展开，
+清晰的空间层次，每个部件可辨识...
+```
+
+**使用图**
+```text
+用户正在使用产品的场景，
+自然的姿势，专注的表情...
+```
+
+### 5.3 视频生成参数
 
 ```text
-用户触发生成
-     |
-     v
-[1] 调用 Gemini 2.5 Flash
-    - 分析 PRD 数据
-    - 确定目标市场特点
-    - 生成落地页设计思路
-     |
-     v
-[2] 调用 Nano Banana Pro (并行)
-    - 生成 Hero 主图
-    - 生成场景使用图
-    - 生成产品多角度图
-     |
-     v
-[3] 组合生成结果
-    - 整合文案与图片
-    - 返回完整落地页数据
-     |
-     v
-[4] 前端渲染预览
-    - 展示生成的落地页
-    - 允许发布或重新生成
+模型: google/veo-2
+时长: 6秒
+分辨率: 720p
+帧率: 24fps
+风格: 产品展示/使用场景
 ```
 
 ---
 
-## 第六部分：用户体验流程
+## 第六部分：预估工作量
 
-### 完整用户旅程
-
-1. **阶段一 (PRD 细化)**
-   - 用户与 AI 对话
-   - AI 完成信息收集后，显示动画提示
-   - 用户点击"进入视觉生成阶段"
-
-2. **阶段二 (视觉生成)**
-   - 生成产品图片
-   - 用户点击图片查看大图
-   - 选择满意的设计方案
-   - 显示确认动画和"进入落地页阶段"提示
-
-3. **阶段三 (落地页生成)**
-   - 点击"AI 生成落地页"
-   - 显示生成进度
-   - 预览 AI 生成的完整落地页
-   - 发布或重新生成
-
----
-
-## 预估工作量
-
-- 动画系统增强：中等
-- 阶段过渡组件：轻量
-- 图片预览组件：中等
-- ImageGallery 增强：中等
-- 落地页生成 Edge Function：较重
-- 落地页构建器更新：中等
-- 项目页面集成：中等
-
+| 模块 | 复杂度 | 描述 |
+|------|--------|------|
+| 数据库迁移 | 轻量 | 添加字段和新表 |
+| VisualGenerationPhase | 中等 | 板块切换逻辑 |
+| ImageTypeSelector | 轻量 | 多选UI组件 |
+| ProductDesignGallery | 轻量 | 重构现有组件 |
+| MarketingImageGallery | 中等 | 分类展示逻辑 |
+| VideoGenerationSection | 较重 | 异步任务处理 |
+| generate-image 更新 | 中等 | Prompt工程 |
+| generate-video 新建 | 较重 | Veo API集成 |
+| Project.tsx 集成 | 中等 | 状态管理 |
