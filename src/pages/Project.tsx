@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { CompetitorResearch } from "@/components/CompetitorResearch";
 import { PrdSidebar, calculatePrdProgress, PrdProgress, PrdData } from "@/components/PrdSidebar";
 import { PrdChatPanel } from "@/components/PrdChatPanel";
 import { PrdReviewPanel } from "@/components/PrdReviewPanel";
+import { PrdCompletionCard } from "@/components/PrdCompletionCard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, PanelLeftClose, PanelLeft, Check } from "lucide-react";
@@ -543,10 +544,14 @@ export default function ProjectPage() {
     return false;
   };
 
-  const handleEnterPrdReview = () => {
+  const handleEnterPrdReview = useCallback(() => {
     setShowPrdReadyPrompt(false);
     setPrdReviewMode(true);
-  };
+  }, []);
+
+  const handleDismissPrdPrompt = useCallback(() => {
+    setShowPrdReadyPrompt(false);
+  }, []);
 
   const handleExitPrdReview = () => {
     setPrdReviewMode(false);
@@ -844,43 +849,14 @@ export default function ProjectPage() {
                   ) : (
                     /* Chat Mode */
                     <div className="flex-1 flex flex-col overflow-hidden">
-                      {/* PRD Ready Prompt */}
+                      {/* PRD Completion Card (Modal with countdown) */}
                       <AnimatePresence>
                         {showPrdReadyPrompt && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            className="border-b border-border/50 bg-primary/5 px-4 py-3"
-                          >
-                            <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-                                  <Check className="w-5 h-5 text-primary" />
-                                </div>
-                                <div>
-                                  <p className="font-medium text-foreground">PRD 已生成完成！</p>
-                                  <p className="text-sm text-muted-foreground">点击查看完整文档并进行审核编辑</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setShowPrdReadyPrompt(false)}
-                                >
-                                  稍后
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="bg-gradient-primary glow-primary"
-                                  onClick={handleEnterPrdReview}
-                                >
-                                  查看完整 PRD
-                                </Button>
-                              </div>
-                            </div>
-                          </motion.div>
+                          <PrdCompletionCard
+                            onViewPrd={handleEnterPrdReview}
+                            onContinueChat={handleDismissPrdPrompt}
+                            autoNavigateDelay={5}
+                          />
                         )}
                       </AnimatePresence>
 
@@ -915,6 +891,7 @@ export default function ProjectPage() {
                           inputValue={inputValue}
                           competitorInsight={competitorInsight}
                           showInsightCard={messages.length <= 2}
+                          prdData={prdData}
                           onInputChange={setInputValue}
                           onSend={handleSendMessage}
                           onSuggestionClick={handleSuggestionClick}
