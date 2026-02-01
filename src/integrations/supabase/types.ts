@@ -49,6 +49,103 @@ export type Database = {
           },
         ]
       }
+      competitor_products: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          price: string | null
+          product_description: string | null
+          product_title: string | null
+          project_id: string
+          rating: number | null
+          review_count: number | null
+          scraped_data: Json | null
+          status: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform?: string
+          price?: string | null
+          product_description?: string | null
+          product_title?: string | null
+          project_id: string
+          rating?: number | null
+          review_count?: number | null
+          scraped_data?: Json | null
+          status?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          price?: string | null
+          product_description?: string | null
+          product_title?: string | null
+          project_id?: string
+          rating?: number | null
+          review_count?: number | null
+          scraped_data?: Json | null
+          status?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_products_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_reviews: {
+        Row: {
+          competitor_product_id: string
+          created_at: string
+          id: string
+          is_positive: boolean | null
+          key_points: string[] | null
+          rating: number | null
+          review_text: string
+          sentiment: string | null
+        }
+        Insert: {
+          competitor_product_id: string
+          created_at?: string
+          id?: string
+          is_positive?: boolean | null
+          key_points?: string[] | null
+          rating?: number | null
+          review_text: string
+          sentiment?: string | null
+        }
+        Update: {
+          competitor_product_id?: string
+          created_at?: string
+          id?: string
+          is_positive?: boolean | null
+          key_points?: string[] | null
+          rating?: number | null
+          review_text?: string
+          sentiment?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_reviews_competitor_product_id_fkey"
+            columns: ["competitor_product_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_submissions: {
         Row: {
           created_at: string
@@ -268,6 +365,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          competitor_research_completed: boolean | null
           created_at: string
           current_stage: number
           description: string | null
@@ -275,12 +373,14 @@ export type Database = {
           landing_page_data: Json | null
           name: string
           prd_data: Json | null
+          prd_progress: Json | null
           status: string
           updated_at: string
           user_id: string
           visual_data: Json | null
         }
         Insert: {
+          competitor_research_completed?: boolean | null
           created_at?: string
           current_stage?: number
           description?: string | null
@@ -288,12 +388,14 @@ export type Database = {
           landing_page_data?: Json | null
           name: string
           prd_data?: Json | null
+          prd_progress?: Json | null
           status?: string
           updated_at?: string
           user_id: string
           visual_data?: Json | null
         }
         Update: {
+          competitor_research_completed?: boolean | null
           created_at?: string
           current_stage?: number
           description?: string | null
@@ -301,6 +403,7 @@ export type Database = {
           landing_page_data?: Json | null
           name?: string
           prd_data?: Json | null
+          prd_progress?: Json | null
           status?: string
           updated_at?: string
           user_id?: string
