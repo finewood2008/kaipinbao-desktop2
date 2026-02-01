@@ -14,15 +14,18 @@ interface CompetitorResearchProps {
   onSkip: () => void;
 }
 
-function detectPlatform(url: string): string {
+function isAmazonUrl(url: string): boolean {
   const lowerUrl = url.toLowerCase();
-  if (lowerUrl.includes("amazon")) return "amazon";
-  if (lowerUrl.includes("aliexpress")) return "aliexpress";
-  if (lowerUrl.includes("taobao")) return "taobao";
-  if (lowerUrl.includes("tmall")) return "tmall";
-  if (lowerUrl.includes("ebay")) return "ebay";
-  if (lowerUrl.includes("1688")) return "1688";
-  return "unknown";
+  return lowerUrl.includes("amazon.com") || 
+         lowerUrl.includes("amazon.co.") || 
+         lowerUrl.includes("amazon.de") ||
+         lowerUrl.includes("amazon.fr") ||
+         lowerUrl.includes("amazon.it") ||
+         lowerUrl.includes("amazon.es") ||
+         lowerUrl.includes("amazon.ca") ||
+         lowerUrl.includes("amazon.co.uk") ||
+         lowerUrl.includes("amazon.co.jp") ||
+         lowerUrl.includes("amazon.in");
 }
 
 export function CompetitorResearch({ projectId, onComplete, onSkip }: CompetitorResearchProps) {
@@ -81,17 +84,21 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       return;
     }
 
+    // Check if it's an Amazon URL
+    if (!isAmazonUrl(urlInput)) {
+      toast.error("目前仅支持 Amazon 产品链接");
+      return;
+    }
+
     setIsAdding(true);
 
     try {
-      const platform = detectPlatform(urlInput);
-      
       const { data, error } = await supabase
         .from("competitor_products")
         .insert({
           project_id: projectId,
           url: urlInput.trim(),
-          platform,
+          platform: "amazon",
           status: "pending",
         })
         .select()
@@ -221,7 +228,7 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
         </motion.div>
         <h2 className="text-xl font-semibold text-foreground">竞品研究 <span className="text-muted-foreground text-sm">(可选)</span></h2>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          添加竞争对手产品链接，我们将抓取产品信息和评论，帮助您更好地了解市场需求和用户痛点
+          添加 Amazon 竞品链接，我们将抓取产品信息和评论，帮助您了解市场需求和用户痛点
         </p>
       </div>
 
@@ -232,7 +239,7 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
           <Input
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
-            placeholder="粘贴 Amazon、AliExpress、淘宝等平台的产品链接..."
+            placeholder="粘贴 Amazon 产品链接 (例如: amazon.com/dp/...)"
             className="pl-9 bg-background/50"
             onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
           />

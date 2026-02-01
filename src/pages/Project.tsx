@@ -12,10 +12,11 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { VisualGenerationPhase } from "@/components/VisualGenerationPhase";
 import { LandingPageBuilder } from "@/components/LandingPageBuilder";
 import { CompetitorResearch } from "@/components/CompetitorResearch";
-import { PrdProgressIndicator, calculatePrdProgress, PrdProgress } from "@/components/PrdProgressIndicator";
+import { PrdSidebar, calculatePrdProgress, PrdProgress } from "@/components/PrdSidebar";
+import { PrdChatPanel } from "@/components/PrdChatPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Send, Loader2, Sparkles, MessageSquare, Image, Globe } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, PanelLeftClose, PanelLeft } from "lucide-react";
 
 interface Message {
   id: string;
@@ -57,6 +58,19 @@ interface LandingPageData {
   view_count: number;
 }
 
+interface CompetitorInsight {
+  positivePoints: string[];
+  negativePoints: string[];
+  totalReviews: number;
+  productsAnalyzed: number;
+  products?: Array<{
+    title: string;
+    rating: number;
+    reviewCount: number;
+  }>;
+  actionableInsights?: string[];
+}
+
 interface Project {
   id: string;
   name: string;
@@ -86,6 +100,7 @@ export default function ProjectPage() {
   const [activeTab, setActiveTab] = useState("chat");
   const [showTransitionPrompt, setShowTransitionPrompt] = useState(false);
   const [showCompetitorResearch, setShowCompetitorResearch] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
   const [prdProgress, setPrdProgress] = useState<PrdProgress>({
     usageScenario: false,
     targetAudience: false,
@@ -93,6 +108,7 @@ export default function ProjectPage() {
     coreFeatures: false,
     confirmed: false,
   });
+  const [competitorInsight, setCompetitorInsight] = useState<CompetitorInsight | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -102,6 +118,7 @@ export default function ProjectPage() {
       fetchImages();
       fetchVideos();
       fetchLandingPage();
+      fetchCompetitorInsight();
     }
   }, [id]);
 
@@ -135,7 +152,6 @@ export default function ProjectPage() {
       toast.error("获取项目失败");
       navigate("/dashboard");
     } else {
-      // Map data to Project type
       const projectData: Project = {
         id: data.id,
         name: data.name,
@@ -146,10 +162,9 @@ export default function ProjectPage() {
         visual_data: data.visual_data,
         landing_page_data: data.landing_page_data,
         competitor_research_completed: data.competitor_research_completed,
-        prd_progress: undefined, // Will be set separately
+        prd_progress: undefined,
       };
       
-      // Parse prd_progress separately due to type complexity
       if (data.prd_progress && typeof data.prd_progress === 'object' && !Array.isArray(data.prd_progress)) {
         const progressData = data.prd_progress as Record<string, boolean>;
         projectData.prd_progress = {
@@ -162,11 +177,9 @@ export default function ProjectPage() {
       }
       setProject(projectData);
       
-      // Check if competitor research is needed
       if (data.current_stage === 1 && !data.competitor_research_completed) {
         setShowCompetitorResearch(true);
       }
-      // Load PRD progress
       if (data.prd_progress && typeof data.prd_progress === 'object' && !Array.isArray(data.prd_progress)) {
         const progressData = data.prd_progress as Record<string, boolean>;
         setPrdProgress({
@@ -176,10 +189,6 @@ export default function ProjectPage() {
           coreFeatures: progressData.coreFeatures ?? false,
           confirmed: progressData.confirmed ?? false,
         });
-      }
-      // If no messages yet and competitor research is done, add welcome message
-      if (!messages.length && data.competitor_research_completed) {
-        initializeConversation(projectData);
       }
     }
     setIsLoading(false);
@@ -212,7 +221,6 @@ export default function ProjectPage() {
       .order("created_at", { ascending: true });
 
     if (!error && data) {
-      // Separate product images (phase 1) from marketing images (phase 2)
       const phase1Images = data.filter((img: any) => (img.phase || 1) === 1);
       const phase2Images = data.filter((img: any) => img.phase === 2);
       setProductImages(phase1Images as GeneratedImage[]);
@@ -244,38 +252,67 @@ export default function ProjectPage() {
     }
   };
 
-  const initializeConversation = async (proj: Project) => {
-    const welcomeMessage = `[当前阶段：PRD细化]
+  const fetchCompetitorInsight = async () => {
+    try {
+      // Fetch competitor products
+      const { data: products } = await supabase
+        .from("competitor_products")
+        .select("*")
+        .eq("project_id", id)
+        .eq("status", "completed");
 
-你好！我是开品宝，您的AI产品研发专家。我将带领您完成从创意到市场测试的全过程。
+      if (!products || products.length === 0) return;
 
-**项目：${proj.name}**
-${proj.description ? `\n${proj.description}\n` : ""}
+      // Fetch reviews
+      const productIds = products.map(p => p.id);
+      const { data: reviews } = await supabase
+        .from("competitor_reviews")
+        .select("*")
+        .in("competitor_product_id", productIds);
 
-让我们开始 **阶段一：ID探索与PRD细化**。我需要了解更多关于您产品的信息。
+      // Simple analysis
+      const positiveKeywords = ["quality", "great", "love", "excellent", "perfect", "好", "不错", "满意", "喜欢"];
+      const negativeKeywords = ["bad", "poor", "broken", "issue", "problem", "差", "失望", "坏", "问题"];
 
-首先，请告诉我：
-1. 这个产品的**主要使用场景**是什么？（室内/户外/特定环境）
-2. 它解决什么**核心痛点**？
+      const positivePoints: string[] = [];
+      const negativePoints: string[] = [];
 
-请详细描述，我会根据您的回答进一步追问。`;
+      (reviews || []).forEach((r: any) => {
+        const text = r.review_text?.toLowerCase() || "";
+        if (positiveKeywords.some(kw => text.includes(kw)) || r.rating >= 4) {
+          // Extract key phrases (simplified)
+          if (text.includes("quality")) positivePoints.push("质量好");
+          if (text.includes("design") || text.includes("look")) positivePoints.push("设计美观");
+          if (text.includes("easy")) positivePoints.push("易于使用");
+        }
+        if (negativeKeywords.some(kw => text.includes(kw)) || r.rating <= 2) {
+          if (text.includes("battery") || text.includes("电池")) negativePoints.push("续航不足");
+          if (text.includes("price") || text.includes("贵")) negativePoints.push("价格偏高");
+          if (text.includes("quality") || text.includes("质量")) negativePoints.push("质量问题");
+        }
+      });
 
-    const { error } = await supabase.from("chat_messages").insert({
-      project_id: id,
-      role: "assistant",
-      content: welcomeMessage,
-      stage: 1,
-    });
+      // Dedupe
+      const uniquePositive = [...new Set(positivePoints)].slice(0, 5);
+      const uniqueNegative = [...new Set(negativePoints)].slice(0, 5);
 
-    if (!error) {
-      setMessages([
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: welcomeMessage,
-          stage: 1,
-        },
-      ]);
+      setCompetitorInsight({
+        positivePoints: uniquePositive.length > 0 ? uniquePositive : ["产品质量", "外观设计"],
+        negativePoints: uniqueNegative.length > 0 ? uniqueNegative : ["价格竞争力", "功能创新"],
+        totalReviews: reviews?.length || 0,
+        productsAnalyzed: products.length,
+        products: products.map(p => ({
+          title: p.product_title || "未知产品",
+          rating: Number(p.rating) || 0,
+          reviewCount: p.review_count || 0,
+        })),
+        actionableInsights: [
+          "基于竞品痛点，建议突出产品差异化优势",
+          "用户最关注的是产品质量和使用体验",
+        ],
+      });
+    } catch (error) {
+      console.error("Failed to fetch competitor insight:", error);
     }
   };
 
@@ -286,7 +323,6 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     setInputValue("");
     setIsSending(true);
 
-    // Add user message immediately
     const userMsg: Message = {
       id: crypto.randomUUID(),
       role: "user",
@@ -295,7 +331,6 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     };
     setMessages((prev) => [...prev, userMsg]);
 
-    // Save user message to DB
     await supabase.from("chat_messages").insert({
       project_id: id,
       role: "user",
@@ -303,13 +338,11 @@ ${proj.description ? `\n${proj.description}\n` : ""}
       stage: project?.current_stage || 1,
     });
 
-    // Prepare messages for AI
     const chatHistory = [...messages, userMsg].map((m) => ({
       role: m.role,
       content: m.content,
     }));
 
-    // Call AI edge function
     setIsStreaming(true);
     try {
       const response = await fetch(
@@ -337,7 +370,6 @@ ${proj.description ? `\n${proj.description}\n` : ""}
       let assistantContent = "";
       let assistantMsgId = crypto.randomUUID();
 
-      // Add empty assistant message
       setMessages((prev) => [
         ...prev,
         { id: assistantMsgId, role: "assistant", content: "", stage: project?.current_stage || 1 },
@@ -381,7 +413,6 @@ ${proj.description ? `\n${proj.description}\n` : ""}
         }
       }
 
-      // Save assistant message to DB
       if (assistantContent) {
         await supabase.from("chat_messages").insert({
           project_id: id,
@@ -390,18 +421,15 @@ ${proj.description ? `\n${proj.description}\n` : ""}
           stage: project?.current_stage || 1,
         });
 
-        // Update PRD progress based on conversation
         const updatedMessages = [...messages, userMsg, { id: assistantMsgId, role: "assistant" as const, content: assistantContent, stage: project?.current_stage || 1 }];
         const newProgress = calculatePrdProgress(updatedMessages);
         setPrdProgress(newProgress);
         
-        // Save progress to DB
         await supabase
           .from("projects")
           .update({ prd_progress: newProgress as unknown as Record<string, boolean> })
           .eq("id", id);
 
-        // Check if AI is suggesting to move to next stage - more intelligent detection
         const stageCompleteSignal = detectStageCompletion(assistantContent, project?.current_stage || 1);
         if (stageCompleteSignal) {
           setTimeout(() => {
@@ -415,13 +443,6 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     } finally {
       setIsSending(false);
       setIsStreaming(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
     }
   };
 
@@ -449,15 +470,12 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     advanceStage();
   };
 
-  // Intelligent stage completion detection
   const detectStageCompletion = (content: string, currentStage: number): boolean => {
     if (currentStage === 1) {
-      // Check for explicit completion signal
       if (content.includes("[STAGE_COMPLETE:1]")) {
         return true;
       }
       
-      // Check for natural language indicators of PRD completion
       const completionIndicators = [
         "PRD细化已完成",
         "PRD信息收集已完成",
@@ -470,31 +488,13 @@ ${proj.description ? `\n${proj.description}\n` : ""}
         "准备进入视觉生成"
       ];
       
-      // Check for summary + confirmation pattern
       const hasSummary = content.includes("总结") || content.includes("汇总") || content.includes("确认以下信息");
       const hasNextStepHint = completionIndicators.some(indicator => content.includes(indicator));
       
       return hasNextStepHint || (hasSummary && content.includes("视觉"));
     }
     
-    // Stage 2 is handled by image selection in the gallery
-    // Stage 3 completion is handled by landing page publishing
-    
     return false;
-  };
-
-  // Parse suggestions from AI response
-  const parseSuggestions = (content: string): string[] => {
-    // Look for pattern: [建议1] | [建议2] | [建议3]
-    const suggestionMatch = content.match(/\[([^\]]+)\]\s*\|\s*\[([^\]]+)\](?:\s*\|\s*\[([^\]]+)\])?(?:\s*\|\s*\[([^\]]+)\])?(?:\s*\|\s*\[([^\]]+)\])?/);
-    if (suggestionMatch) {
-      return suggestionMatch.slice(1).filter(Boolean);
-    }
-    return [];
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    setInputValue(suggestion);
   };
 
   const handleVisualPhaseConfirm = () => {
@@ -507,7 +507,6 @@ ${proj.description ? `\n${proj.description}\n` : ""}
   };
 
   const getPrdData = () => {
-    // Extract usage scenarios from PRD if available
     const prdData = project?.prd_data as any;
     return {
       usageScenarios: prdData?.usageScenarios || [],
@@ -518,37 +517,123 @@ ${proj.description ? `\n${proj.description}\n` : ""}
 
   const handleCompetitorResearchComplete = async (hasResearch: boolean) => {
     setShowCompetitorResearch(false);
-    if (project && !messages.length) {
-      await initializeConversation(project);
+    await fetchCompetitorInsight();
+    
+    // Auto-start conversation with AI
+    if (messages.length === 0) {
+      // Send initial message to trigger AI response
+      setIsSending(true);
+      setIsStreaming(true);
+      
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({
+              messages: [{ role: "user", content: "开始PRD细化对话" }],
+              projectId: id,
+              currentStage: 1,
+            }),
+          }
+        );
+
+        if (!response.ok) throw new Error("AI请求失败");
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let assistantContent = "";
+        let assistantMsgId = crypto.randomUUID();
+
+        setMessages([
+          { id: assistantMsgId, role: "assistant", content: "", stage: 1 },
+        ]);
+
+        if (reader) {
+          let textBuffer = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            textBuffer += decoder.decode(value, { stream: true });
+
+            let newlineIndex: number;
+            while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+              let line = textBuffer.slice(0, newlineIndex);
+              textBuffer = textBuffer.slice(newlineIndex + 1);
+
+              if (line.endsWith("\r")) line = line.slice(0, -1);
+              if (line.startsWith(":") || line.trim() === "") continue;
+              if (!line.startsWith("data: ")) continue;
+
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr === "[DONE]") break;
+
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const content = parsed.choices?.[0]?.delta?.content;
+                if (content) {
+                  assistantContent += content;
+                  setMessages([
+                    { id: assistantMsgId, role: "assistant", content: assistantContent, stage: 1 },
+                  ]);
+                }
+              } catch {
+                textBuffer = line + "\n" + textBuffer;
+                break;
+              }
+            }
+          }
+        }
+
+        if (assistantContent) {
+          await supabase.from("chat_messages").insert({
+            project_id: id,
+            role: "assistant",
+            content: assistantContent,
+            stage: 1,
+          });
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error("AI初始化失败，请刷新重试");
+      } finally {
+        setIsSending(false);
+        setIsStreaming(false);
+      }
     }
+    
     if (hasResearch) {
-      toast.success("竞品研究完成，数据将用于PRD细化");
+      toast.success("竞品研究完成，AI将基于数据开始对话");
     }
   };
 
   const handleCompetitorResearchSkip = async () => {
     setShowCompetitorResearch(false);
-    // Mark as completed (skipped)
     await supabase
       .from("projects")
       .update({ competitor_research_completed: true })
       .eq("id", id);
     
-    if (project && !messages.length) {
-      await initializeConversation(project);
-    }
+    handleCompetitorResearchComplete(false);
   };
 
   const handlePrdProgressItemClick = (item: keyof PrdProgress) => {
-    // Create a prompt to ask about this specific item
     const prompts: Record<keyof PrdProgress, string> = {
-      usageScenario: "请告诉我这个产品的主要使用场景",
-      targetAudience: "请描述您的目标用户群体",
-      designStyle: "请描述您期望的产品外观风格",
-      coreFeatures: "请列举产品的核心功能和卖点",
-      confirmed: "请确认以上信息是否准确",
+      usageScenario: "我想补充产品的使用场景信息",
+      targetAudience: "我想描述目标用户群体",
+      designStyle: "我想确定产品的外观风格",
+      coreFeatures: "我想明确产品的核心功能和卖点",
+      confirmed: "请帮我总结确认已收集的信息",
     };
     setInputValue(prompts[item]);
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setInputValue(suggestion);
   };
 
   if (isLoading) {
@@ -598,6 +683,18 @@ ${proj.description ? `\n${proj.description}\n` : ""}
                 </div>
               </div>
             </div>
+
+            {/* Sidebar Toggle for Stage 1 */}
+            {project?.current_stage === 1 && !showCompetitorResearch && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowSidebar(!showSidebar)}
+                className="md:hidden"
+              >
+                {showSidebar ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeft className="w-5 h-5" />}
+              </Button>
+            )}
           </div>
           <StageIndicator currentStage={project?.current_stage || 1} />
         </div>
@@ -638,7 +735,7 @@ ${proj.description ? `\n${proj.description}\n` : ""}
           </div>
 
           {/* Chat Tab */}
-          <TabsContent value="chat" className="flex-1 flex flex-col overflow-hidden m-0">
+          <TabsContent value="chat" className="flex-1 flex overflow-hidden m-0">
             {/* Show Competitor Research if not completed */}
             {showCompetitorResearch ? (
               <ScrollArea className="flex-1">
@@ -650,76 +747,101 @@ ${proj.description ? `\n${proj.description}\n` : ""}
               </ScrollArea>
             ) : (
               <>
-                {/* PRD Progress Indicator for Stage 1 */}
-                {project?.current_stage === 1 && (
-                  <div className="px-4 py-3 border-b border-border/30">
-                    <div className="max-w-3xl mx-auto">
-                      <PrdProgressIndicator
-                        progress={prdProgress}
-                        onItemClick={handlePrdProgressItemClick}
-                      />
-                    </div>
-                  </div>
-                )}
-                
-                <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    <AnimatePresence initial={false}>
-                      {messages.map((message, index) => {
-                        const isLastAssistant = message.role === "assistant" && index === messages.length - 1;
-                        const suggestions = isLastAssistant && !isStreaming ? parseSuggestions(message.content) : [];
-                        
-                        return (
-                          <ChatMessage
-                            key={message.id}
-                            role={message.role}
-                            content={message.content}
-                            isStreaming={isStreaming && message === messages[messages.length - 1]}
-                            suggestions={suggestions}
-                            onSuggestionClick={handleSuggestionClick}
+                {/* PRD Stage with Sidebar Layout */}
+                {project?.current_stage === 1 ? (
+                  <div className="flex-1 flex overflow-hidden">
+                    {/* Sidebar */}
+                    <AnimatePresence>
+                      {showSidebar && (
+                        <motion.div
+                          initial={{ width: 0, opacity: 0 }}
+                          animate={{ width: 280, opacity: 1 }}
+                          exit={{ width: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="hidden md:block flex-shrink-0 overflow-hidden"
+                        >
+                          <PrdSidebar
+                            progress={prdProgress}
+                            competitorInsight={competitorInsight}
+                            onItemClick={handlePrdProgressItemClick}
+                            className="w-[280px] h-full"
                           />
-                        );
-                      })}
+                        </motion.div>
+                      )}
                     </AnimatePresence>
-                    {isSending && !isStreaming && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex items-center gap-2 text-muted-foreground"
-                      >
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">AI正在思考...</span>
-                      </motion.div>
-                    )}
-                  </div>
-                </ScrollArea>
 
-                {/* Input Area */}
-                <div className="border-t border-border/50 glass p-4">
-                  <div className="max-w-3xl mx-auto">
-                    <Card className="flex items-center gap-2 p-2 bg-secondary/50">
-                      <Input
-                        placeholder="输入您的回复..."
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        disabled={isSending}
-                        className="border-0 bg-transparent focus-visible:ring-0"
-                      />
-                      <Button
-                        size="icon"
-                        onClick={handleSendMessage}
-                        disabled={!inputValue.trim() || isSending}
-                        className="bg-gradient-primary glow-primary"
-                      >
-                        <Send className="w-4 h-4" />
-                      </Button>
-                    </Card>
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      按 Enter 发送，Shift + Enter 换行
-                    </p>
+                    {/* Chat Panel */}
+                    <PrdChatPanel
+                      messages={messages}
+                      isStreaming={isStreaming}
+                      isSending={isSending}
+                      inputValue={inputValue}
+                      competitorInsight={competitorInsight}
+                      showInsightCard={messages.length <= 2}
+                      onInputChange={setInputValue}
+                      onSend={handleSendMessage}
+                      onSuggestionClick={handleSuggestionClick}
+                    />
                   </div>
-                </div>
+                ) : (
+                  /* Non-PRD stages: Original chat layout */
+                  <>
+                    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+                      <div className="max-w-3xl mx-auto space-y-4">
+                        <AnimatePresence initial={false}>
+                          {messages.map((message) => (
+                            <ChatMessage
+                              key={message.id}
+                              role={message.role}
+                              content={message.content}
+                              isStreaming={isStreaming && message === messages[messages.length - 1]}
+                            />
+                          ))}
+                        </AnimatePresence>
+                        {isSending && !isStreaming && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center gap-2 text-muted-foreground"
+                          >
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">AI正在思考...</span>
+                          </motion.div>
+                        )}
+                      </div>
+                    </ScrollArea>
+
+                    {/* Input Area */}
+                    <div className="border-t border-border/50 glass p-4">
+                      <div className="max-w-3xl mx-auto">
+                        <Card className="flex items-center gap-2 p-2 bg-secondary/50">
+                          <Input
+                            placeholder="输入您的回复..."
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSendMessage();
+                              }
+                            }}
+                            disabled={isSending}
+                            className="border-0 bg-transparent focus-visible:ring-0"
+                          />
+                          <Button
+                            size="icon"
+                            onClick={handleSendMessage}
+                            disabled={!inputValue.trim() || isSending}
+                            className="bg-gradient-primary glow-primary"
+                          >
+                            <Loader2 className={`w-4 h-4 ${isSending ? 'animate-spin' : 'hidden'}`} />
+                            <MessageSquare className={`w-4 h-4 ${isSending ? 'hidden' : ''}`} />
+                          </Button>
+                        </Card>
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </TabsContent>
