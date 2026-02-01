@@ -44,6 +44,33 @@ interface VisualAssets {
   videoUrl?: string;
 }
 
+// AI Advertising Expert System Prompt
+const SYSTEM_PROMPT = `You are a world-class AI Advertising Expert with 15 years of experience in cross-border e-commerce and DTC brand advertising.
+
+## Your Professional Background
+- Former core member of advertising teams at Meta, Google, and TikTok
+- Managed over $50 million in advertising budgets
+- Specialized in new product market validation and cold-start strategies
+- Deep expertise in Facebook/Instagram/Google Ads best practices
+
+## Core Mission
+You are designing an advertising landing page for a BRAND NEW PRODUCT. The core purpose of this landing page is:
+**To validate market interest and acceptance of this new product through email subscription collection**
+
+## Design Principles
+1. **AIDA Model**: Attention → Interest → Desire → Action
+2. **Pain Point Resonance**: Use real user pain points from competitor reviews to build empathy
+3. **Differentiated Value**: Highlight core differences from competitors
+4. **Urgency Creation**: Use "limited", "early access", "exclusive" to boost conversions
+5. **Trust Building**: Show social proof and professional endorsements
+6. **Single Clear CTA**: One page, one core action - email subscription
+
+## Copywriting Style
+- Target international markets, ALL content MUST be in ENGLISH
+- Concise and powerful, every sentence has a clear purpose
+- Action-oriented language, create visual imagery
+- Data-driven, use specific numbers to enhance persuasion`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -62,65 +89,71 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Build comprehensive prompt with all PRD data
-    const strategyPrompt = `你是一位专业的营销专家和产品经理。请根据以下产品信息，为落地页生成详细的设计思路。
+    // Build comprehensive prompt with professional advertising strategy analysis
+    const strategyPrompt = `Based on the following product intelligence, design a high-converting landing page strategy.
 
-产品信息：
-- 产品名称：${prdData.name}
-- 产品描述：${prdData.description || "暂无描述"}
-- 目标市场：${targetMarket || "国际市场"}
-- 使用场景：${prdData.usageScenario || "暂无"}
-- 目标受众：${prdData.target_audience || "普通消费者"}
-- 设计风格：${prdData.designStyle || "现代简约"}
-- 核心功能：${prdData.coreFeatures?.join("、") || prdData.features?.join("、") || "暂无"}
-- 痛点：${prdData.pain_points?.join("、") || "暂无"}
-- 卖点：${prdData.selling_points?.join("、") || "暂无"}
+## PRODUCT INTELLIGENCE
+Product Name: ${prdData.name}
+Product Description: ${prdData.description || "N/A"}
+Target Market: ${targetMarket || "International"}
+Target Audience: ${prdData.target_audience || "General consumers"}
+Usage Scenario: ${prdData.usageScenario || "N/A"}
+Design Style: ${prdData.designStyle || "Modern minimalist"}
+Core Features: ${prdData.coreFeatures?.join(", ") || prdData.features?.join(", ") || "N/A"}
+Pain Points (from PRD): ${prdData.pain_points?.join(", ") || "N/A"}
+Selling Points: ${prdData.selling_points?.join(", ") || "N/A"}
 
 ${prdData.competitorInsights ? `
-竞品洞察：
-- 竞品优势：${prdData.competitorInsights.positivePoints?.join("、") || "暂无"}
-- 竞品劣势（我们的机会）：${prdData.competitorInsights.negativePoints?.join("、") || "暂无"}
-- 差异化策略：${prdData.competitorInsights.differentiationStrategy || "暂无"}
+## COMPETITOR INTELLIGENCE
+Competitor Strengths: ${prdData.competitorInsights.positivePoints?.join(", ") || "N/A"}
+Competitor Weaknesses (Our Opportunities): ${prdData.competitorInsights.negativePoints?.join(", ") || "N/A"}
+Differentiation Strategy: ${prdData.competitorInsights.differentiationStrategy || "N/A"}
 ` : ""}
 
 ${prdData.marketingAssets ? `
-营销素材描述：
-- 场景描述：${prdData.marketingAssets.sceneDescription || "暂无"}
-- 结构亮点：${prdData.marketingAssets.structureHighlights?.join("、") || "暂无"}
-- 生活方式：${prdData.marketingAssets.lifestyleContext || "暂无"}
+## VISUAL CONTEXT
+Scene Description: ${prdData.marketingAssets.sceneDescription || "N/A"}
+Structure Highlights: ${prdData.marketingAssets.structureHighlights?.join(", ") || "N/A"}
+Lifestyle Context: ${prdData.marketingAssets.lifestyleContext || "N/A"}
 ` : ""}
 
-请以JSON格式返回落地页策略，包含以下字段：
+## YOUR TASK
+Design a landing page strategy optimized for EMAIL COLLECTION as the primary conversion goal.
+This is for MARKET VALIDATION - we want to test if there's genuine interest in this product before full launch.
+
+Return a JSON object with these fields:
 {
-  "headline": "吸引人的主标题（突出核心卖点）",
-  "subheadline": "副标题/价值主张",
-  "painPoints": ["基于竞品差评优化的痛点1", "痛点2", "痛点3"],
-  "sellingPoints": ["突出差异化的卖点1", "卖点2", "卖点3"],
-  "trustBadges": ["✓ 信任标识1", "✓ 信任标识2", "✓ 信任标识3"],
-  "ctaText": "行动号召按钮文案",
+  "headline": "Compelling headline (max 8 words) - use power words, create curiosity",
+  "subheadline": "Value proposition that addresses the #1 pain point",
+  "painPoints": ["3 customer pain points - from competitor reviews, real user language"],
+  "sellingPoints": ["3 key differentiators - specific, measurable benefits"],
+  "trustBadges": ["✓ Trust signal 1", "✓ Trust signal 2", "✓ Trust signal 3"],
+  "ctaText": "Action-oriented CTA (e.g., 'Get Early Access', 'Join Waitlist')",
+  "urgencyMessage": "Scarcity/urgency message (e.g., 'Limited spots for beta testers')",
+  "socialProof": "Social proof statement (e.g., 'Join 1,000+ who signed up this week')",
+  "benefitStatement": "One-liner benefit that removes friction for signing up",
   "imagePrompts": {
-    "lifestyle": "生活场景图的详细描述prompt（如果需要AI补充生成）",
-    "usage": "使用场景图的详细描述prompt",
-    "detail": "产品细节图的详细描述prompt"
+    "hero": "Hero image prompt - lifestyle setting showing product in use",
+    "lifestyle": "Secondary lifestyle image prompt",
+    "detail": "Product detail close-up prompt"
   },
   "colorScheme": {
-    "primary": "主色调hex值",
-    "accent": "强调色hex值",
-    "background": "背景色hex值"
+    "primary": "Primary brand color hex",
+    "accent": "CTA button color hex (high contrast)",
+    "background": "Background color hex"
   },
-  "sections": [
-    {"type": "hero", "title": "主标题区域"},
-    {"type": "pain_points", "title": "痛点共鸣区"},
-    {"type": "solution", "title": "解决方案区"},
-    {"type": "features", "title": "功能展示区"},
-    {"type": "gallery", "title": "产品展示区"},
-    {"type": "video", "title": "视频展示区"},
-    {"type": "trust", "title": "信任背书区"},
-    {"type": "cta", "title": "行动号召区"}
+  "pageFlow": [
+    {"section": "hero", "purpose": "Grab attention, state value prop"},
+    {"section": "pain_points", "purpose": "Build empathy"},
+    {"section": "solution", "purpose": "Present product as answer"},
+    {"section": "benefits", "purpose": "Highlight key features"},
+    {"section": "social_proof", "purpose": "Build trust"},
+    {"section": "cta", "purpose": "Drive email signup"}
   ]
 }
 
-只返回JSON，不要其他内容。`;
+CRITICAL: All text content MUST be in English. Focus on conversion, not description.
+Only return the JSON object, no other text.`;
 
     const strategyResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -129,15 +162,27 @@ ${prdData.marketingAssets ? `
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-pro-preview",
         messages: [
-          { role: "system", content: "你是一位资深的产品营销专家，擅长打造高转化率的广告落地页。" },
+          { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: strategyPrompt },
         ],
       }),
     });
 
     if (!strategyResponse.ok) {
+      if (strategyResponse.status === 429) {
+        return new Response(JSON.stringify({ error: "AI 请求频率过高，请稍后重试" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (strategyResponse.status === 402) {
+        return new Response(JSON.stringify({ error: "AI 额度已用完，请充值后再试" }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const errorText = await strategyResponse.text();
       console.error("Strategy generation failed:", errorText);
       throw new Error("营销策略生成失败");
@@ -154,15 +199,18 @@ ${prdData.marketingAssets ? `
     } catch (e) {
       console.error("Failed to parse strategy:", e);
       strategy = {
-        headline: prdData.name,
-        subheadline: prdData.description || "创新产品，改变生活",
-        painPoints: prdData.pain_points || ["传统产品使用不便", "市场缺乏创新", "价格过高"],
-        sellingPoints: prdData.selling_points || ["创新设计", "高品质材料", "性价比超高"],
-        trustBadges: ["✓ 30天无理由退款", "✓ 专业团队研发", "✓ 全球用户信赖"],
-        ctaText: "立即订阅",
+        headline: `Discover ${prdData.name}`,
+        subheadline: prdData.description || "Revolutionary innovation that changes everything",
+        painPoints: prdData.pain_points || ["Frustrated with outdated solutions", "Tired of compromise", "Ready for change"],
+        sellingPoints: prdData.selling_points || ["Cutting-edge design", "Premium quality", "Unbeatable value"],
+        trustBadges: ["✓ 30-Day Money Back", "✓ Expert Designed", "✓ Trusted Worldwide"],
+        ctaText: "Get Early Access",
+        urgencyMessage: "Limited spots for beta testers",
+        socialProof: "Join early adopters shaping the future",
+        benefitStatement: "Be the first to experience the difference",
         imagePrompts: {
-          lifestyle: `${prdData.name} being used in a modern lifestyle setting`,
-          usage: `hands demonstrating ${prdData.name} usage`,
+          hero: `${prdData.name} being used in a modern lifestyle setting`,
+          lifestyle: `hands demonstrating ${prdData.name} usage`,
           detail: `${prdData.name} close-up detail shot`,
         },
         colorScheme: {
@@ -276,6 +324,13 @@ STYLE REQUIREMENTS:
         heroImageUrl: selectedImageUrl || visualAssets?.selectedProductImage,
         videoUrl: visualAssets?.videoUrl,
         productImages: existingImages.filter(img => img.image_type === "product").map(img => img.image_url),
+        // Conversion optimization fields for frontend
+        conversionOptimization: {
+          primaryCta: strategy?.ctaText || "Get Early Access",
+          urgencyMessage: strategy?.urgencyMessage || "Limited spots available",
+          socialProof: strategy?.socialProof || "",
+          benefitStatement: strategy?.benefitStatement || "",
+        },
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

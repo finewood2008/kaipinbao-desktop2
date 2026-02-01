@@ -312,10 +312,10 @@ export function LandingPageBuilder({
                   <Wand2 className="w-10 h-10 text-white" />
                 </motion.div>
                 
-                <h3 className="text-2xl font-bold mb-2">AI 生成广告落地页</h3>
+                <h3 className="text-2xl font-bold mb-2">AI 广告投放专家</h3>
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  基于 PRD 数据、产品视觉素材和竞品洞察，AI 将自动生成专业的广告级落地页，
-                  包含文案优化和场景图片补充
+                  专业广告投放 AI 为您生成高转化率落地页，
+                  通过邮件收集验证市场对新产品的接受度
                 </p>
 
                 {/* Template Selection */}

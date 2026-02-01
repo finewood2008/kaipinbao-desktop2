@@ -161,7 +161,7 @@ export function LandingPagePreview({
         <section className={cn("py-16 px-8", styles.painPoints.bg)}>
           <div className="max-w-4xl mx-auto">
             <h2 className={cn("text-2xl font-bold text-center mb-8", styles.painPoints.isDark ? "text-white" : "text-gray-800")}>
-              😤 这些问题，你一定遇到过
+              😤 Sound Familiar?
             </h2>
             <div className="grid md:grid-cols-3 gap-6">
               {painPoints.map((point, i) => (
@@ -201,7 +201,7 @@ export function LandingPagePreview({
         <section className={cn("py-16 px-8", styles.solutions.bg)}>
           <div className="max-w-4xl mx-auto">
             <h2 className={cn("text-2xl font-bold text-center mb-8", styles.solutions.isDark ? "text-white" : "text-gray-800")}>
-              ✨ 我们的解决方案
+              ✨ Our Solution
             </h2>
             <div className="grid md:grid-cols-3 gap-6">
               {sellingPoints.map((point, i) => (
@@ -228,7 +228,7 @@ export function LandingPagePreview({
         <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-900" : "bg-slate-50")}>
           <div className="max-w-4xl mx-auto">
             <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>
-              🎯 简单易用
+              🎯 Simple & Intuitive
             </h2>
             <img
               src={usageImage}
@@ -244,7 +244,7 @@ export function LandingPagePreview({
         <section className={cn("py-16 px-8", styles.video.bg)}>
           <div className="max-w-4xl mx-auto">
             <h2 className={cn("text-2xl font-bold text-center mb-8", styles.video.titleColor)}>
-              🎬 产品展示
+              🎬 See It In Action
             </h2>
             <div className="relative rounded-2xl overflow-hidden shadow-2xl">
               <video
@@ -276,7 +276,7 @@ export function LandingPagePreview({
         <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-800" : "bg-slate-50")}>
           <div className="max-w-4xl mx-auto">
             <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>
-              📸 产品细节展示
+              📸 Every Detail Matters
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {detailImage && (
@@ -329,14 +329,14 @@ export function LandingPagePreview({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <h3 className="text-2xl font-bold mb-2">抢先体验</h3>
-            <p className="text-white/70 mb-6">留下邮箱，第一时间获取产品动态</p>
+            <h3 className="text-2xl font-bold mb-2">Get Early Access</h3>
+            <p className="text-white/70 mb-6">Be the first to know when we launch</p>
             
             {isSubscribed ? (
               <div className="bg-white/20 backdrop-blur rounded-lg p-6">
                 <CheckCircle className="w-12 h-12 text-green-300 mx-auto mb-3" />
-                <p className="text-lg font-medium">感谢订阅！</p>
-                <p className="text-sm text-white/70">我们会第一时间通知您</p>
+                <p className="text-lg font-medium">You're In!</p>
+                <p className="text-sm text-white/70">We'll notify you as soon as we launch</p>
               </div>
             ) : isInteractive ? (
               <div className="flex gap-2 max-w-sm mx-auto">
