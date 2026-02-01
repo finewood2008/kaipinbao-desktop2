@@ -7,6 +7,13 @@ const corsHeaders = {
 };
 
 const sectionPrompts: Record<string, string> = {
+  productOverview: `Based on the product context provided, generate a product overview including:
+- productName: A catchy product name (both Chinese and English)
+- productTagline: A memorable tagline (both Chinese and English)
+- productCategory: Product category
+- pricingRange: Recommended price range
+Output as JSON object in Chinese.`,
+
   usageScenario: `Based on the product context provided, generate a detailed description of usage scenarios for this product. 
 Include 3-5 specific scenarios where the product would be used, mentioning:
 - Environment (indoor/outdoor, specific locations)
@@ -22,13 +29,17 @@ Output in Chinese. Be specific and vivid.`,
 - Purchasing behavior characteristics
 Output in Chinese. Be specific and create a vivid persona.`,
 
-  designStyle: `Based on the product context provided, generate a detailed design style description. Include:
-- Material choices (metal, plastic, fabric, etc.)
-- Color scheme (specific colors and their rationale)
-- Form factor (rounded, angular, minimal, etc.)
-- Texture and finish (matte, glossy, textured, etc.)
-- Overall aesthetic direction
-Output in Chinese. Be specific and aligned with the target audience.`,
+  designStyle: `Based on the product context provided, generate a detailed CMF (Color, Material, Finish) design specification. Include:
+- designStyle: Overall design direction and aesthetic
+- cmfDesign: {
+    "primaryColor": Primary color with description,
+    "secondaryColor": Secondary color,
+    "accentColor": Accent color,
+    "surfaceFinish": Surface treatment,
+    "textureDetails": Texture description,
+    "materialBreakdown": [{"material": "name", "percentage": number, "location": "where used"}]
+  }
+Output as JSON object in Chinese.`,
 
   coreFeatures: `Based on the product context provided, generate a list of 4-6 core features. Each feature should:
 - Address a specific user pain point
@@ -37,27 +48,41 @@ Output in Chinese. Be specific and aligned with the target audience.`,
 - Have clear user benefit
 Output as a JSON array of strings in Chinese. Example: ["功能1", "功能2"]`,
 
+  specifications: `Based on the product context provided, generate product specifications. Include:
+- dimensions: Size in mm
+- weight: Weight in grams
+- materials: Array of materials used
+- colors: Available color options
+- powerSource: Power type if applicable
+- connectivity: Connection types if applicable
+Output as JSON object in Chinese.`,
+
+  marketPositioning: `Based on the product context provided, generate market positioning strategy. Include:
+- priceTier: "budget" | "mid-range" | "premium" | "luxury"
+- primaryCompetitors: Array of main competitor names
+- uniqueSellingPoints: Array of 3 key USPs
+- competitiveAdvantages: Array of advantages vs competitors
+- targetMarketSize: Estimated market size description
+Output as JSON object in Chinese.`,
+
+  packaging: `Based on the product context provided, generate packaging design specifications. Include:
+- packageType: Type of packaging
+- includedAccessories: Array of items in box
+- specialPackagingFeatures: Unboxing experience design
+- sustainabilityFeatures: Eco-friendly aspects
+Output as JSON object in Chinese.`,
+
   marketingAssets: `Based on the product context provided, generate marketing asset descriptions. Include:
 - sceneDescription: A detailed scene for product photography (lighting, background, props)
 - usageScenarios: 3 specific usage scenario descriptions for photos
 - lifestyleContext: The lifestyle message to convey
-Output as JSON object in Chinese. Example:
-{
-  "sceneDescription": "现代简约办公桌，柔和自然光...",
-  "usageScenarios": ["场景1", "场景2", "场景3"],
-  "lifestyleContext": "追求效率与品质的生活方式"
-}`,
+Output as JSON object in Chinese.`,
 
   videoAssets: `Based on the product context provided, generate video creative descriptions for a 6-second product video. Include:
 - storyLine: A brief story arc (beginning, middle, end)
 - keyActions: 2-3 key actions to show in the video
 - emotionalTone: The emotional message to convey
-Output as JSON object in Chinese. Example:
-{
-  "storyLine": "产品展开 → 使用中 → 收纳便携",
-  "keyActions": ["单手折叠", "快速展开"],
-  "emotionalTone": "专业高效"
-}`,
+Output as JSON object in Chinese.`,
 };
 
 serve(async (req) => {
@@ -103,10 +128,12 @@ serve(async (req) => {
 ${project?.description ? `产品描述: ${project.description}` : ""}
 
 当前PRD数据:
+${currentPrdData?.productName ? `- 产品名称: ${currentPrdData.productName}` : ""}
 ${currentPrdData?.usageScenario ? `- 使用场景: ${currentPrdData.usageScenario}` : ""}
 ${currentPrdData?.targetAudience ? `- 目标用户: ${currentPrdData.targetAudience}` : ""}
 ${currentPrdData?.designStyle ? `- 外观风格: ${currentPrdData.designStyle}` : ""}
 ${currentPrdData?.coreFeatures?.length ? `- 核心功能: ${currentPrdData.coreFeatures.join(", ")}` : ""}
+${currentPrdData?.pricingRange ? `- 定价区间: ${currentPrdData.pricingRange}` : ""}
 `;
 
     if (competitors && competitors.length > 0) {
@@ -122,20 +149,20 @@ ${competitors.map((c: any) => `- ${c.product_title} (${c.price || "价格未知"
       );
     }
 
-    // Call Gemini API
+    // Call Google Gemini API directly
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GOOGLE_API_KEY,
+        },
         body: JSON.stringify({
           contents: [
             {
-              parts: [
-                {
-                  text: `${context}\n\n${sectionPrompt}`,
-                },
-              ],
+              role: "user",
+              parts: [{ text: `${context}\n\n${sectionPrompt}` }],
             },
           ],
           generationConfig: {
@@ -177,9 +204,14 @@ ${competitors.map((c: any) => `- ${c.product_title} (${c.price || "价格未知"
           .filter((line: string) => line.trim().length > 0 && !line.startsWith("#"))
           .slice(0, 6);
       }
-    } else if (section === "marketingAssets" || section === "videoAssets") {
+    } else if (["marketingAssets", "videoAssets", "specifications", "marketPositioning", "packaging", "designStyle", "productOverview"].includes(section)) {
       // Extract JSON object from response
-      const jsonMatch = generatedText.match(/\{[\s\S]*?\}/);
+      let jsonStr = generatedText;
+      const codeBlockMatch = generatedText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      }
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           regeneratedContent = JSON.parse(jsonMatch[0]);
@@ -199,12 +231,27 @@ ${competitors.map((c: any) => `- ${c.product_title} (${c.price || "价格未知"
 
     // Update the project with new content
     const updatedPrdData = { ...currentPrdData };
+    
     if (section === "coreFeatures") {
       updatedPrdData.coreFeatures = regeneratedContent;
     } else if (section === "marketingAssets") {
       updatedPrdData.marketingAssets = regeneratedContent;
     } else if (section === "videoAssets") {
       updatedPrdData.videoAssets = regeneratedContent;
+    } else if (section === "specifications") {
+      updatedPrdData.specifications = regeneratedContent;
+    } else if (section === "marketPositioning") {
+      updatedPrdData.marketPositioning = regeneratedContent;
+    } else if (section === "packaging") {
+      updatedPrdData.packaging = regeneratedContent;
+    } else if (section === "designStyle") {
+      updatedPrdData.designStyle = regeneratedContent.designStyle;
+      updatedPrdData.cmfDesign = regeneratedContent.cmfDesign;
+    } else if (section === "productOverview") {
+      updatedPrdData.productName = regeneratedContent.productName;
+      updatedPrdData.productTagline = regeneratedContent.productTagline;
+      updatedPrdData.productCategory = regeneratedContent.productCategory;
+      updatedPrdData.pricingRange = regeneratedContent.pricingRange;
     } else {
       (updatedPrdData as any)[section] = regeneratedContent;
     }

@@ -62,9 +62,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY not configured");
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+    if (!GOOGLE_API_KEY) {
+      console.error("GOOGLE_API_KEY not configured");
       return new Response(
         JSON.stringify({ success: false, error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -127,28 +127,38 @@ ${JSON.stringify(reviewTexts, null, 2)}
 
 请基于以上数据，输出JSON格式的市场分析报告。`;
 
-    console.log("Calling AI for market analysis...");
+    console.log("Calling Google Gemini API for market analysis...");
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-preview",
-        messages: [
-          { role: "system", content: MARKET_ANALYST_SYSTEM_PROMPT },
-          { role: "user", content: analysisPrompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 4000,
-      }),
-    });
+    // Call Google Gemini API directly
+    const aiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": GOOGLE_API_KEY,
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: MARKET_ANALYST_SYSTEM_PROMPT }],
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: analysisPrompt }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 4000,
+          },
+        }),
+      }
+    );
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
-      console.error("AI API error:", aiResponse.status, errorText);
+      console.error("Gemini API error:", aiResponse.status, errorText);
       
       if (aiResponse.status === 429) {
         return new Response(
@@ -156,18 +166,12 @@ ${JSON.stringify(reviewTexts, null, 2)}
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ success: false, error: "AI额度已用完，请充值后再试" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       
       throw new Error(`AI request failed: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
-    const analysisContent = aiData.choices?.[0]?.message?.content || "";
+    const analysisContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     console.log("AI response received, length:", analysisContent.length);
 
@@ -179,6 +183,11 @@ ${JSON.stringify(reviewTexts, null, 2)}
       const jsonMatch = analysisContent.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
         jsonStr = jsonMatch[1].trim();
+      }
+      // Also try to find JSON object directly
+      const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (objectMatch) {
+        jsonStr = objectMatch[0];
       }
       analysis = JSON.parse(jsonStr);
     } catch (parseError) {
