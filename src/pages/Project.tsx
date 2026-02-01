@@ -306,14 +306,9 @@ ${proj.description ? `\n${proj.description}\n` : ""}
           stage: project?.current_stage || 1,
         });
 
-        // Check if AI is suggesting to move to next stage
-        if (
-          project?.current_stage === 1 &&
-          (assistantContent.includes("PRD细化已完成") ||
-            assistantContent.includes("进入下一阶段") ||
-            assistantContent.includes("开始视觉生成"))
-        ) {
-          // Show transition prompt instead of auto-advancing
+        // Check if AI is suggesting to move to next stage - more intelligent detection
+        const stageCompleteSignal = detectStageCompletion(assistantContent, project?.current_stage || 1);
+        if (stageCompleteSignal) {
           setTimeout(() => {
             setShowTransitionPrompt(true);
           }, 1000);
@@ -357,6 +352,40 @@ ${proj.description ? `\n${proj.description}\n` : ""}
 
   const handleStageTransitionConfirm = () => {
     advanceStage();
+  };
+
+  // Intelligent stage completion detection
+  const detectStageCompletion = (content: string, currentStage: number): boolean => {
+    if (currentStage === 1) {
+      // Check for explicit completion signal
+      if (content.includes("[STAGE_COMPLETE:1]")) {
+        return true;
+      }
+      
+      // Check for natural language indicators of PRD completion
+      const completionIndicators = [
+        "PRD细化已完成",
+        "PRD信息收集已完成",
+        "进入视觉生成阶段",
+        "开始视觉生成",
+        "开始生成产品渲染",
+        "我已经充分了解",
+        "信息已经足够",
+        "可以进入下一阶段",
+        "准备进入视觉生成"
+      ];
+      
+      // Check for summary + confirmation pattern
+      const hasSummary = content.includes("总结") || content.includes("汇总") || content.includes("确认以下信息");
+      const hasNextStepHint = completionIndicators.some(indicator => content.includes(indicator));
+      
+      return hasNextStepHint || (hasSummary && content.includes("视觉"));
+    }
+    
+    // Stage 2 is handled by image selection in the gallery
+    // Stage 3 completion is handled by landing page publishing
+    
+    return false;
   };
 
   // Parse suggestions from AI response
