@@ -12,8 +12,7 @@ import {
   ImagePlus,
   MessageSquare,
   X,
-  ZoomIn,
-  ChevronRight
+  ZoomIn
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -26,23 +25,26 @@ interface GeneratedImage {
   prompt: string;
   is_selected: boolean;
   feedback: string | null;
+  image_type?: string;
+  phase?: number;
+  parent_image_id?: string | null;
 }
 
-interface ImageGalleryProps {
+interface ProductDesignGalleryProps {
   projectId: string;
   images: GeneratedImage[];
   onImagesChange: (images: GeneratedImage[]) => void;
-  onConfirmSelection: () => void;
+  onSelectImage: (image: GeneratedImage) => void;
   prdSummary?: string;
 }
 
-export function ImageGallery({
+export function ProductDesignGallery({
   projectId,
   images,
   onImagesChange,
-  onConfirmSelection,
+  onSelectImage,
   prdSummary,
-}: ImageGalleryProps) {
+}: ProductDesignGalleryProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [feedbackImageId, setFeedbackImageId] = useState<string | null>(null);
@@ -65,6 +67,8 @@ export function ImageGallery({
           body: JSON.stringify({
             prompt,
             projectId,
+            imageType: "product",
+            phase: 1,
           }),
         }
       );
@@ -84,6 +88,8 @@ export function ImageGallery({
           image_url: data.imageUrl,
           prompt: data.prompt,
           is_selected: false,
+          image_type: "product",
+          phase: 1,
         })
         .select()
         .single();
@@ -91,7 +97,7 @@ export function ImageGallery({
       if (error) throw error;
 
       onImagesChange([...images, savedImage as GeneratedImage]);
-      toast.success("图像生成成功！");
+      toast.success("产品造型生成成功！");
     } catch (error) {
       console.error(error);
       toast.error(error instanceof Error ? error.message : "图像生成失败");
@@ -111,25 +117,29 @@ export function ImageGallery({
     generateImage(customPrompt);
   };
 
-  const handleSelectImage = async (imageId: string) => {
+  const handleSelectImage = async (image: GeneratedImage) => {
+    // Update all images - only the selected one is marked
     const updatedImages = images.map((img) => ({
       ...img,
-      is_selected: img.id === imageId,
+      is_selected: img.id === image.id,
     }));
 
     // Update in database
     await supabase
       .from("generated_images")
       .update({ is_selected: false })
-      .eq("project_id", projectId);
+      .eq("project_id", projectId)
+      .eq("phase", 1);
 
     await supabase
       .from("generated_images")
       .update({ is_selected: true })
-      .eq("id", imageId);
+      .eq("id", image.id);
 
     onImagesChange(updatedImages);
-    toast.success("已选择此设计方案");
+    
+    // Notify parent with the selected image
+    onSelectImage({ ...image, is_selected: true });
   };
 
   const handleSubmitFeedback = async () => {
@@ -163,8 +173,6 @@ export function ImageGallery({
     setLightboxOpen(true);
   };
 
-  const selectedImage = images.find((img) => img.is_selected);
-
   return (
     <div className="space-y-6">
       {/* Generation Controls */}
@@ -172,9 +180,9 @@ export function ImageGallery({
         <CardContent className="p-6">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-stage-2" />
-            AI 产品渲染图生成
+            AI 产品造型生成
             <span className="text-xs text-muted-foreground font-normal ml-2">
-              使用 Nano Banana Pro 模型
+              板块一：基于PRD生成产品外观
             </span>
           </h3>
 
@@ -187,12 +195,12 @@ export function ImageGallery({
               {isGenerating ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  正在生成高质量渲染图...
+                  正在生成产品造型...
                 </>
               ) : (
                 <>
                   <ImagePlus className="w-4 h-4 mr-2" />
-                  基于 PRD 生成产品图
+                  基于 PRD 生成产品造型
                 </>
               )}
               {/* Shimmer effect */}
@@ -205,7 +213,7 @@ export function ImageGallery({
 
             <div className="flex gap-2">
               <Input
-                placeholder="或输入自定义描述..."
+                placeholder="或输入自定义造型描述..."
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
                 disabled={isGenerating}
@@ -222,13 +230,13 @@ export function ImageGallery({
         </CardContent>
       </Card>
 
-      {/* Image Gallery - Enhanced with larger cards */}
+      {/* Image Gallery */}
       {images.length > 0 && (
         <div className="space-y-4">
           <h3 className="font-semibold flex items-center gap-2">
-            生成的设计方案 
+            产品造型方案 
             <span className="text-sm text-muted-foreground font-normal">
-              ({images.length} 个方案)
+              ({images.length} 个方案，点击选择进入下一板块)
             </span>
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -251,18 +259,19 @@ export function ImageGallery({
                     className={cn(
                       "overflow-hidden transition-all duration-300 group",
                       image.is_selected
-                        ? "ring-2 ring-stage-2 shadow-lg glow-accent"
+                        ? "ring-2 ring-stage-2 shadow-lg"
                         : "hover:ring-1 hover:ring-border hover:shadow-md"
                     )}
+                    style={image.is_selected ? { boxShadow: "0 0 20px hsl(var(--stage-2) / 0.3)" } : {}}
                   >
-                    {/* Image Container - Larger aspect ratio */}
+                    {/* Image Container */}
                     <div 
                       className="aspect-[4/3] relative cursor-pointer overflow-hidden"
                       onClick={() => openLightbox(index)}
                     >
                       <img
                         src={image.image_url}
-                        alt="Product render"
+                        alt="Product design"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                       
@@ -317,20 +326,22 @@ export function ImageGallery({
                           </Button>
                         </div>
                         
-                        {!image.is_selected && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSelectImage(image.id);
-                            }}
-                            className="border-stage-2/50 text-stage-2 hover:bg-stage-2/10"
-                          >
-                            <Check className="w-4 h-4 mr-1" />
-                            选择
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant={image.is_selected ? "default" : "outline"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectImage(image);
+                          }}
+                          className={cn(
+                            image.is_selected 
+                              ? "bg-stage-2 hover:bg-stage-2/90" 
+                              : "border-stage-2/50 text-stage-2 hover:bg-stage-2/10"
+                          )}
+                        >
+                          <Check className="w-4 h-4 mr-1" />
+                          {image.is_selected ? "已选择" : "选择此造型"}
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -341,13 +352,29 @@ export function ImageGallery({
         </div>
       )}
 
+      {/* Empty State */}
+      {images.length === 0 && !isGenerating && (
+        <Card className="glass border-dashed border-border/50">
+          <CardContent className="p-12 text-center">
+            <ImagePlus className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <h4 className="font-medium mb-2">开始创建产品造型</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              点击上方按钮，AI 将根据 PRD 信息生成多种产品外观方案
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Lightbox */}
       <ImageLightbox
         images={images}
         currentIndex={lightboxIndex}
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
-        onSelect={handleSelectImage}
+        onSelect={(imageId) => {
+          const image = images.find(img => img.id === imageId);
+          if (image) handleSelectImage(image);
+        }}
         onNavigate={setLightboxIndex}
       />
 
@@ -400,62 +427,6 @@ export function ImageGallery({
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Confirm Selection - Enhanced with animation prompt */}
-      {selectedImage && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        >
-          <Card className="glass border-stage-2/50 overflow-hidden relative">
-            {/* Animated gradient border */}
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-stage-2/20 via-accent/20 to-stage-2/20"
-              animate={{
-                backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
-              }}
-              transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-              style={{ backgroundSize: "200% 100%" }}
-            />
-            
-            <CardContent className="p-6 relative">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <motion.div 
-                    className="w-16 h-16 rounded-lg overflow-hidden border-2 border-stage-2"
-                    animate={{ scale: [1, 1.05, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    <img 
-                      src={selectedImage.image_url} 
-                      alt="" 
-                      className="w-full h-full object-cover" 
-                    />
-                  </motion.div>
-                  <div>
-                    <h4 className="font-semibold text-stage-2 flex items-center gap-2">
-                      <Check className="w-4 h-4" />
-                      已选择设计方案
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      确认后将进入下一阶段：营销落地页生成
-                    </p>
-                  </div>
-                </div>
-                <Button 
-                  onClick={onConfirmSelection} 
-                  className="bg-gradient-to-r from-stage-2 to-stage-3 hover:opacity-90 transition-opacity animate-glow-pulse"
-                  size="lg"
-                >
-                  <span className="mr-2">确认并进入下一阶段</span>
-                  <ChevronRight className="w-5 h-5" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
     </div>
   );
 }

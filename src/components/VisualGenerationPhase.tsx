@@ -1,0 +1,402 @@
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Layers, 
+  Megaphone, 
+  Check, 
+  ChevronRight,
+  ArrowLeft,
+  Sparkles
+} from "lucide-react";
+import { ProductDesignGallery } from "./ProductDesignGallery";
+import { ImageTypeSelector, ImageType } from "./ImageTypeSelector";
+import { MarketingImageGallery } from "./MarketingImageGallery";
+import { VideoGenerationSection } from "./VideoGenerationSection";
+import { cn } from "@/lib/utils";
+
+interface GeneratedImage {
+  id: string;
+  image_url: string;
+  prompt: string;
+  is_selected: boolean;
+  feedback: string | null;
+  image_type?: string;
+  phase?: number;
+  parent_image_id?: string | null;
+}
+
+interface GeneratedVideo {
+  id: string;
+  video_url: string | null;
+  prompt: string;
+  scene_description: string | null;
+  duration_seconds: number;
+  status: string;
+}
+
+interface VisualGenerationPhaseProps {
+  projectId: string;
+  productImages: GeneratedImage[];
+  marketingImages: GeneratedImage[];
+  videos: GeneratedVideo[];
+  onProductImagesChange: (images: GeneratedImage[]) => void;
+  onMarketingImagesChange: (images: GeneratedImage[]) => void;
+  onVideosChange: (videos: GeneratedVideo[]) => void;
+  onConfirmAndProceed: () => void;
+  prdSummary?: string;
+  prdData?: {
+    usageScenarios?: string[];
+    targetAudience?: string;
+    coreFeatures?: string[];
+  };
+}
+
+export function VisualGenerationPhase({
+  projectId,
+  productImages,
+  marketingImages,
+  videos,
+  onProductImagesChange,
+  onMarketingImagesChange,
+  onVideosChange,
+  onConfirmAndProceed,
+  prdSummary,
+  prdData,
+}: VisualGenerationPhaseProps) {
+  const [currentPhase, setCurrentPhase] = useState<1 | 2>(1);
+  const [selectedProductImage, setSelectedProductImage] = useState<GeneratedImage | null>(null);
+  const [showPhaseTransition, setShowPhaseTransition] = useState(false);
+  const [selectedImageTypes, setSelectedImageTypes] = useState<ImageType[]>([]);
+
+  // Check for existing selected product image
+  useEffect(() => {
+    const selected = productImages.find(img => img.is_selected);
+    if (selected) {
+      setSelectedProductImage(selected);
+      // If we have a selected product and marketing images, we're in phase 2
+      if (marketingImages.length > 0) {
+        setCurrentPhase(2);
+      }
+    }
+  }, [productImages, marketingImages]);
+
+  const handleProductSelection = (image: GeneratedImage) => {
+    setSelectedProductImage(image);
+    setShowPhaseTransition(true);
+  };
+
+  const handleConfirmPhaseTransition = () => {
+    setShowPhaseTransition(false);
+    setCurrentPhase(2);
+  };
+
+  const handleBackToPhase1 = () => {
+    setCurrentPhase(1);
+  };
+
+  const phases = [
+    { id: 1, label: "产品造型设计", icon: Layers },
+    { id: 2, label: "营销素材生成", icon: Megaphone },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Phase Indicator */}
+      <Card className="glass border-border/50 overflow-hidden">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {phases.map((phase, index) => (
+                <div key={phase.id} className="flex items-center">
+                  <motion.button
+                    onClick={() => phase.id === 1 && currentPhase === 2 && handleBackToPhase1()}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300",
+                      currentPhase === phase.id
+                        ? "bg-gradient-to-r from-stage-2 to-accent text-white"
+                        : phase.id < currentPhase
+                        ? "bg-stage-2/20 text-stage-2 cursor-pointer hover:bg-stage-2/30"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                    whileHover={phase.id < currentPhase ? { scale: 1.02 } : {}}
+                    whileTap={phase.id < currentPhase ? { scale: 0.98 } : {}}
+                  >
+                    {phase.id < currentPhase ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <phase.icon className="w-4 h-4" />
+                    )}
+                    <span className="text-sm font-medium">{phase.label}</span>
+                  </motion.button>
+                  
+                  {index < phases.length - 1 && (
+                    <div className="mx-3 flex items-center">
+                      <motion.div
+                        className={cn(
+                          "h-0.5 w-8 rounded-full",
+                          currentPhase > phase.id ? "bg-stage-2" : "bg-border"
+                        )}
+                        initial={false}
+                        animate={{
+                          backgroundColor: currentPhase > phase.id 
+                            ? "hsl(var(--stage-2))" 
+                            : "hsl(var(--border))"
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Current phase hint */}
+            <Badge variant="outline" className="bg-background/50">
+              {currentPhase === 1 
+                ? "生成并选择产品造型" 
+                : "生成营销素材 & 视频"
+              }
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Phase Transition Overlay */}
+      <AnimatePresence>
+        {showPhaseTransition && selectedProductImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-background/90 backdrop-blur-md z-50 flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="max-w-lg w-full"
+            >
+              <Card className="glass border-stage-2/50 overflow-hidden">
+                {/* Confetti effect */}
+                <motion.div
+                  className="absolute inset-0 pointer-events-none"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  {[...Array(12)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="absolute w-2 h-2 rounded-full"
+                      style={{
+                        left: `${Math.random() * 100}%`,
+                        top: `${Math.random() * 100}%`,
+                        backgroundColor: `hsl(${Math.random() * 60 + 180}, 70%, 60%)`,
+                      }}
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ 
+                        scale: [0, 1, 0.5],
+                        opacity: [0, 1, 0],
+                        y: [0, -30, -50],
+                      }}
+                      transition={{ 
+                        duration: 1.5,
+                        delay: i * 0.05,
+                        repeat: Infinity,
+                        repeatDelay: 2
+                      }}
+                    />
+                  ))}
+                </motion.div>
+
+                <CardContent className="p-8 text-center relative">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 25, delay: 0.1 }}
+                    className="w-24 h-24 mx-auto mb-6 rounded-xl overflow-hidden border-4 border-stage-2 shadow-lg"
+                    style={{ boxShadow: "0 0 30px hsl(var(--stage-2) / 0.4)" }}
+                  >
+                    <img 
+                      src={selectedProductImage.image_url} 
+                      alt="Selected design"
+                      className="w-full h-full object-cover"
+                    />
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <h3 className="text-xl font-bold mb-2 flex items-center justify-center gap-2">
+                      <Sparkles className="w-5 h-5 text-stage-2" />
+                      产品造型已选定！
+                    </h3>
+                    <p className="text-muted-foreground mb-6">
+                      接下来将根据这个造型生成各类营销素材和视频
+                    </p>
+                  </motion.div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowPhaseTransition(false)}
+                      className="flex-1"
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-2" />
+                      返回修改
+                    </Button>
+                    <Button
+                      onClick={handleConfirmPhaseTransition}
+                      className="flex-1 bg-gradient-to-r from-stage-2 to-accent animate-glow-pulse"
+                    >
+                      进入素材生成
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Phase Content */}
+      <AnimatePresence mode="wait">
+        {currentPhase === 1 ? (
+          <motion.div
+            key="phase1"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ProductDesignGallery
+              projectId={projectId}
+              images={productImages}
+              onImagesChange={onProductImagesChange}
+              onSelectImage={handleProductSelection}
+              prdSummary={prdSummary}
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="phase2"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6"
+          >
+            {/* Selected Product Display */}
+            {selectedProductImage && (
+              <Card className="glass border-stage-2/30 overflow-hidden">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-20 rounded-lg overflow-hidden border-2 border-stage-2 flex-shrink-0">
+                      <img 
+                        src={selectedProductImage.image_url}
+                        alt="Selected product"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold flex items-center gap-2">
+                        <Check className="w-4 h-4 text-stage-2" />
+                        已选定的产品造型
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        基于此造型生成营销素材
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleBackToPhase1}
+                      className="text-muted-foreground"
+                    >
+                      <ArrowLeft className="w-4 h-4 mr-1" />
+                      更换造型
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Image Type Selector */}
+            <ImageTypeSelector
+              selectedTypes={selectedImageTypes}
+              onTypesChange={setSelectedImageTypes}
+            />
+
+            {/* Marketing Image Gallery */}
+            <MarketingImageGallery
+              projectId={projectId}
+              parentImageId={selectedProductImage?.id}
+              parentImageUrl={selectedProductImage?.image_url}
+              selectedTypes={selectedImageTypes}
+              images={marketingImages}
+              onImagesChange={onMarketingImagesChange}
+              prdSummary={prdSummary}
+            />
+
+            {/* Video Generation */}
+            <VideoGenerationSection
+              projectId={projectId}
+              parentImageId={selectedProductImage?.id}
+              parentImageUrl={selectedProductImage?.image_url}
+              videos={videos}
+              onVideosChange={onVideosChange}
+              usageScenarios={prdData?.usageScenarios}
+            />
+
+            {/* Proceed to Landing Page */}
+            {(marketingImages.length > 0 || videos.length > 0) && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Card className="glass border-stage-3/50 overflow-hidden relative">
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-stage-2/10 via-stage-3/10 to-stage-2/10"
+                    animate={{
+                      backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                    }}
+                    transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+                    style={{ backgroundSize: "200% 100%" }}
+                  />
+                  
+                  <CardContent className="p-6 relative">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-semibold text-stage-3">
+                          素材生成完成！
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          已生成 {marketingImages.length} 张图片
+                          {videos.length > 0 && ` 和 ${videos.length} 个视频`}
+                        </p>
+                      </div>
+                      <Button 
+                        onClick={onConfirmAndProceed} 
+                        className="bg-gradient-to-r from-stage-2 to-stage-3 hover:opacity-90 transition-opacity animate-glow-pulse"
+                        size="lg"
+                      >
+                        <span className="mr-2">进入落地页阶段</span>
+                        <ChevronRight className="w-5 h-5" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

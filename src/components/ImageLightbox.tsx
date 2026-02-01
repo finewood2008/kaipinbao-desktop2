@@ -24,7 +24,7 @@ interface ImageLightboxProps {
   currentIndex: number;
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (imageId: string) => void;
+  onSelect?: (imageId: string) => void;
   onNavigate: (index: number) => void;
 }
 
@@ -84,7 +84,7 @@ export function ImageLightbox({
   };
 
   const handleSelect = useCallback(() => {
-    if (!currentImage) return;
+    if (!currentImage || !onSelect) return;
     onSelect(currentImage.id);
     setShowConfirmation(true);
     setTimeout(() => {
@@ -227,31 +227,33 @@ export function ImageLightbox({
           </div>
 
           {/* Footer with actions */}
-          <div className="p-4 border-t border-border/50 flex items-center justify-center gap-4">
-            <Button
-              size="lg"
-              onClick={handleSelect}
-              disabled={currentImage.is_selected}
-              className={cn(
-                "min-w-[200px]",
-                currentImage.is_selected 
-                  ? "bg-stage-2/20 text-stage-2 border border-stage-2"
-                  : "bg-gradient-to-r from-stage-2 to-stage-2/80"
-              )}
-            >
-              {currentImage.is_selected ? (
-                <>
-                  <Check className="w-5 h-5 mr-2" />
-                  已选择此设计
-                </>
-              ) : (
-                <>
-                  <Check className="w-5 h-5 mr-2" />
-                  选择此设计方案
-                </>
-              )}
-            </Button>
-          </div>
+          {onSelect && (
+            <div className="p-4 border-t border-border/50 flex items-center justify-center gap-4">
+              <Button
+                size="lg"
+                onClick={handleSelect}
+                disabled={currentImage.is_selected}
+                className={cn(
+                  "min-w-[200px]",
+                  currentImage.is_selected 
+                    ? "bg-stage-2/20 text-stage-2 border border-stage-2"
+                    : "bg-gradient-to-r from-stage-2 to-stage-2/80"
+                )}
+              >
+                {currentImage.is_selected ? (
+                  <>
+                    <Check className="w-5 h-5 mr-2" />
+                    已选择此设计
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-5 h-5 mr-2" />
+                    选择此设计方案
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
 
           {/* Thumbnail strip */}
           {images.length > 1 && (
