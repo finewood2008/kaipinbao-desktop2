@@ -1,7 +1,16 @@
 import { motion } from "framer-motion";
-import { ExternalLink, Loader2, Star, Trash2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { ExternalLink, Loader2, Star, Trash2, CheckCircle, XCircle, AlertCircle, Image as ImageIcon, ThumbsUp, ThumbsDown, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+
+export interface ReviewSummary {
+  overallRating: number | null;
+  totalReviews: number | null;
+  ratingBreakdown: { stars: number; percentage: number }[];
+  topPositives: string[];
+  topNegatives: string[];
+}
 
 export interface CompetitorProduct {
   id: string;
@@ -12,6 +21,9 @@ export interface CompetitorProduct {
   rating?: number;
   review_count?: number;
   product_images?: string[];
+  main_image?: string;
+  review_summary?: ReviewSummary;
+  review_screenshot_url?: string;
   status: "pending" | "scraping" | "completed" | "failed";
 }
 
@@ -47,6 +59,10 @@ const statusLabels = {
 export function CompetitorCard({ product, onDelete, onRetry }: CompetitorCardProps) {
   const platformClass = platformColors[product.platform] || platformColors.unknown;
   const displayUrl = product.url.length > 50 ? product.url.slice(0, 50) + "..." : product.url;
+  const [showScreenshot, setShowScreenshot] = useState(false);
+
+  // Use main_image if available, otherwise fall back to first product_image
+  const displayImage = product.main_image || (product.product_images && product.product_images[0]);
 
   return (
     <motion.div
@@ -93,49 +109,75 @@ export function CompetitorCard({ product, onDelete, onRetry }: CompetitorCardPro
 
       {/* Product info (when completed) */}
       {product.status === "completed" && product.product_title && (
-        <div className="space-y-2 pt-1 border-t border-border/30">
-          <p className="text-sm font-medium text-foreground line-clamp-2">
-            {product.product_title}
-          </p>
+        <div className="space-y-3 pt-2 border-t border-border/30">
+          {/* Main product image and title */}
+          <div className="flex gap-3">
+            {displayImage && (
+              <div className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-muted border border-border/50">
+                <img 
+                  src={displayImage} 
+                  alt="产品主图"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground line-clamp-2">
+                {product.product_title}
+              </p>
+              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                {product.price && <span className="text-primary font-medium">{product.price}</span>}
+                {product.rating && (
+                  <span className="flex items-center gap-1">
+                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                    {product.rating.toFixed(1)}
+                  </span>
+                )}
+                {product.review_count !== undefined && (
+                  <span>({product.review_count.toLocaleString()} 评论)</span>
+                )}
+              </div>
+            </div>
+          </div>
           
-          {/* Product Images Thumbnails */}
-          {product.product_images && product.product_images.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {product.product_images.slice(0, 4).map((imgUrl, index) => (
-                <div 
-                  key={index}
-                  className="w-12 h-12 flex-shrink-0 rounded-md overflow-hidden bg-muted"
+          {/* Review Summary */}
+          {product.review_summary && (
+            <ReviewSummarySection summary={product.review_summary} />
+          )}
+          
+          {/* Review Screenshot Button */}
+          {product.review_screenshot_url && (
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs h-7 gap-1.5"
+                onClick={() => setShowScreenshot(!showScreenshot)}
+              >
+                <Camera className="w-3 h-3" />
+                {showScreenshot ? "隐藏评论截图" : "查看评论页截图"}
+              </Button>
+              
+              {showScreenshot && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="rounded-lg overflow-hidden border border-border/50"
                 >
-                  <img 
-                    src={imgUrl} 
-                    alt={`产品图 ${index + 1}`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
+                  <img
+                    src={product.review_screenshot_url}
+                    alt="评论页截图"
+                    className="w-full"
+                    loading="lazy"
                   />
-                </div>
-              ))}
-              {product.product_images.length > 4 && (
-                <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted/50 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground">+{product.product_images.length - 4}</span>
-                </div>
+                </motion.div>
               )}
             </div>
           )}
-          
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {product.price && <span className="text-primary font-medium">{product.price}</span>}
-            {product.rating && (
-              <span className="flex items-center gap-1">
-                <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                {product.rating.toFixed(1)}
-              </span>
-            )}
-            {product.review_count !== undefined && (
-              <span>({product.review_count.toLocaleString()} 评论)</span>
-            )}
-          </div>
         </div>
       )}
 
@@ -155,5 +197,76 @@ export function CompetitorCard({ product, onDelete, onRetry }: CompetitorCardPro
         </div>
       )}
     </motion.div>
+  );
+}
+
+// Review Summary Component
+function ReviewSummarySection({ summary }: { summary: ReviewSummary }) {
+  const hasPositives = summary.topPositives && summary.topPositives.length > 0;
+  const hasNegatives = summary.topNegatives && summary.topNegatives.length > 0;
+  const hasBreakdown = summary.ratingBreakdown && summary.ratingBreakdown.length > 0;
+  
+  if (!hasPositives && !hasNegatives && !hasBreakdown) {
+    return null;
+  }
+
+  return (
+    <div className="bg-muted/30 rounded-lg p-2.5 space-y-2">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+        <Star className="w-3 h-3 text-yellow-500" />
+        评论摘要
+      </div>
+      
+      {/* Rating Breakdown */}
+      {hasBreakdown && (
+        <div className="space-y-1">
+          {summary.ratingBreakdown
+            .sort((a, b) => b.stars - a.stars)
+            .slice(0, 5)
+            .map((item) => (
+              <div key={item.stars} className="flex items-center gap-2 text-xs">
+                <span className="w-10 text-muted-foreground">{item.stars} 星</span>
+                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-yellow-500/70 rounded-full"
+                    style={{ width: `${item.percentage}%` }}
+                  />
+                </div>
+                <span className="w-8 text-right text-muted-foreground">{item.percentage}%</span>
+              </div>
+            ))}
+        </div>
+      )}
+      
+      {/* Top Positives */}
+      {hasPositives && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1 text-xs text-green-500">
+            <ThumbsUp className="w-3 h-3" />
+            <span>好评要点</span>
+          </div>
+          {summary.topPositives.slice(0, 2).map((point, idx) => (
+            <p key={idx} className="text-xs text-muted-foreground line-clamp-2 pl-4">
+              • {point}
+            </p>
+          ))}
+        </div>
+      )}
+      
+      {/* Top Negatives */}
+      {hasNegatives && (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1 text-xs text-red-500">
+            <ThumbsDown className="w-3 h-3" />
+            <span>差评痛点</span>
+          </div>
+          {summary.topNegatives.slice(0, 2).map((point, idx) => (
+            <p key={idx} className="text-xs text-muted-foreground line-clamp-2 pl-4">
+              • {point}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

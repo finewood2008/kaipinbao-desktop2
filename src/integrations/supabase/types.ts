@@ -53,6 +53,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          main_image: string | null
           platform: string
           price: string | null
           product_description: string | null
@@ -61,6 +62,8 @@ export type Database = {
           project_id: string
           rating: number | null
           review_count: number | null
+          review_screenshot_url: string | null
+          review_summary: Json | null
           scraped_data: Json | null
           status: string
           updated_at: string
@@ -69,6 +72,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          main_image?: string | null
           platform?: string
           price?: string | null
           product_description?: string | null
@@ -77,6 +81,8 @@ export type Database = {
           project_id: string
           rating?: number | null
           review_count?: number | null
+          review_screenshot_url?: string | null
+          review_summary?: Json | null
           scraped_data?: Json | null
           status?: string
           updated_at?: string
@@ -85,6 +91,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          main_image?: string | null
           platform?: string
           price?: string | null
           product_description?: string | null
@@ -93,6 +100,8 @@ export type Database = {
           project_id?: string
           rating?: number | null
           review_count?: number | null
+          review_screenshot_url?: string | null
+          review_summary?: Json | null
           scraped_data?: Json | null
           status?: string
           updated_at?: string
