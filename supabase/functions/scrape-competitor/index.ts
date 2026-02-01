@@ -318,56 +318,81 @@ async function scrapeAmazonReviewsPage(
   supabase: any,
   productId: string
 ): Promise<{ reviews: Array<{ text: string; rating?: number }>; screenshotUrl: string | null }> {
-  // Construct reviews page URL
-  const reviewUrl = `https://www.amazon.com/product-reviews/${asin}/?sortBy=recent&pageNumber=1`;
+  // Try multiple review pages for better coverage
+  const reviewUrls = [
+    `https://www.amazon.com/product-reviews/${asin}/?sortBy=recent&pageNumber=1`,
+    `https://www.amazon.com/product-reviews/${asin}/?sortBy=helpful&pageNumber=1`,
+  ];
   
-  console.log("Scraping reviews page:", reviewUrl);
-
-  const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      url: reviewUrl,
-      formats: ["markdown", "screenshot"],
-      waitFor: 5000,
-      actions: [
-        { type: "wait", milliseconds: 2000 },
-        { type: "scroll", direction: "down" },
-        { type: "wait", milliseconds: 1500 },
-        { type: "scroll", direction: "down" },
-        { type: "wait", milliseconds: 1000 },
-      ],
-    }),
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok || !data.success) {
-    console.error("Reviews page scrape error:", data);
-    return { reviews: [], screenshotUrl: null };
-  }
-
-  const reviewsMarkdown = data.data?.markdown || "";
-  const screenshotBase64 = data.data?.screenshot;
-
-  // Extract reviews from reviews page
-  const reviews = extractReviewsFromReviewPage(reviewsMarkdown);
-
-  // Upload screenshot to Supabase Storage if available
+  let allReviews: Array<{ text: string; rating?: number }> = [];
   let screenshotUrl: string | null = null;
-  if (screenshotBase64) {
+
+  for (const reviewUrl of reviewUrls) {
+    if (allReviews.length >= 50) break; // Stop if we have enough
+    
+    console.log("Scraping reviews page:", reviewUrl);
+
     try {
-      screenshotUrl = await uploadScreenshotToStorage(supabase, productId, screenshotBase64);
-      console.log("Screenshot uploaded:", screenshotUrl);
-    } catch (uploadError) {
-      console.error("Screenshot upload error:", uploadError);
+      const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: reviewUrl,
+          formats: ["markdown", "screenshot"],
+          waitFor: 8000, // Increased wait time
+          actions: [
+            { type: "wait", milliseconds: 3000 },
+            { type: "scroll", direction: "down" },
+            { type: "wait", milliseconds: 2000 },
+            { type: "scroll", direction: "down" },
+            { type: "wait", milliseconds: 2000 },
+            { type: "scroll", direction: "down" },
+            { type: "wait", milliseconds: 1500 },
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        console.error("Reviews page scrape error:", data);
+        continue;
+      }
+
+      const reviewsMarkdown = data.data?.markdown || "";
+      const screenshotBase64 = data.data?.screenshot;
+      
+      console.log("Reviews markdown length:", reviewsMarkdown.length);
+
+      // Extract reviews from reviews page
+      const pageReviews = extractReviewsFromReviewPage(reviewsMarkdown);
+      console.log(`Extracted ${pageReviews.length} reviews from page`);
+      
+      // Merge reviews (avoid duplicates)
+      for (const review of pageReviews) {
+        if (!allReviews.some(r => r.text.substring(0, 100) === review.text.substring(0, 100))) {
+          allReviews.push(review);
+        }
+      }
+
+      // Upload screenshot to Supabase Storage if available (only for first page)
+      if (!screenshotUrl && screenshotBase64) {
+        try {
+          screenshotUrl = await uploadScreenshotToStorage(supabase, productId, screenshotBase64);
+          console.log("Screenshot uploaded:", screenshotUrl);
+        } catch (uploadError) {
+          console.error("Screenshot upload error:", uploadError);
+        }
+      }
+    } catch (error) {
+      console.error("Error scraping review page:", error);
     }
   }
 
-  return { reviews, screenshotUrl };
+  return { reviews: allReviews, screenshotUrl };
 }
 
 // Upload screenshot to Supabase Storage (NOT storing base64 in database)
@@ -377,8 +402,28 @@ async function uploadScreenshotToStorage(
   base64Data: string
 ): Promise<string | null> {
   try {
+    // Handle different base64 formats from Firecrawl
+    let base64Clean = base64Data;
+    
     // Remove data URL prefix if present
-    const base64Clean = base64Data.replace(/^data:image\/\w+;base64,/, "");
+    if (base64Clean.startsWith('data:')) {
+      base64Clean = base64Clean.replace(/^data:image\/\w+;base64,/, "");
+    }
+    
+    // Validate base64 string
+    if (!base64Clean || base64Clean.length < 100) {
+      console.log("Screenshot data too short or empty");
+      return null;
+    }
+    
+    // Clean any whitespace/newlines
+    base64Clean = base64Clean.replace(/[\s\n\r]/g, '');
+    
+    // Verify it's valid base64
+    if (!/^[A-Za-z0-9+/=]+$/.test(base64Clean)) {
+      console.log("Invalid base64 characters detected");
+      return null;
+    }
     
     // Convert base64 to Uint8Array
     const binaryString = atob(base64Clean);
@@ -417,69 +462,152 @@ async function uploadScreenshotToStorage(
 function extractReviewsFromReviewPage(markdown: string): Array<{ text: string; rating?: number }> {
   const reviews: Array<{ text: string; rating?: number }> = [];
   
-  // Reviews page has a more consistent format
-  // Look for patterns like "X out of 5 stars" followed by review text
+  console.log("Parsing reviews from markdown...");
   
-  // Split by review blocks (each review typically starts with rating)
-  const blocks = markdown.split(/(?=\d\s*out of\s*5\s*stars)/i);
+  // Method 1: Look for review blocks with clear patterns
+  // Amazon reviews typically have: rating, title, "Verified Purchase", then content
   
-  for (const block of blocks) {
-    if (block.length < 50) continue;
+  // Pattern for review blocks - looking for the structure:
+  // "X.0 out of 5 stars" ... "Verified Purchase" ... content
+  const reviewBlockPattern = /(\d)\.0 out of 5 stars[\s\S]*?(?:Verified Purchase|Reviewed in)[\s\S]*?\n\n([\s\S]*?)(?=\d\.0 out of 5 stars|Helpful|Report|$)/gi;
+  
+  let match;
+  while ((match = reviewBlockPattern.exec(markdown)) !== null) {
+    const rating = parseInt(match[1], 10);
+    let content = match[2].trim();
     
-    // Extract rating
-    const ratingMatch = block.match(/^(\d)\s*out of\s*5\s*stars/i);
-    const rating = ratingMatch ? parseInt(ratingMatch[1], 10) : undefined;
+    // Clean up the content
+    content = content
+      .replace(/^\s*\n/gm, '')
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\d+ people found this helpful.*$/i, '')
+      .replace(/Report$/i, '')
+      .replace(/Helpful$/i, '')
+      .trim();
     
-    // Look for review content after "Verified Purchase" or date
-    const contentPatterns = [
-      /Verified Purchase\s*\n+([\s\S]+?)(?=\n\n|\d+\s*people found|Helpful|Report abuse|$)/i,
-      /Reviewed in[^]*?\d{4}\s*\n+([\s\S]+?)(?=\n\n|\d+\s*people found|Helpful|Report abuse|$)/i,
-    ];
-    
-    for (const pattern of contentPatterns) {
-      const contentMatch = block.match(pattern);
-      if (contentMatch && contentMatch[1]) {
-        const text = contentMatch[1]
-          .trim()
-          .replace(/\n+/g, " ")
-          .replace(/\s+/g, " ");
-        
-        // Validate: must be actual text, not URL fragments or short UI elements
-        if (isValidReviewText(text)) {
-          reviews.push({ text, rating });
-          break;
-        }
-      }
+    if (isValidReviewText(content) && content.length >= 30) {
+      reviews.push({ text: content, rating });
     }
   }
   
-  // If block-based extraction failed, try line-based
-  if (reviews.length === 0) {
+  // Method 2: If pattern matching fails, try line-by-line extraction
+  if (reviews.length < 5) {
+    console.log("Using fallback line-based extraction...");
+    
     const lines = markdown.split(/\n+/);
+    let currentRating: number | undefined;
+    let potentialReview = '';
+    
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
-      // Skip if it looks like a URL or UI element
-      if (!isValidReviewText(line)) continue;
+      // Check for rating
+      const ratingMatch = line.match(/^(\d)\.0 out of 5 stars/i);
+      if (ratingMatch) {
+        // Save previous review if valid
+        if (potentialReview && isValidReviewText(potentialReview) && potentialReview.length >= 50) {
+          reviews.push({ text: potentialReview.trim(), rating: currentRating });
+        }
+        currentRating = parseInt(ratingMatch[1], 10);
+        potentialReview = '';
+        continue;
+      }
       
-      // Look for review-like content (longer sentences)
-      if (line.length >= 80 && line.length <= 2000) {
+      // Skip UI elements
+      if (isUiElement(line)) continue;
+      
+      // Skip very short lines that are likely titles or headers
+      if (line.length < 20) continue;
+      
+      // Accumulate review content
+      if (currentRating && line.length >= 20) {
+        // Check if this looks like review content
+        if (!line.includes('amazon.com') && 
+            !line.startsWith('[') && 
+            !line.includes('Verified Purchase') &&
+            !line.match(/^Reviewed in/i)) {
+          potentialReview += ' ' + line;
+        }
+      }
+      
+      // Also look for standalone long paragraphs that might be reviews
+      if (line.length >= 100 && isValidReviewText(line)) {
         // Try to find associated rating
-        let rating: number | undefined;
-        for (let j = Math.max(0, i - 5); j < i; j++) {
-          const ratingMatch = lines[j].match(/(\d)\s*out of\s*5/i);
-          if (ratingMatch) {
-            rating = parseInt(ratingMatch[1], 10);
+        for (let j = Math.max(0, i - 10); j < i; j++) {
+          const rMatch = lines[j].match(/(\d)\.0 out of 5 stars/i);
+          if (rMatch) {
+            reviews.push({ text: line, rating: parseInt(rMatch[1], 10) });
             break;
           }
         }
+      }
+    }
+    
+    // Don't forget last review
+    if (potentialReview && isValidReviewText(potentialReview) && potentialReview.length >= 50) {
+      reviews.push({ text: potentialReview.trim(), rating: currentRating });
+    }
+  }
+  
+  // Method 3: Extract any substantial text blocks as fallback
+  if (reviews.length < 3) {
+    console.log("Using text block extraction fallback...");
+    
+    // Split by double newlines to get paragraphs
+    const paragraphs = markdown.split(/\n\n+/);
+    
+    for (const para of paragraphs) {
+      const cleaned = para.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // Look for paragraphs that look like reviews (substantial text, no URLs)
+      if (cleaned.length >= 80 && 
+          cleaned.length <= 2000 && 
+          isValidReviewText(cleaned) &&
+          !cleaned.includes('Add to') &&
+          !cleaned.includes('Buy Now') &&
+          !cleaned.includes('customers mention')) {
         
-        reviews.push({ text: line, rating });
+        // Try to find a rating near this text
+        const beforeText = markdown.substring(0, markdown.indexOf(para));
+        const lastRating = beforeText.match(/(\d)\.0 out of 5 stars/gi);
+        const rating = lastRating ? parseInt(lastRating[lastRating.length - 1][0], 10) : undefined;
+        
+        if (!reviews.some(r => r.text.includes(cleaned.substring(0, 50)))) {
+          reviews.push({ text: cleaned, rating });
+        }
       }
     }
   }
   
+  console.log(`Total reviews extracted: ${reviews.length}`);
   return reviews.slice(0, 100); // Limit to 100 reviews
+}
+
+// Check if a line is likely a UI element
+function isUiElement(line: string): boolean {
+  const uiPatterns = [
+    /^(see|read|show)\s+(more|all|full)/i,
+    /^(helpful|report|share)/i,
+    /^\d+\s*(people|person)\s+found/i,
+    /^verified purchase$/i,
+    /^reviewed in/i,
+    /^\d+\s*out of\s*\d+/i,
+    /^\[.*\]$/,
+    /^!\[/,
+    /amazon\.com/i,
+    /^http/i,
+    /^Add to/i,
+    /^Buy Now/i,
+    /^In Stock/i,
+    /^Quantity/i,
+    /customer reviews?$/i,
+    /^Color:/i,
+    /^Size:/i,
+    /^Style:/i,
+  ];
+  
+  return uiPatterns.some(p => p.test(line.trim()));
 }
 
 // Validate that text is actual review content, not URL fragments or UI elements
