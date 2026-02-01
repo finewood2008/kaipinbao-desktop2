@@ -6,6 +6,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// PRD data structure for extraction
+interface PrdData {
+  usageScenario: string | null;
+  targetAudience: string | null;
+  designStyle: string | null;
+  coreFeatures: string[] | null;
+  pricingRange: string | null;
+  marketingAssets: {
+    sceneDescription: string | null;
+    structureHighlights: string[] | null;
+    explodedComponents: string[] | null;
+    usageScenarios: string[] | null;
+    lifestyleContext: string | null;
+  };
+  videoAssets: {
+    storyLine: string | null;
+    keyActions: string[] | null;
+    emotionalTone: string | null;
+  };
+  competitorInsights: {
+    positivePoints: string[] | null;
+    negativePoints: string[] | null;
+    differentiationStrategy: string | null;
+  };
+}
+
 const BASE_SYSTEM_PROMPT = `你是"开品宝"的AI产品研发专家。你的目标是带领跨境卖家/工厂，通过"对话即研发"的模式，完成从创意到市场测试的全链路闭环。
 
 # 你的核心能力
@@ -85,6 +111,31 @@ PRD信息收集已完成！我已经充分了解了您的产品需求。点击�
   1. **落地页生成**：基于最终产品图，生成响应式落地页内容
   2. **广告策略**：生成 Meta/TikTok 广告测试方案
 
+# PRD数据提取（重要！）
+每次回复时，如果用户提供了关于产品的具体信息，你需要在回复末尾添加结构化的PRD数据标签，格式如下：
+
+\`\`\`prd-data
+{
+  "usageScenario": "室内办公环境，桌面使用",
+  "targetAudience": "25-40岁年轻白领，关注效率和美观",
+  "designStyle": "简约现代，金属材质，银色/深灰色",
+  "coreFeatures": ["无线充电", "LED氛围灯", "智能感应"],
+  "pricingRange": "$50-80",
+  "marketingAssets": {
+    "sceneDescription": "现代极简办公桌，柔和自然光，白色背景",
+    "structureHighlights": ["内置锂电池", "Type-C接口"],
+    "usageScenarios": ["办公室工作", "咖啡厅阅读"]
+  },
+  "videoAssets": {
+    "storyLine": "手放在产品上→LED灯亮起→手机充电动画",
+    "keyActions": ["触摸感应", "放置手机"],
+    "emotionalTone": "科技感、专业"
+  }
+}
+\`\`\`
+
+只填写用户已经明确提供的信息，未提及的保持null。这个数据块会被系统自动解析并保存。
+
 # 回答建议功能（重要！）
 **在每次提问后，你必须在回复末尾添加3-5个回答建议，格式如下：**
 
@@ -108,7 +159,98 @@ PRD信息收集已完成！我已经充分了解了您的产品需求。点击�
 - 重点内容使用 **加粗**
 - 列表使用有序或无序列表
 - **必须在每次提问后提供回答建议**
-- **当阶段完成条件满足时，必须输出完成信号**`;
+- **当阶段完成条件满足时，必须输出完成信号**
+- **当用户提供具体产品信息时，必须在末尾添加prd-data代码块**`;
+
+// Extract PRD data from AI response
+function extractPrdData(content: string): Partial<PrdData> | null {
+  const prdMatch = content.match(/```prd-data\s*([\s\S]*?)\s*```/);
+  if (!prdMatch) return null;
+  
+  try {
+    const prdJson = JSON.parse(prdMatch[1]);
+    return prdJson;
+  } catch (e) {
+    console.error("Failed to parse PRD data:", e);
+    return null;
+  }
+}
+
+// Merge new PRD data with existing
+function mergePrdData(existing: Partial<PrdData> | null, newData: Partial<PrdData>): Partial<PrdData> {
+  if (!existing) return newData;
+  
+  const merged: Partial<PrdData> = { ...existing };
+  
+  // Simple fields - overwrite if new data exists
+  if (newData.usageScenario) merged.usageScenario = newData.usageScenario;
+  if (newData.targetAudience) merged.targetAudience = newData.targetAudience;
+  if (newData.designStyle) merged.designStyle = newData.designStyle;
+  if (newData.pricingRange) merged.pricingRange = newData.pricingRange;
+  
+  // Array fields - merge
+  if (newData.coreFeatures) {
+    merged.coreFeatures = [...new Set([...(existing.coreFeatures || []), ...newData.coreFeatures])];
+  }
+  
+  // Nested objects - deep merge
+  if (newData.marketingAssets) {
+    merged.marketingAssets = {
+      sceneDescription: newData.marketingAssets.sceneDescription || existing.marketingAssets?.sceneDescription || null,
+      structureHighlights: newData.marketingAssets.structureHighlights 
+        ? [...new Set([...(existing.marketingAssets?.structureHighlights || []), ...newData.marketingAssets.structureHighlights])]
+        : existing.marketingAssets?.structureHighlights || null,
+      explodedComponents: newData.marketingAssets.explodedComponents
+        ? [...new Set([...(existing.marketingAssets?.explodedComponents || []), ...newData.marketingAssets.explodedComponents])]
+        : existing.marketingAssets?.explodedComponents || null,
+      usageScenarios: newData.marketingAssets.usageScenarios
+        ? [...new Set([...(existing.marketingAssets?.usageScenarios || []), ...newData.marketingAssets.usageScenarios])]
+        : existing.marketingAssets?.usageScenarios || null,
+      lifestyleContext: newData.marketingAssets.lifestyleContext || existing.marketingAssets?.lifestyleContext || null,
+    };
+  }
+  
+  if (newData.videoAssets) {
+    merged.videoAssets = {
+      storyLine: newData.videoAssets.storyLine || existing.videoAssets?.storyLine || null,
+      keyActions: newData.videoAssets.keyActions
+        ? [...new Set([...(existing.videoAssets?.keyActions || []), ...newData.videoAssets.keyActions])]
+        : existing.videoAssets?.keyActions || null,
+      emotionalTone: newData.videoAssets.emotionalTone || existing.videoAssets?.emotionalTone || null,
+    };
+  }
+  
+  if (newData.competitorInsights) {
+    merged.competitorInsights = {
+      positivePoints: newData.competitorInsights.positivePoints || existing.competitorInsights?.positivePoints || null,
+      negativePoints: newData.competitorInsights.negativePoints || existing.competitorInsights?.negativePoints || null,
+      differentiationStrategy: newData.competitorInsights.differentiationStrategy || existing.competitorInsights?.differentiationStrategy || null,
+    };
+  }
+  
+  return merged;
+}
+
+// Calculate PRD progress based on collected data
+function calculatePrdProgressFromData(prdData: Partial<PrdData> | null): Record<string, boolean> {
+  if (!prdData) {
+    return {
+      usageScenario: false,
+      targetAudience: false,
+      designStyle: false,
+      coreFeatures: false,
+      confirmed: false,
+    };
+  }
+  
+  return {
+    usageScenario: !!prdData.usageScenario,
+    targetAudience: !!prdData.targetAudience,
+    designStyle: !!prdData.designStyle,
+    coreFeatures: !!(prdData.coreFeatures && prdData.coreFeatures.length > 0),
+    confirmed: false, // This is set separately when stage completes
+  };
+}
 
 // Fetch competitor research data
 async function getCompetitorData(supabase: any, projectId: string) {
@@ -153,8 +295,23 @@ async function getCompetitorData(supabase: any, projectId: string) {
 }
 
 // Build dynamic system prompt with competitor insights
-function buildDynamicSystemPrompt(competitorData: any, projectName: string, projectDescription: string | null): string {
+function buildDynamicSystemPrompt(competitorData: any, projectName: string, projectDescription: string | null, existingPrdData: Partial<PrdData> | null): string {
   let prompt = BASE_SYSTEM_PROMPT;
+
+  // Add existing PRD data context
+  if (existingPrdData && Object.keys(existingPrdData).some(k => existingPrdData[k as keyof PrdData])) {
+    prompt += `
+
+## 已收集的PRD数据（你应该基于这些继续对话，不要重复询问已有信息）
+
+${existingPrdData.usageScenario ? `- **使用场景**: ${existingPrdData.usageScenario}` : ""}
+${existingPrdData.targetAudience ? `- **目标用户**: ${existingPrdData.targetAudience}` : ""}
+${existingPrdData.designStyle ? `- **外观风格**: ${existingPrdData.designStyle}` : ""}
+${existingPrdData.coreFeatures?.length ? `- **核心功能**: ${existingPrdData.coreFeatures.join(", ")}` : ""}
+${existingPrdData.pricingRange ? `- **定价区间**: ${existingPrdData.pricingRange}` : ""}
+
+**重要**：继续收集尚未获取的信息，不要重复询问上述已有内容。`;
+  }
 
   if (competitorData && competitorData.products?.length > 0) {
     const { products, reviews, totalReviews } = competitorData;
@@ -223,12 +380,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get project info
+    // Get project info including existing PRD data
     const { data: project } = await supabase
       .from("projects")
-      .select("name, description")
+      .select("name, description, prd_data")
       .eq("id", projectId)
       .single();
+
+    const existingPrdData = project?.prd_data as Partial<PrdData> | null;
 
     // Get competitor data if in stage 1
     let competitorData = null;
@@ -243,7 +402,8 @@ serve(async (req) => {
     const dynamicSystemPrompt = buildDynamicSystemPrompt(
       competitorData, 
       project?.name || "未命名项目",
-      project?.description
+      project?.description,
+      existingPrdData
     );
     
     const systemPromptWithStage = `${dynamicSystemPrompt}\n\n当前阶段：${currentStage} - ${stageName}`;
@@ -296,6 +456,9 @@ serve(async (req) => {
       });
     }
 
+    // Collect full response for PRD extraction
+    let fullResponse = "";
+
     // Transform Google SSE format to OpenAI-compatible SSE format
     const transformStream = new TransformStream({
       transform(chunk, controller) {
@@ -315,6 +478,7 @@ serve(async (req) => {
               const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
               
               if (content) {
+                fullResponse += content;
                 // Convert to OpenAI-compatible format
                 const openAIFormat = {
                   choices: [
@@ -334,6 +498,32 @@ serve(async (req) => {
           }
         }
       },
+      async flush() {
+        // After streaming is complete, extract and save PRD data
+        if (fullResponse && currentStage === 1) {
+          const extractedPrd = extractPrdData(fullResponse);
+          if (extractedPrd) {
+            const mergedPrd = mergePrdData(existingPrdData, extractedPrd);
+            const newProgress = calculatePrdProgressFromData(mergedPrd);
+            
+            // Check if stage is complete
+            if (fullResponse.includes("[STAGE_COMPLETE:1]")) {
+              newProgress.confirmed = true;
+            }
+            
+            // Update project with merged PRD data and progress
+            await supabase
+              .from("projects")
+              .update({ 
+                prd_data: mergedPrd,
+                prd_progress: newProgress,
+              })
+              .eq("id", projectId);
+            
+            console.log("PRD data saved:", mergedPrd);
+          }
+        }
+      }
     });
 
     const transformedStream = response.body?.pipeThrough(transformStream);

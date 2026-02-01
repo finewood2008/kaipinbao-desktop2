@@ -12,7 +12,7 @@ import { ChatMessage } from "@/components/ChatMessage";
 import { VisualGenerationPhase } from "@/components/VisualGenerationPhase";
 import { LandingPageBuilder } from "@/components/LandingPageBuilder";
 import { CompetitorResearch } from "@/components/CompetitorResearch";
-import { PrdSidebar, calculatePrdProgress, PrdProgress } from "@/components/PrdSidebar";
+import { PrdSidebar, calculatePrdProgress, PrdProgress, PrdData } from "@/components/PrdSidebar";
 import { PrdChatPanel } from "@/components/PrdChatPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -108,6 +108,7 @@ export default function ProjectPage() {
     coreFeatures: false,
     confirmed: false,
   });
+  const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [competitorInsight, setCompetitorInsight] = useState<CompetitorInsight | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +165,11 @@ export default function ProjectPage() {
         competitor_research_completed: data.competitor_research_completed,
         prd_progress: undefined,
       };
+      
+      // Parse PRD data
+      if (data.prd_data && typeof data.prd_data === 'object') {
+        setPrdData(data.prd_data as PrdData);
+      }
       
       if (data.prd_progress && typeof data.prd_progress === 'object' && !Array.isArray(data.prd_progress)) {
         const progressData = data.prd_progress as Record<string, boolean>;
@@ -425,10 +431,26 @@ export default function ProjectPage() {
         const newProgress = calculatePrdProgress(updatedMessages);
         setPrdProgress(newProgress);
         
-        await supabase
+        // Refetch project to get updated PRD data from backend
+        const { data: updatedProject } = await supabase
           .from("projects")
-          .update({ prd_progress: newProgress as unknown as Record<string, boolean> })
-          .eq("id", id);
+          .select("prd_data, prd_progress")
+          .eq("id", id)
+          .single();
+        
+        if (updatedProject?.prd_data) {
+          setPrdData(updatedProject.prd_data as PrdData);
+        }
+        if (updatedProject?.prd_progress && typeof updatedProject.prd_progress === 'object') {
+          const progressData = updatedProject.prd_progress as Record<string, boolean>;
+          setPrdProgress({
+            usageScenario: progressData.usageScenario ?? newProgress.usageScenario,
+            targetAudience: progressData.targetAudience ?? newProgress.targetAudience,
+            designStyle: progressData.designStyle ?? newProgress.designStyle,
+            coreFeatures: progressData.coreFeatures ?? newProgress.coreFeatures,
+            confirmed: progressData.confirmed ?? newProgress.confirmed,
+          });
+        }
 
         const stageCompleteSignal = detectStageCompletion(assistantContent, project?.current_stage || 1);
         if (stageCompleteSignal) {
@@ -762,6 +784,7 @@ export default function ProjectPage() {
                         >
                           <PrdSidebar
                             progress={prdProgress}
+                            prdData={prdData}
                             competitorInsight={competitorInsight}
                             onItemClick={handlePrdProgressItemClick}
                             className="w-[280px] h-full"

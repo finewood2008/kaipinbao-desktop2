@@ -1,9 +1,11 @@
 import { motion } from "framer-motion";
-import { Check, MapPin, Users, Palette, Zap, ClipboardCheck, TrendingUp, TrendingDown, Lightbulb, Image, Video } from "lucide-react";
+import { Check, MapPin, Users, Palette, Zap, ClipboardCheck, TrendingUp, TrendingDown, Lightbulb, Image, Video, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useState } from "react";
 
 export interface PrdProgress {
   usageScenario: boolean;
@@ -11,6 +13,26 @@ export interface PrdProgress {
   designStyle: boolean;
   coreFeatures: boolean;
   confirmed: boolean;
+}
+
+export interface PrdData {
+  usageScenario?: string | null;
+  targetAudience?: string | null;
+  designStyle?: string | null;
+  coreFeatures?: string[] | null;
+  pricingRange?: string | null;
+  marketingAssets?: {
+    sceneDescription?: string | null;
+    structureHighlights?: string[] | null;
+    explodedComponents?: string[] | null;
+    usageScenarios?: string[] | null;
+    lifestyleContext?: string | null;
+  };
+  videoAssets?: {
+    storyLine?: string | null;
+    keyActions?: string[] | null;
+    emotionalTone?: string | null;
+  };
 }
 
 interface CompetitorInsight {
@@ -22,29 +44,77 @@ interface CompetitorInsight {
 
 interface PrdSidebarProps {
   progress: PrdProgress;
+  prdData?: PrdData | null;
   competitorInsight?: CompetitorInsight | null;
   onItemClick?: (item: keyof PrdProgress) => void;
   className?: string;
 }
 
 const progressItems = [
-  { key: "usageScenario" as const, label: "使用场景", icon: MapPin, description: "产品使用环境" },
-  { key: "targetAudience" as const, label: "目标用户", icon: Users, description: "用户画像与痛点" },
-  { key: "designStyle" as const, label: "外观风格", icon: Palette, description: "材质、形态、颜色" },
-  { key: "coreFeatures" as const, label: "核心功能", icon: Zap, description: "卖点与差异化" },
-  { key: "confirmed" as const, label: "信息确认", icon: ClipboardCheck, description: "确认PRD信息" },
+  { key: "usageScenario" as const, label: "使用场景", icon: MapPin, dataKey: "usageScenario" as const },
+  { key: "targetAudience" as const, label: "目标用户", icon: Users, dataKey: "targetAudience" as const },
+  { key: "designStyle" as const, label: "外观风格", icon: Palette, dataKey: "designStyle" as const },
+  { key: "coreFeatures" as const, label: "核心功能", icon: Zap, dataKey: "coreFeatures" as const },
+  { key: "confirmed" as const, label: "信息确认", icon: ClipboardCheck, dataKey: null },
 ];
 
 const assetReminders = [
-  { icon: Image, label: "场景图数据", items: ["使用环境", "光线氛围", "背景元素"] },
-  { icon: Image, label: "结构/爆炸图", items: ["内部组件", "技术亮点"] },
-  { icon: Video, label: "视频场景", items: ["6秒故事线", "情感基调"] },
+  { icon: Image, label: "场景图数据", items: ["使用环境", "光线氛围", "背景元素"], dataKey: "sceneDescription" as const },
+  { icon: Image, label: "结构/爆炸图", items: ["内部组件", "技术亮点"], dataKey: "structureHighlights" as const },
+  { icon: Video, label: "视频场景", items: ["6秒故事线", "情感基调"], dataKey: "storyLine" as const },
 ];
 
-export function PrdSidebar({ progress, competitorInsight, onItemClick, className }: PrdSidebarProps) {
+export function PrdSidebar({ progress, prdData, competitorInsight, onItemClick, className }: PrdSidebarProps) {
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  
   const completedCount = Object.values(progress).filter(Boolean).length;
   const totalCount = progressItems.length;
   const progressPercent = (completedCount / totalCount) * 100;
+
+  const toggleExpand = (key: string) => {
+    setExpandedItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const getDataValue = (key: string): string | string[] | null => {
+    if (!prdData) return null;
+    
+    switch (key) {
+      case "usageScenario":
+        return prdData.usageScenario || null;
+      case "targetAudience":
+        return prdData.targetAudience || null;
+      case "designStyle":
+        return prdData.designStyle || null;
+      case "coreFeatures":
+        return prdData.coreFeatures || null;
+      default:
+        return null;
+    }
+  };
+
+  const getAssetStatus = (dataKey: string): { collected: boolean; value?: string | string[] } => {
+    if (!prdData) return { collected: false };
+    
+    switch (dataKey) {
+      case "sceneDescription":
+        return { 
+          collected: !!prdData.marketingAssets?.sceneDescription,
+          value: prdData.marketingAssets?.sceneDescription || undefined
+        };
+      case "structureHighlights":
+        return { 
+          collected: !!(prdData.marketingAssets?.structureHighlights?.length),
+          value: prdData.marketingAssets?.structureHighlights || undefined
+        };
+      case "storyLine":
+        return { 
+          collected: !!prdData.videoAssets?.storyLine,
+          value: prdData.videoAssets?.storyLine || undefined
+        };
+      default:
+        return { collected: false };
+    }
+  };
 
   return (
     <ScrollArea className={cn("h-full bg-card/30 backdrop-blur-sm border-r border-border/50", className)}>
@@ -68,51 +138,88 @@ export function PrdSidebar({ progress, competitorInsight, onItemClick, className
           </p>
         </motion.div>
 
-        {/* Progress Steps */}
+        {/* Progress Steps with Data Display */}
         <div className="space-y-1">
           {progressItems.map((item, index) => {
             const isCompleted = progress[item.key];
             const Icon = item.icon;
+            const dataValue = item.dataKey ? getDataValue(item.dataKey) : null;
+            const hasData = dataValue !== null && (Array.isArray(dataValue) ? dataValue.length > 0 : !!dataValue);
+            const isExpanded = expandedItems[item.key];
 
             return (
-              <motion.button
+              <motion.div
                 key={item.key}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05 }}
-                onClick={() => onItemClick?.(item.key)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all",
-                  "hover:bg-muted/50",
-                  isCompleted
-                    ? "bg-primary/10"
-                    : "bg-transparent"
-                )}
               >
-                <div className={cn(
-                  "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
-                  isCompleted
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                )}>
-                  {isCompleted ? (
-                    <Check className="w-3.5 h-3.5" />
-                  ) : (
-                    <Icon className="w-3.5 h-3.5" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn(
-                    "text-sm font-medium truncate",
-                    isCompleted ? "text-primary" : "text-foreground"
-                  )}>
-                    {item.label}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {item.description}
-                  </p>
-                </div>
-              </motion.button>
+                <Collapsible open={isExpanded && hasData} onOpenChange={() => hasData && toggleExpand(item.key)}>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      onClick={() => hasData ? toggleExpand(item.key) : onItemClick?.(item.key)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all",
+                        "hover:bg-muted/50",
+                        isCompleted
+                          ? "bg-primary/10"
+                          : "bg-transparent"
+                      )}
+                    >
+                      <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0",
+                        isCompleted
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {isCompleted ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : (
+                          <Icon className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          "text-sm font-medium truncate",
+                          isCompleted ? "text-primary" : "text-foreground"
+                        )}>
+                          {item.label}
+                        </p>
+                        {hasData && !isExpanded && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {Array.isArray(dataValue) 
+                              ? `${dataValue.length}项功能` 
+                              : String(dataValue).slice(0, 20) + (String(dataValue).length > 20 ? "..." : "")}
+                          </p>
+                        )}
+                      </div>
+                      {hasData && (
+                        isExpanded 
+                          ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          : <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    {hasData && (
+                      <div className="ml-9 mr-3 mb-2 p-2 bg-muted/30 rounded-md">
+                        {Array.isArray(dataValue) ? (
+                          <ul className="text-xs text-muted-foreground space-y-1">
+                            {dataValue.map((v, i) => (
+                              <li key={i} className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary/50" />
+                                {v}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">{String(dataValue)}</p>
+                        )}
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              </motion.div>
             );
           })}
         </div>
@@ -166,7 +273,7 @@ export function PrdSidebar({ progress, competitorInsight, onItemClick, className
 
         <Separator className="bg-border/50" />
 
-        {/* Asset Data Reminders */}
+        {/* Asset Data Collection Status */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -175,7 +282,7 @@ export function PrdSidebar({ progress, competitorInsight, onItemClick, className
         >
           <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Lightbulb className="w-4 h-4 text-yellow-500" />
-            待收集信息
+            素材数据采集
           </h4>
           <p className="text-xs text-muted-foreground">
             用于后续视觉生成
@@ -183,30 +290,79 @@ export function PrdSidebar({ progress, competitorInsight, onItemClick, className
           <div className="space-y-2">
             {assetReminders.map((reminder, index) => {
               const Icon = reminder.icon;
+              const status = getAssetStatus(reminder.dataKey);
+              
               return (
-                <div key={index} className="bg-muted/30 rounded-lg p-2">
+                <div 
+                  key={index} 
+                  className={cn(
+                    "rounded-lg p-2 transition-colors",
+                    status.collected ? "bg-primary/10" : "bg-muted/30"
+                  )}
+                >
                   <div className="flex items-center gap-1.5 text-xs font-medium text-foreground mb-1">
-                    <Icon className="w-3 h-3 text-primary" />
-                    {reminder.label}
+                    {status.collected ? (
+                      <Check className="w-3 h-3 text-primary" />
+                    ) : (
+                      <Icon className="w-3 h-3 text-muted-foreground" />
+                    )}
+                    <span className={status.collected ? "text-primary" : ""}>{reminder.label}</span>
+                    {status.collected && (
+                      <span className="ml-auto text-xs text-primary">✓ 已采集</span>
+                    )}
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {reminder.items.map((item, i) => (
-                      <span key={i} className="text-xs bg-background/50 text-muted-foreground px-1.5 py-0.5 rounded">
-                        {item}
-                      </span>
-                    ))}
-                  </div>
+                  {status.collected && status.value ? (
+                    <p className="text-xs text-muted-foreground pl-4 truncate">
+                      {Array.isArray(status.value) ? status.value.join(", ") : status.value}
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {reminder.items.map((item, i) => (
+                        <span key={i} className="text-xs bg-background/50 text-muted-foreground px-1.5 py-0.5 rounded">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </motion.div>
+
+        {/* Video Assets Status */}
+        {prdData?.videoAssets && (prdData.videoAssets.storyLine || prdData.videoAssets.keyActions?.length) && (
+          <>
+            <Separator className="bg-border/50" />
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-2"
+            >
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                🎬 视频素材
+              </h4>
+              {prdData.videoAssets.storyLine && (
+                <div className="bg-primary/10 rounded-lg p-2">
+                  <p className="text-xs font-medium text-primary mb-1">故事线</p>
+                  <p className="text-xs text-muted-foreground">{prdData.videoAssets.storyLine}</p>
+                </div>
+              )}
+              {prdData.videoAssets.emotionalTone && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">情感基调:</span>
+                  <span className="px-2 py-0.5 bg-accent rounded text-accent-foreground">{prdData.videoAssets.emotionalTone}</span>
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
       </div>
     </ScrollArea>
   );
 }
 
-// Utility function to calculate progress from chat messages
+// Utility function to calculate progress from chat messages (kept for backward compatibility)
 export function calculatePrdProgress(messages: { role: string; content: string }[]): PrdProgress {
   const allContent = messages.map(m => m.content).join(' ').toLowerCase();
   
