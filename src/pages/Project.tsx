@@ -14,9 +14,10 @@ import { LandingPageBuilder } from "@/components/LandingPageBuilder";
 import { CompetitorResearch } from "@/components/CompetitorResearch";
 import { PrdSidebar, calculatePrdProgress, PrdProgress, PrdData } from "@/components/PrdSidebar";
 import { PrdChatPanel } from "@/components/PrdChatPanel";
+import { PrdReviewPanel } from "@/components/PrdReviewPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, PanelLeftClose, PanelLeft } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, PanelLeftClose, PanelLeft, Check } from "lucide-react";
 
 interface Message {
   id: string;
@@ -64,9 +65,11 @@ interface CompetitorInsight {
   totalReviews: number;
   productsAnalyzed: number;
   products?: Array<{
+    id: string;
     title: string;
     rating: number;
     reviewCount: number;
+    product_images?: string[];
   }>;
   actionableInsights?: string[];
 }
@@ -101,6 +104,8 @@ export default function ProjectPage() {
   const [showTransitionPrompt, setShowTransitionPrompt] = useState(false);
   const [showCompetitorResearch, setShowCompetitorResearch] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [prdReviewMode, setPrdReviewMode] = useState(false);
+  const [showPrdReadyPrompt, setShowPrdReadyPrompt] = useState(false);
   const [prdProgress, setPrdProgress] = useState<PrdProgress>({
     usageScenario: false,
     targetAudience: false,
@@ -110,6 +115,7 @@ export default function ProjectPage() {
   });
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [competitorInsight, setCompetitorInsight] = useState<CompetitorInsight | null>(null);
+  const [competitorProducts, setCompetitorProducts] = useState<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -269,6 +275,15 @@ export default function ProjectPage() {
 
       if (!products || products.length === 0) return;
 
+      // Save products for PrdReviewPanel
+      setCompetitorProducts(products.map(p => ({
+        id: p.id,
+        product_title: p.product_title,
+        product_images: p.product_images as string[] | undefined,
+        price: p.price,
+        rating: Number(p.rating) || 0,
+      })));
+
       // Fetch reviews
       const productIds = products.map(p => p.id);
       const { data: reviews } = await supabase
@@ -308,9 +323,11 @@ export default function ProjectPage() {
         totalReviews: reviews?.length || 0,
         productsAnalyzed: products.length,
         products: products.map(p => ({
+          id: p.id,
           title: p.product_title || "未知产品",
           rating: Number(p.rating) || 0,
           reviewCount: p.review_count || 0,
+          product_images: p.product_images as string[] | undefined,
         })),
         actionableInsights: [
           "基于竞品痛点，建议突出产品差异化优势",
@@ -458,6 +475,13 @@ export default function ProjectPage() {
             setShowTransitionPrompt(true);
           }, 1000);
         }
+        
+        // Detect PRD_READY signal
+        if (assistantContent.includes("[PRD_READY]")) {
+          setTimeout(() => {
+            setShowPrdReadyPrompt(true);
+          }, 1000);
+        }
       }
     } catch (error) {
       console.error(error);
@@ -517,6 +541,42 @@ export default function ProjectPage() {
     }
     
     return false;
+  };
+
+  const handleEnterPrdReview = () => {
+    setShowPrdReadyPrompt(false);
+    setPrdReviewMode(true);
+  };
+
+  const handleExitPrdReview = () => {
+    setPrdReviewMode(false);
+  };
+
+  const handleSavePrdData = async (data: PrdData) => {
+    setPrdData(data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase
+      .from("projects")
+      .update({ prd_data: JSON.parse(JSON.stringify(data)) })
+      .eq("id", id);
+  };
+
+  const handleConfirmPrd = async () => {
+    // Update progress to confirmed
+    const newProgress = { ...prdProgress, confirmed: true };
+    setPrdProgress(newProgress);
+    await supabase
+      .from("projects")
+      .update({ 
+        prd_progress: newProgress,
+        current_stage: 2 
+      })
+      .eq("id", id);
+    
+    setProject(prev => prev ? { ...prev, current_stage: 2 } : null);
+    setPrdReviewMode(false);
+    setActiveTab("images");
+    toast.success("🎉 PRD 已确认，进入视觉生成阶段！");
   };
 
   const handleVisualPhaseConfirm = () => {
@@ -771,41 +831,97 @@ export default function ProjectPage() {
               <>
                 {/* PRD Stage with Sidebar Layout */}
                 {project?.current_stage === 1 ? (
-                  <div className="flex-1 flex overflow-hidden">
-                    {/* Sidebar */}
-                    <AnimatePresence>
-                      {showSidebar && (
-                        <motion.div
-                          initial={{ width: 0, opacity: 0 }}
-                          animate={{ width: 280, opacity: 1 }}
-                          exit={{ width: 0, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="hidden md:block flex-shrink-0 overflow-hidden"
-                        >
-                          <PrdSidebar
-                            progress={prdProgress}
-                            prdData={prdData}
-                            competitorInsight={competitorInsight}
-                            onItemClick={handlePrdProgressItemClick}
-                            className="w-[280px] h-full"
-                          />
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Chat Panel */}
-                    <PrdChatPanel
-                      messages={messages}
-                      isStreaming={isStreaming}
-                      isSending={isSending}
-                      inputValue={inputValue}
-                      competitorInsight={competitorInsight}
-                      showInsightCard={messages.length <= 2}
-                      onInputChange={setInputValue}
-                      onSend={handleSendMessage}
-                      onSuggestionClick={handleSuggestionClick}
+                  prdReviewMode ? (
+                    /* PRD Review Mode */
+                    <PrdReviewPanel
+                      prdData={prdData}
+                      competitorProducts={competitorProducts}
+                      projectId={id || ""}
+                      onSave={handleSavePrdData}
+                      onConfirm={handleConfirmPrd}
+                      onBack={handleExitPrdReview}
                     />
-                  </div>
+                  ) : (
+                    /* Chat Mode */
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                      {/* PRD Ready Prompt */}
+                      <AnimatePresence>
+                        {showPrdReadyPrompt && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="border-b border-border/50 bg-primary/5 px-4 py-3"
+                          >
+                            <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                                  <Check className="w-5 h-5 text-primary" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-foreground">PRD 已生成完成！</p>
+                                  <p className="text-sm text-muted-foreground">点击查看完整文档并进行审核编辑</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setShowPrdReadyPrompt(false)}
+                                >
+                                  稍后
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-primary glow-primary"
+                                  onClick={handleEnterPrdReview}
+                                >
+                                  查看完整 PRD
+                                </Button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="flex-1 flex overflow-hidden">
+                        {/* Sidebar */}
+                        <AnimatePresence>
+                          {showSidebar && (
+                            <motion.div
+                              initial={{ width: 0, opacity: 0 }}
+                              animate={{ width: 280, opacity: 1 }}
+                              exit={{ width: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="hidden md:block flex-shrink-0 overflow-hidden"
+                            >
+                              <PrdSidebar
+                                progress={prdProgress}
+                                prdData={prdData}
+                                competitorInsight={competitorInsight}
+                                onItemClick={handlePrdProgressItemClick}
+                                onViewPrd={prdData ? handleEnterPrdReview : undefined}
+                                className="w-[280px] h-full"
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Chat Panel */}
+                        <PrdChatPanel
+                          messages={messages}
+                          isStreaming={isStreaming}
+                          isSending={isSending}
+                          inputValue={inputValue}
+                          competitorInsight={competitorInsight}
+                          showInsightCard={messages.length <= 2}
+                          onInputChange={setInputValue}
+                          onSend={handleSendMessage}
+                          onSuggestionClick={handleSuggestionClick}
+                        />
+                      </div>
+                    </div>
+                  )
                 ) : (
                   /* Non-PRD stages: Original chat layout */
                   <>

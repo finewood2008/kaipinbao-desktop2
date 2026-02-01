@@ -11,6 +11,7 @@ export interface CompetitorProduct {
   price?: string;
   rating?: number;
   review_count?: number;
+  product_images?: string[];
   status: "pending" | "scraping" | "completed" | "failed";
 }
 
@@ -92,10 +93,37 @@ export function CompetitorCard({ product, onDelete, onRetry }: CompetitorCardPro
 
       {/* Product info (when completed) */}
       {product.status === "completed" && product.product_title && (
-        <div className="space-y-1.5 pt-1 border-t border-border/30">
+        <div className="space-y-2 pt-1 border-t border-border/30">
           <p className="text-sm font-medium text-foreground line-clamp-2">
             {product.product_title}
           </p>
+          
+          {/* Product Images Thumbnails */}
+          {product.product_images && product.product_images.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {product.product_images.slice(0, 4).map((imgUrl, index) => (
+                <div 
+                  key={index}
+                  className="w-12 h-12 flex-shrink-0 rounded-md overflow-hidden bg-muted"
+                >
+                  <img 
+                    src={imgUrl} 
+                    alt={`产品图 ${index + 1}`}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              ))}
+              {product.product_images.length > 4 && (
+                <div className="w-12 h-12 flex-shrink-0 rounded-md bg-muted/50 flex items-center justify-center">
+                  <span className="text-xs text-muted-foreground">+{product.product_images.length - 4}</span>
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {product.price && <span className="text-primary font-medium">{product.price}</span>}
             {product.rating && (

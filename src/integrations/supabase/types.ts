@@ -56,6 +56,7 @@ export type Database = {
           platform: string
           price: string | null
           product_description: string | null
+          product_images: Json | null
           product_title: string | null
           project_id: string
           rating: number | null
@@ -71,6 +72,7 @@ export type Database = {
           platform?: string
           price?: string | null
           product_description?: string | null
+          product_images?: Json | null
           product_title?: string | null
           project_id: string
           rating?: number | null
@@ -86,6 +88,7 @@ export type Database = {
           platform?: string
           price?: string | null
           product_description?: string | null
+          product_images?: Json | null
           product_title?: string | null
           project_id?: string
           rating?: number | null
