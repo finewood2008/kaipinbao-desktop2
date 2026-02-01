@@ -12,10 +12,10 @@ serve(async (req) => {
 
   try {
     const { prompt, projectId } = await req.json();
-    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!GOOGLE_API_KEY) {
-      throw new Error("GOOGLE_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     if (!prompt) {
@@ -74,26 +74,21 @@ MATERIALS: ${photographyParams.slice(15).join("; ")}
 
 OUTPUT: A single, clean, commercially-ready product image suitable for Amazon, Shopify, or premium e-commerce listings. The product should be the sole focus with no distracting elements, props, or text. Maintain accurate proportions and showcase the product's key design features and material quality.`;
 
-    // Use Google AI Studio Gemini API for image generation
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${GOOGLE_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: enhancedPrompt }],
-            },
-          ],
-          generationConfig: {
-            responseModalities: ["TEXT", "IMAGE"],
-          },
-        }),
-      }
-    );
+    // Use Lovable AI Gateway with Nano Banana Pro model for high-quality image generation
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-pro-image-preview",
+        messages: [
+          { role: "user", content: enhancedPrompt },
+        ],
+        modalities: ["image", "text"],
+      }),
+    });
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -102,14 +97,14 @@ OUTPUT: A single, clean, commercially-ready product image suitable for Amazon, S
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402 || response.status === 403) {
-        return new Response(JSON.stringify({ error: "API 额度已用完或权限不足" }), {
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "API 额度已用完，请充值后再试" }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const text = await response.text();
-      console.error("Google AI Studio error:", response.status, text);
+      console.error("Lovable AI Gateway error:", response.status, text);
       return new Response(JSON.stringify({ error: "图像生成失败" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -118,23 +113,9 @@ OUTPUT: A single, clean, commercially-ready product image suitable for Amazon, S
 
     const data = await response.json();
     
-    // Extract image from Google AI Studio response
-    let imageUrl = null;
-    let description = null;
-    
-    const candidates = data.candidates || [];
-    for (const candidate of candidates) {
-      const parts = candidate.content?.parts || [];
-      for (const part of parts) {
-        if (part.inlineData?.mimeType?.startsWith("image/")) {
-          // Convert inline data to data URL
-          imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
-        if (part.text) {
-          description = part.text;
-        }
-      }
-    }
+    // Extract image from Lovable AI Gateway response
+    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const description = data.choices?.[0]?.message?.content;
 
     if (!imageUrl) {
       console.error("No image in response:", JSON.stringify(data));
