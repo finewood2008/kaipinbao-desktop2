@@ -15,7 +15,13 @@ import {
   Video,
   Loader2,
   Save,
-  ChevronRight
+  ChevronRight,
+  DollarSign,
+  Package,
+  Tag,
+  Settings,
+  Target,
+  Lightbulb
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,11 +29,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PrdData {
+  // Core fields
   usageScenario?: string | null;
   targetAudience?: string | null;
   designStyle?: string | null;
@@ -35,6 +43,60 @@ export interface PrdData {
   pricingRange?: string | null;
   painPoints?: string[] | null;
   sellingPoints?: string[] | null;
+  
+  // Enhanced fields
+  productName?: string | null;
+  productTagline?: string | null;
+  productCategory?: string | null;
+  dialoguePhase?: string | null;
+  selectedDirection?: string | null;
+  
+  // Specifications
+  specifications?: {
+    dimensions?: string | null;
+    weight?: string | null;
+    materials?: string[] | null;
+    colors?: string[] | null;
+    powerSource?: string | null;
+    connectivity?: string | null;
+  } | null;
+  
+  // CMF Design
+  cmfDesign?: {
+    primaryColor?: string | null;
+    secondaryColor?: string | null;
+    accentColor?: string | null;
+    surfaceFinish?: string | null;
+    textureDetails?: string | null;
+    materialBreakdown?: { material: string; percentage: number; location: string }[] | null;
+  } | null;
+  
+  // Feature Matrix
+  featureMatrix?: {
+    feature: string;
+    priority: "must-have" | "important" | "nice-to-have";
+    painPointAddressed: string;
+    differentiator: string;
+    implementationNote: string;
+  }[] | null;
+  
+  // Market Positioning
+  marketPositioning?: {
+    priceTier?: "budget" | "mid-range" | "premium" | "luxury";
+    primaryCompetitors?: string[] | null;
+    uniqueSellingPoints?: string[] | null;
+    competitiveAdvantages?: string[] | null;
+    targetMarketSize?: string | null;
+  } | null;
+  
+  // Packaging
+  packaging?: {
+    packageType?: string | null;
+    includedAccessories?: string[] | null;
+    specialPackagingFeatures?: string | null;
+    sustainabilityFeatures?: string | null;
+  } | null;
+  
   marketingAssets?: {
     sceneDescription?: string | null;
     structureHighlights?: string[] | null;
@@ -77,14 +139,23 @@ interface PrdReviewPanelProps {
 }
 
 type PrdSection = 
+  | "productOverview"
   | "usageScenario" 
   | "targetAudience" 
   | "designStyle" 
-  | "coreFeatures" 
+  | "coreFeatures"
+  | "specifications"
+  | "marketPositioning"
+  | "packaging"
   | "marketingAssets" 
   | "videoAssets";
 
 const sectionConfig: Record<PrdSection, { label: string; icon: React.ElementType; description: string }> = {
+  productOverview: {
+    label: "产品概述",
+    icon: Tag,
+    description: "产品名称、标语和类别",
+  },
   usageScenario: { 
     label: "使用场景", 
     icon: MapPin, 
@@ -96,14 +167,29 @@ const sectionConfig: Record<PrdSection, { label: string; icon: React.ElementType
     description: "产品的目标用户群体画像" 
   },
   designStyle: { 
-    label: "外观风格", 
+    label: "CMF 设计规格", 
     icon: Palette, 
-    description: "产品的材质、配色和设计风格" 
+    description: "颜色、材质、表面处理和设计风格" 
   },
   coreFeatures: { 
-    label: "核心功能", 
+    label: "功能规格矩阵", 
     icon: Zap, 
-    description: "产品的差异化功能和卖点" 
+    description: "产品的差异化功能和优先级" 
+  },
+  specifications: {
+    label: "产品规格",
+    icon: Settings,
+    description: "尺寸、重量、材质等技术规格",
+  },
+  marketPositioning: {
+    label: "市场定位与竞争策略",
+    icon: Target,
+    description: "定价、竞争优势和USP",
+  },
+  packaging: {
+    label: "包装设计",
+    icon: Package,
+    description: "包装类型、配件和环保特征",
   },
   marketingAssets: { 
     label: "营销素材方案", 
@@ -137,14 +223,28 @@ export function PrdReviewPanel({
     
     if (section === "coreFeatures") {
       setEditingListValue(localPrdData.coreFeatures || []);
-    } else if (section === "marketingAssets" || section === "videoAssets") {
-      // For complex objects, we edit as JSON-like text
+    } else if (section === "productOverview") {
+      setEditingValue(JSON.stringify({
+        productName: localPrdData.productName || "",
+        productTagline: localPrdData.productTagline || "",
+        productCategory: localPrdData.productCategory || "",
+        pricingRange: localPrdData.pricingRange || "",
+      }, null, 2));
+    } else if (["marketingAssets", "videoAssets", "specifications", "marketPositioning", "packaging", "designStyle"].includes(section)) {
       const value = section === "marketingAssets" 
         ? localPrdData.marketingAssets 
-        : localPrdData.videoAssets;
+        : section === "videoAssets"
+        ? localPrdData.videoAssets
+        : section === "specifications"
+        ? localPrdData.specifications
+        : section === "marketPositioning"
+        ? localPrdData.marketPositioning
+        : section === "packaging"
+        ? localPrdData.packaging
+        : { designStyle: localPrdData.designStyle, cmfDesign: localPrdData.cmfDesign };
       setEditingValue(JSON.stringify(value || {}, null, 2));
     } else {
-      setEditingValue(String(localPrdData[section] || ""));
+      setEditingValue(String(localPrdData[section as keyof PrdData] || ""));
     }
   };
 
@@ -163,14 +263,42 @@ export function PrdReviewPanel({
       
       if (editingSection === "coreFeatures") {
         updatedData.coreFeatures = editingListValue.filter(v => v.trim());
-      } else if (editingSection === "marketingAssets" || editingSection === "videoAssets") {
+      } else if (editingSection === "productOverview") {
+        try {
+          const parsed = JSON.parse(editingValue);
+          updatedData.productName = parsed.productName;
+          updatedData.productTagline = parsed.productTagline;
+          updatedData.productCategory = parsed.productCategory;
+          updatedData.pricingRange = parsed.pricingRange;
+        } catch {
+          toast.error("JSON 格式错误");
+          setIsSaving(false);
+          return;
+        }
+      } else if (["marketingAssets", "videoAssets", "specifications", "marketPositioning", "packaging"].includes(editingSection)) {
         try {
           const parsed = JSON.parse(editingValue);
           if (editingSection === "marketingAssets") {
             updatedData.marketingAssets = parsed;
-          } else {
+          } else if (editingSection === "videoAssets") {
             updatedData.videoAssets = parsed;
+          } else if (editingSection === "specifications") {
+            updatedData.specifications = parsed;
+          } else if (editingSection === "marketPositioning") {
+            updatedData.marketPositioning = parsed;
+          } else if (editingSection === "packaging") {
+            updatedData.packaging = parsed;
           }
+        } catch {
+          toast.error("JSON 格式错误");
+          setIsSaving(false);
+          return;
+        }
+      } else if (editingSection === "designStyle") {
+        try {
+          const parsed = JSON.parse(editingValue);
+          updatedData.designStyle = parsed.designStyle;
+          updatedData.cmfDesign = parsed.cmfDesign;
         } catch {
           toast.error("JSON 格式错误");
           setIsSaving(false);
@@ -214,6 +342,20 @@ export function PrdReviewPanel({
           updatedData.marketingAssets = data.regeneratedContent;
         } else if (section === "videoAssets") {
           updatedData.videoAssets = data.regeneratedContent;
+        } else if (section === "productOverview") {
+          updatedData.productName = data.regeneratedContent.productName;
+          updatedData.productTagline = data.regeneratedContent.productTagline;
+          updatedData.productCategory = data.regeneratedContent.productCategory;
+          updatedData.pricingRange = data.regeneratedContent.pricingRange;
+        } else if (section === "specifications") {
+          updatedData.specifications = data.regeneratedContent;
+        } else if (section === "marketPositioning") {
+          updatedData.marketPositioning = data.regeneratedContent;
+        } else if (section === "packaging") {
+          updatedData.packaging = data.regeneratedContent;
+        } else if (section === "designStyle") {
+          updatedData.designStyle = data.regeneratedContent.designStyle;
+          updatedData.cmfDesign = data.regeneratedContent.cmfDesign;
         } else {
           (updatedData as any)[section] = data.regeneratedContent;
         }
@@ -250,17 +392,126 @@ export function PrdReviewPanel({
     }
 
     switch (section) {
+      case "productOverview":
+        return (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-muted-foreground">产品名称：</span>
+                <span className="text-foreground font-medium">{localPrdData.productName || "未定义"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">产品类别：</span>
+                <span className="text-foreground">{localPrdData.productCategory || "未定义"}</span>
+              </div>
+            </div>
+            {localPrdData.productTagline && (
+              <div>
+                <span className="text-muted-foreground">产品标语：</span>
+                <span className="text-foreground">{localPrdData.productTagline}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">目标价格：</span>
+              <span className="text-foreground font-medium">{localPrdData.pricingRange || "未定义"}</span>
+            </div>
+          </div>
+        );
+
       case "usageScenario":
       case "targetAudience":
-      case "designStyle":
         return (
           <p className="text-sm text-foreground/90 whitespace-pre-wrap">
             {localPrdData[section] || <span className="text-muted-foreground italic">未定义</span>}
           </p>
         );
 
+      case "designStyle":
+        const cmf = localPrdData.cmfDesign;
+        return (
+          <div className="space-y-3 text-sm">
+            <div>
+              <span className="text-muted-foreground">整体调性：</span>
+              <span className="text-foreground">{localPrdData.designStyle || "未定义"}</span>
+            </div>
+            {cmf && (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  {cmf.primaryColor && (
+                    <div className="p-2 rounded-lg bg-muted/50">
+                      <span className="text-xs text-muted-foreground">主色</span>
+                      <p className="text-foreground">{cmf.primaryColor}</p>
+                    </div>
+                  )}
+                  {cmf.secondaryColor && (
+                    <div className="p-2 rounded-lg bg-muted/50">
+                      <span className="text-xs text-muted-foreground">辅色</span>
+                      <p className="text-foreground">{cmf.secondaryColor}</p>
+                    </div>
+                  )}
+                  {cmf.accentColor && (
+                    <div className="p-2 rounded-lg bg-muted/50">
+                      <span className="text-xs text-muted-foreground">点缀色</span>
+                      <p className="text-foreground">{cmf.accentColor}</p>
+                    </div>
+                  )}
+                </div>
+                {cmf.surfaceFinish && (
+                  <div>
+                    <span className="text-muted-foreground">表面处理：</span>
+                    <span className="text-foreground">{cmf.surfaceFinish}</span>
+                  </div>
+                )}
+                {cmf.materialBreakdown && cmf.materialBreakdown.length > 0 && (
+                  <div>
+                    <span className="text-muted-foreground">材质分布：</span>
+                    <div className="mt-1 space-y-1">
+                      {cmf.materialBreakdown.map((m, i) => (
+                        <div key={i} className="text-xs flex gap-2">
+                          <Badge variant="outline">{m.material}</Badge>
+                          <span>{m.percentage}%</span>
+                          <span className="text-muted-foreground">- {m.location}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+
       case "coreFeatures":
         const features = localPrdData.coreFeatures || [];
+        const featureMatrix = localPrdData.featureMatrix || [];
+        
+        if (featureMatrix.length > 0) {
+          return (
+            <div className="space-y-2">
+              {featureMatrix.map((f, i) => (
+                <div key={i} className="p-2 rounded-lg bg-muted/30 border border-border/30">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        f.priority === "must-have" && "border-destructive/50 text-destructive",
+                        f.priority === "important" && "border-primary/50 text-primary",
+                        f.priority === "nice-to-have" && "border-muted-foreground/50 text-muted-foreground",
+                      )}
+                    >
+                      {f.priority === "must-have" ? "必须" : f.priority === "important" ? "重要" : "加分"}
+                    </Badge>
+                    <span className="font-medium">{f.feature}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    解决痛点: {f.painPointAddressed} | 差异化: {f.differentiator}
+                  </p>
+                </div>
+              ))}
+            </div>
+          );
+        }
+        
         return features.length > 0 ? (
           <ul className="space-y-2">
             {features.map((feature, i) => (
@@ -274,13 +525,131 @@ export function PrdReviewPanel({
           <p className="text-sm text-muted-foreground italic">未定义</p>
         );
 
+      case "specifications":
+        const specs = localPrdData.specifications;
+        return specs ? (
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {specs.dimensions && (
+              <div>
+                <span className="text-muted-foreground">尺寸：</span>
+                <span className="text-foreground">{specs.dimensions}</span>
+              </div>
+            )}
+            {specs.weight && (
+              <div>
+                <span className="text-muted-foreground">重量：</span>
+                <span className="text-foreground">{specs.weight}</span>
+              </div>
+            )}
+            {specs.materials && specs.materials.length > 0 && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">材质：</span>
+                <span className="text-foreground">{specs.materials.join("、")}</span>
+              </div>
+            )}
+            {specs.colors && specs.colors.length > 0 && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">颜色：</span>
+                <span className="text-foreground">{specs.colors.join("、")}</span>
+              </div>
+            )}
+            {specs.powerSource && (
+              <div>
+                <span className="text-muted-foreground">供电方式：</span>
+                <span className="text-foreground">{specs.powerSource}</span>
+              </div>
+            )}
+            {specs.connectivity && (
+              <div>
+                <span className="text-muted-foreground">连接方式：</span>
+                <span className="text-foreground">{specs.connectivity}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">AI 将自动生成</p>
+        );
+
+      case "marketPositioning":
+        const mp = localPrdData.marketPositioning;
+        return mp ? (
+          <div className="space-y-3 text-sm">
+            {mp.priceTier && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">定价层级：</span>
+                <Badge variant="outline">{mp.priceTier}</Badge>
+              </div>
+            )}
+            {mp.uniqueSellingPoints && mp.uniqueSellingPoints.length > 0 && (
+              <div>
+                <span className="text-muted-foreground">核心卖点 (USP)：</span>
+                <ul className="mt-1 space-y-1">
+                  {mp.uniqueSellingPoints.map((usp, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <Lightbulb className="w-3 h-3 text-primary" />
+                      <span>{usp}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {mp.competitiveAdvantages && mp.competitiveAdvantages.length > 0 && (
+              <div>
+                <span className="text-muted-foreground">竞争优势：</span>
+                <span className="text-foreground">{mp.competitiveAdvantages.join("、")}</span>
+              </div>
+            )}
+            {mp.primaryCompetitors && mp.primaryCompetitors.length > 0 && (
+              <div>
+                <span className="text-muted-foreground">主要竞品：</span>
+                <span className="text-foreground">{mp.primaryCompetitors.join("、")}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">AI 将自动生成</p>
+        );
+
+      case "packaging":
+        const pkg = localPrdData.packaging;
+        return pkg ? (
+          <div className="space-y-2 text-sm">
+            {pkg.packageType && (
+              <div>
+                <span className="text-muted-foreground">包装类型：</span>
+                <span className="text-foreground">{pkg.packageType}</span>
+              </div>
+            )}
+            {pkg.includedAccessories && pkg.includedAccessories.length > 0 && (
+              <div>
+                <span className="text-muted-foreground">包装内容：</span>
+                <span className="text-foreground">{pkg.includedAccessories.join("、")}</span>
+              </div>
+            )}
+            {pkg.specialPackagingFeatures && (
+              <div>
+                <span className="text-muted-foreground">特色设计：</span>
+                <span className="text-foreground">{pkg.specialPackagingFeatures}</span>
+              </div>
+            )}
+            {pkg.sustainabilityFeatures && (
+              <div>
+                <span className="text-muted-foreground">环保特征：</span>
+                <span className="text-foreground">{pkg.sustainabilityFeatures}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">AI 将自动生成</p>
+        );
+
       case "marketingAssets":
         const marketing = localPrdData.marketingAssets;
         return marketing ? (
           <div className="space-y-3 text-sm">
             {marketing.sceneDescription && (
               <div>
-                <span className="text-muted-foreground">场景图：</span>
+                <span className="text-muted-foreground">主图场景：</span>
                 <span className="text-foreground">{marketing.sceneDescription}</span>
               </div>
             )}
@@ -368,7 +737,7 @@ export function PrdReviewPanel({
       );
     }
 
-    if (section === "marketingAssets" || section === "videoAssets") {
+    if (["marketingAssets", "videoAssets", "specifications", "marketPositioning", "packaging", "designStyle", "productOverview"].includes(section)) {
       return (
         <Textarea
           value={editingValue}
@@ -390,10 +759,14 @@ export function PrdReviewPanel({
   };
 
   const sections: PrdSection[] = [
+    "productOverview",
     "usageScenario",
     "targetAudience",
     "designStyle",
     "coreFeatures",
+    "specifications",
+    "marketPositioning",
+    "packaging",
     "marketingAssets",
     "videoAssets",
   ];
@@ -417,7 +790,7 @@ export function PrdReviewPanel({
           </Button>
           <div>
             <h2 className="text-lg font-semibold">📋 PRD 文档审核</h2>
-            <p className="text-sm text-muted-foreground">审核并编辑产品需求定义</p>
+            <p className="text-sm text-muted-foreground">审核并编辑产品需求定义的每个细节</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
