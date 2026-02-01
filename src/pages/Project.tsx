@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StageIndicator } from "@/components/StageIndicator";
 import { StageTransitionPrompt } from "@/components/StageTransitionPrompt";
 import { ChatMessage } from "@/components/ChatMessage";
-import { ImageGallery } from "@/components/ImageGallery";
+import { VisualGenerationPhase } from "@/components/VisualGenerationPhase";
 import { LandingPageBuilder } from "@/components/LandingPageBuilder";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -29,6 +29,18 @@ interface GeneratedImage {
   prompt: string;
   is_selected: boolean;
   feedback: string | null;
+  image_type?: string;
+  phase?: number;
+  parent_image_id?: string | null;
+}
+
+interface GeneratedVideo {
+  id: string;
+  video_url: string | null;
+  prompt: string;
+  scene_description: string | null;
+  duration_seconds: number;
+  status: string;
 }
 
 interface LandingPageData {
@@ -63,7 +75,9 @@ export default function ProjectPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [productImages, setProductImages] = useState<GeneratedImage[]>([]);
+  const [marketingImages, setMarketingImages] = useState<GeneratedImage[]>([]);
+  const [videos, setVideos] = useState<GeneratedVideo[]>([]);
   const [landingPage, setLandingPage] = useState<LandingPageData | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
   const [showTransitionPrompt, setShowTransitionPrompt] = useState(false);
@@ -74,6 +88,7 @@ export default function ProjectPage() {
       fetchProject();
       fetchMessages();
       fetchImages();
+      fetchVideos();
       fetchLandingPage();
     }
   }, [id]);
@@ -144,7 +159,23 @@ export default function ProjectPage() {
       .order("created_at", { ascending: true });
 
     if (!error && data) {
-      setGeneratedImages(data as GeneratedImage[]);
+      // Separate product images (phase 1) from marketing images (phase 2)
+      const phase1Images = data.filter((img: any) => (img.phase || 1) === 1);
+      const phase2Images = data.filter((img: any) => img.phase === 2);
+      setProductImages(phase1Images as GeneratedImage[]);
+      setMarketingImages(phase2Images as GeneratedImage[]);
+    }
+  };
+
+  const fetchVideos = async () => {
+    const { data, error } = await supabase
+      .from("generated_videos")
+      .select("*")
+      .eq("project_id", id)
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setVideos(data as GeneratedVideo[]);
     }
   };
 
@@ -402,20 +433,23 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     setInputValue(suggestion);
   };
 
-  const handleImageSelectionConfirm = () => {
-    const selectedImage = generatedImages.find((img) => img.is_selected);
-    if (selectedImage) {
-      setShowTransitionPrompt(true);
-    }
-  };
-
-  const handleImageSelectionTransition = () => {
+  const handleVisualPhaseConfirm = () => {
     advanceStage(3);
   };
 
   const getSelectedImageUrl = () => {
-    const selected = generatedImages.find((img) => img.is_selected);
+    const selected = productImages.find((img) => img.is_selected);
     return selected?.image_url;
+  };
+
+  const getPrdData = () => {
+    // Extract usage scenarios from PRD if available
+    const prdData = project?.prd_data as any;
+    return {
+      usageScenarios: prdData?.usageScenarios || [],
+      targetAudience: prdData?.targetAudience || "",
+      coreFeatures: prdData?.coreFeatures || [],
+    };
   };
 
   if (isLoading) {
@@ -439,11 +473,7 @@ ${proj.description ? `\n${proj.description}\n` : ""}
       <StageTransitionPrompt
         isVisible={showTransitionPrompt}
         currentStage={project?.current_stage || 1}
-        onConfirm={
-          project?.current_stage === 2 
-            ? handleImageSelectionTransition 
-            : handleStageTransitionConfirm
-        }
+        onConfirm={handleStageTransitionConfirm}
         onDismiss={() => setShowTransitionPrompt(false)}
       />
 
@@ -573,12 +603,17 @@ ${proj.description ? `\n${proj.description}\n` : ""}
           {/* Images Tab */}
           <TabsContent value="images" className="flex-1 overflow-auto p-4 m-0">
             <div className="max-w-5xl mx-auto">
-              <ImageGallery
+              <VisualGenerationPhase
                 projectId={id || ""}
-                images={generatedImages}
-                onImagesChange={setGeneratedImages}
-                onConfirmSelection={handleImageSelectionConfirm}
+                productImages={productImages}
+                marketingImages={marketingImages}
+                videos={videos}
+                onProductImagesChange={setProductImages}
+                onMarketingImagesChange={setMarketingImages}
+                onVideosChange={setVideos}
+                onConfirmAndProceed={handleVisualPhaseConfirm}
                 prdSummary={project?.name}
+                prdData={getPrdData()}
               />
             </div>
           </TabsContent>

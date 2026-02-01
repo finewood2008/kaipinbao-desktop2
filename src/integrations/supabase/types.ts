@@ -83,8 +83,11 @@ export type Database = {
           created_at: string
           feedback: string | null
           id: string
+          image_type: string
           image_url: string
           is_selected: boolean
+          parent_image_id: string | null
+          phase: number
           project_id: string
           prompt: string
         }
@@ -92,8 +95,11 @@ export type Database = {
           created_at?: string
           feedback?: string | null
           id?: string
+          image_type?: string
           image_url: string
           is_selected?: boolean
+          parent_image_id?: string | null
+          phase?: number
           project_id: string
           prompt: string
         }
@@ -101,14 +107,78 @@ export type Database = {
           created_at?: string
           feedback?: string | null
           id?: string
+          image_type?: string
           image_url?: string
           is_selected?: boolean
+          parent_image_id?: string | null
+          phase?: number
           project_id?: string
           prompt?: string
         }
         Relationships: [
           {
+            foreignKeyName: "generated_images_parent_image_id_fkey"
+            columns: ["parent_image_id"]
+            isOneToOne: false
+            referencedRelation: "generated_images"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "generated_images_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generated_videos: {
+        Row: {
+          created_at: string
+          duration_seconds: number
+          id: string
+          parent_image_id: string | null
+          project_id: string
+          prompt: string
+          scene_description: string | null
+          status: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          parent_image_id?: string | null
+          project_id: string
+          prompt: string
+          scene_description?: string | null
+          status?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number
+          id?: string
+          parent_image_id?: string | null
+          project_id?: string
+          prompt?: string
+          scene_description?: string | null
+          status?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_videos_parent_image_id_fkey"
+            columns: ["parent_image_id"]
+            isOneToOne: false
+            referencedRelation: "generated_images"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_videos_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
