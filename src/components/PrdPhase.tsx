@@ -236,6 +236,36 @@ export function PrdPhase({
           content: assistantContent,
           stage: 1,
         });
+
+        // Extract and save PRD data from initial AI response
+        const prdDataMatch = assistantContent.match(/```prd-data\s*([\s\S]*?)\s*```/);
+        if (prdDataMatch) {
+          try {
+            const extractedPrdData = JSON.parse(prdDataMatch[1]);
+            
+            const { data: existingProject } = await supabase
+              .from("projects")
+              .select("prd_data")
+              .eq("id", projectId)
+              .single();
+            
+            const existingPrdData = (existingProject?.prd_data as Record<string, unknown>) || {};
+            const mergedPrdData = {
+              ...existingPrdData,
+              ...extractedPrdData,
+            };
+            
+            await supabase
+              .from("projects")
+              .update({ prd_data: mergedPrdData })
+              .eq("id", projectId);
+            
+            setPrdData(mergedPrdData as PrdData);
+            console.log("Initial PRD data extracted:", Object.keys(extractedPrdData));
+          } catch (parseError) {
+            console.error("Failed to parse initial PRD data:", parseError);
+          }
+        }
       }
     } catch (error) {
       console.error(error);
@@ -350,15 +380,47 @@ export function PrdPhase({
           stage: 1,
         });
 
-        // Refetch project to get updated PRD data
-        const { data: updatedProject } = await supabase
-          .from("projects")
-          .select("prd_data")
-          .eq("id", projectId)
-          .single();
+        // Extract and save PRD data from AI response
+        const prdDataMatch = assistantContent.match(/```prd-data\s*([\s\S]*?)\s*```/);
+        if (prdDataMatch) {
+          try {
+            const extractedPrdData = JSON.parse(prdDataMatch[1]);
+            
+            // Get existing prd_data and merge
+            const { data: existingProject } = await supabase
+              .from("projects")
+              .select("prd_data")
+              .eq("id", projectId)
+              .single();
+            
+            const existingPrdData = (existingProject?.prd_data as Record<string, unknown>) || {};
+            const mergedPrdData = {
+              ...existingPrdData,
+              ...extractedPrdData,
+            };
+            
+            // Save merged PRD data to database
+            await supabase
+              .from("projects")
+              .update({ prd_data: mergedPrdData })
+              .eq("id", projectId);
+            
+            setPrdData(mergedPrdData as PrdData);
+            console.log("PRD data extracted and saved:", Object.keys(extractedPrdData));
+          } catch (parseError) {
+            console.error("Failed to parse PRD data:", parseError);
+          }
+        } else {
+          // Refetch project to get any updated PRD data
+          const { data: updatedProject } = await supabase
+            .from("projects")
+            .select("prd_data")
+            .eq("id", projectId)
+            .single();
 
-        if (updatedProject?.prd_data) {
-          setPrdData(updatedProject.prd_data as PrdData);
+          if (updatedProject?.prd_data) {
+            setPrdData(updatedProject.prd_data as PrdData);
+          }
         }
 
         // Detect PRD_READY signal
@@ -480,14 +542,47 @@ export function PrdPhase({
           stage: 1,
         });
 
-        const { data: updatedProject } = await supabase
-          .from("projects")
-          .select("prd_data")
-          .eq("id", projectId)
-          .single();
+        // Extract and save PRD data from AI response
+        const prdDataMatch = assistantContent.match(/```prd-data\s*([\s\S]*?)\s*```/);
+        if (prdDataMatch) {
+          try {
+            const extractedPrdData = JSON.parse(prdDataMatch[1]);
+            
+            // Get existing prd_data and merge
+            const { data: existingProject } = await supabase
+              .from("projects")
+              .select("prd_data")
+              .eq("id", projectId)
+              .single();
+            
+            const existingPrdData = (existingProject?.prd_data as Record<string, unknown>) || {};
+            const mergedPrdData = {
+              ...existingPrdData,
+              ...extractedPrdData,
+            };
+            
+            // Save merged PRD data to database
+            await supabase
+              .from("projects")
+              .update({ prd_data: mergedPrdData })
+              .eq("id", projectId);
+            
+            setPrdData(mergedPrdData as PrdData);
+            console.log("PRD data extracted and saved:", Object.keys(extractedPrdData));
+          } catch (parseError) {
+            console.error("Failed to parse PRD data:", parseError);
+          }
+        } else {
+          // Refetch project to get any updated PRD data
+          const { data: updatedProject } = await supabase
+            .from("projects")
+            .select("prd_data")
+            .eq("id", projectId)
+            .single();
 
-        if (updatedProject?.prd_data) {
-          setPrdData(updatedProject.prd_data as PrdData);
+          if (updatedProject?.prd_data) {
+            setPrdData(updatedProject.prd_data as PrdData);
+          }
         }
 
         if (assistantContent.includes("[PRD_READY]")) {
