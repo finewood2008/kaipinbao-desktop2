@@ -552,6 +552,10 @@ export function PrdPhase({
       setCurrentPhase(2);
     } else if (phase === 3 && phase2Completed) {
       setCurrentPhase(3);
+      // Start AI conversation when entering phase 3 directly
+      if (messages.length === 0) {
+        startAiConversation();
+      }
     } else if (phase === 4 && phase3Completed) {
       setCurrentPhase(4);
     }
