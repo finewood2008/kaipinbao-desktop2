@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
-import { Bot, User } from "lucide-react";
+import { Bot, User, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -10,6 +11,7 @@ interface ChatMessageProps {
   isStreaming?: boolean;
   suggestions?: string[];
   onSuggestionClick?: (suggestion: string) => void;
+  showPmBadge?: boolean;
 }
 
 export function ChatMessage({ 
@@ -17,9 +19,13 @@ export function ChatMessage({
   content, 
   isStreaming, 
   suggestions,
-  onSuggestionClick 
+  onSuggestionClick,
+  showPmBadge = true,
 }: ChatMessageProps) {
   const isAssistant = role === "assistant";
+  
+  // Clean content: remove prd-data blocks from display
+  const displayContent = content.replace(/```prd-data[\s\S]*?```/g, "").trim();
 
   return (
     <motion.div
@@ -30,19 +36,30 @@ export function ChatMessage({
         isAssistant ? "bg-secondary/50" : "bg-card"
       )}
     >
-      <div
-        className={cn(
-          "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-          isAssistant ? "bg-gradient-primary" : "bg-muted"
-        )}
-      >
-        {isAssistant ? (
-          <Bot className="w-4 h-4 text-primary-foreground" />
-        ) : (
-          <User className="w-4 h-4 text-foreground" />
-        )}
+      <div className="flex-shrink-0">
+        <div
+          className={cn(
+            "w-8 h-8 rounded-full flex items-center justify-center",
+            isAssistant ? "bg-gradient-primary" : "bg-muted"
+          )}
+        >
+          {isAssistant ? (
+            <Briefcase className="w-4 h-4 text-primary-foreground" />
+          ) : (
+            <User className="w-4 h-4 text-foreground" />
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-hidden">
+        {/* PM Badge for assistant */}
+        {isAssistant && showPmBadge && (
+          <div className="flex items-center gap-2 mb-2">
+            <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-primary/20">
+              <Briefcase className="w-3 h-3 mr-1" />
+              产品经理顾问
+            </Badge>
+          </div>
+        )}
         <div className="prose prose-sm prose-invert max-w-none">
           <ReactMarkdown
             components={{
@@ -56,7 +73,7 @@ export function ChatMessage({
               ),
             }}
           >
-            {content}
+            {displayContent}
           </ReactMarkdown>
         </div>
         {isStreaming && (
