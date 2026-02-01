@@ -7,12 +7,13 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StageIndicator } from "@/components/StageIndicator";
+import { StageTransitionPrompt } from "@/components/StageTransitionPrompt";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ImageGallery } from "@/components/ImageGallery";
 import { LandingPageBuilder } from "@/components/LandingPageBuilder";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Send, Loader2, Sparkles, ChevronRight, MessageSquare, Image, Globe } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Sparkles, MessageSquare, Image, Globe } from "lucide-react";
 
 interface Message {
   id: string;
@@ -65,6 +66,7 @@ export default function ProjectPage() {
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [landingPage, setLandingPage] = useState<LandingPageData | null>(null);
   const [activeTab, setActiveTab] = useState("chat");
+  const [showTransitionPrompt, setShowTransitionPrompt] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -303,6 +305,19 @@ ${proj.description ? `\n${proj.description}\n` : ""}
           content: assistantContent,
           stage: project?.current_stage || 1,
         });
+
+        // Check if AI is suggesting to move to next stage
+        if (
+          project?.current_stage === 1 &&
+          (assistantContent.includes("PRD细化已完成") ||
+            assistantContent.includes("进入下一阶段") ||
+            assistantContent.includes("开始视觉生成"))
+        ) {
+          // Show transition prompt instead of auto-advancing
+          setTimeout(() => {
+            setShowTransitionPrompt(true);
+          }, 1000);
+        }
       }
     } catch (error) {
       console.error(error);
@@ -335,8 +350,13 @@ ${proj.description ? `\n${proj.description}\n` : ""}
       toast.error("阶段更新失败");
     } else {
       setProject((prev) => prev ? { ...prev, current_stage: newStage } : null);
-      toast.success(`进入阶段 ${newStage}`);
+      setShowTransitionPrompt(false);
+      toast.success(`🎉 进入阶段 ${newStage}`);
     }
+  };
+
+  const handleStageTransitionConfirm = () => {
+    advanceStage();
   };
 
   // Parse suggestions from AI response
@@ -349,15 +369,6 @@ ${proj.description ? `\n${proj.description}\n` : ""}
     return [];
   };
 
-  // Get suggestions for the last assistant message
-  const getLastMessageSuggestions = (): string[] => {
-    const lastAssistantMsg = [...messages].reverse().find(m => m.role === "assistant");
-    if (lastAssistantMsg) {
-      return parseSuggestions(lastAssistantMsg.content);
-    }
-    return [];
-  };
-
   const handleSuggestionClick = (suggestion: string) => {
     setInputValue(suggestion);
   };
@@ -365,8 +376,12 @@ ${proj.description ? `\n${proj.description}\n` : ""}
   const handleImageSelectionConfirm = () => {
     const selectedImage = generatedImages.find((img) => img.is_selected);
     if (selectedImage) {
-      advanceStage(3);
+      setShowTransitionPrompt(true);
     }
+  };
+
+  const handleImageSelectionTransition = () => {
+    advanceStage(3);
   };
 
   const getSelectedImageUrl = () => {
@@ -377,15 +392,34 @@ ${proj.description ? `\n${proj.description}\n` : ""}
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">加载项目中...</p>
+        </motion.div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-dark flex flex-col">
+      {/* Stage Transition Prompt */}
+      <StageTransitionPrompt
+        isVisible={showTransitionPrompt}
+        currentStage={project?.current_stage || 1}
+        onConfirm={
+          project?.current_stage === 2 
+            ? handleImageSelectionTransition 
+            : handleStageTransitionConfirm
+        }
+        onDismiss={() => setShowTransitionPrompt(false)}
+      />
+
       {/* Header */}
-      <header className="border-b border-border/50 glass sticky top-0 z-50">
+      <header className="border-b border-border/50 glass sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -393,20 +427,19 @@ ${proj.description ? `\n${proj.description}\n` : ""}
                 <ArrowLeft className="w-5 h-5" />
               </Button>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-primary-foreground" />
-                </div>
+                <motion.div 
+                  className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center"
+                  whileHover={{ scale: 1.05, rotate: 5 }}
+                  transition={{ type: "spring", stiffness: 400 }}
+                >
+                  <Sparkles className="w-5 h-5 text-primary-foreground" />
+                </motion.div>
                 <div>
                   <h1 className="font-semibold">{project?.name}</h1>
                   <p className="text-xs text-muted-foreground">产品研发项目</p>
                 </div>
               </div>
             </div>
-            {project && project.current_stage < 3 && (
-              <Button variant="outline" size="sm" onClick={() => advanceStage()}>
-                进入下一阶段 <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            )}
           </div>
           <StageIndicator currentStage={project?.current_stage || 1} />
         </div>
@@ -417,25 +450,31 @@ ${proj.description ? `\n${proj.description}\n` : ""}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
           <div className="border-b border-border/50 px-4">
             <TabsList className="bg-transparent">
-              <TabsTrigger value="chat" className="data-[state=active]:bg-muted">
-                <MessageSquare className="w-4 h-4 mr-2" />
+              <TabsTrigger value="chat" className="data-[state=active]:bg-muted gap-2">
+                <MessageSquare className="w-4 h-4" />
                 对话
               </TabsTrigger>
               <TabsTrigger 
                 value="images" 
-                className="data-[state=active]:bg-muted"
+                className="data-[state=active]:bg-muted gap-2"
                 disabled={project?.current_stage === 1}
               >
-                <Image className="w-4 h-4 mr-2" />
+                <Image className="w-4 h-4" />
                 视觉生成
+                {project?.current_stage === 1 && (
+                  <span className="text-xs text-muted-foreground ml-1">(完成对话解锁)</span>
+                )}
               </TabsTrigger>
               <TabsTrigger 
                 value="landing" 
-                className="data-[state=active]:bg-muted"
+                className="data-[state=active]:bg-muted gap-2"
                 disabled={project?.current_stage !== 3}
               >
-                <Globe className="w-4 h-4 mr-2" />
+                <Globe className="w-4 h-4" />
                 落地页
+                {project?.current_stage !== 3 && (
+                  <span className="text-xs text-muted-foreground ml-1">(选择设计解锁)</span>
+                )}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -504,7 +543,7 @@ ${proj.description ? `\n${proj.description}\n` : ""}
 
           {/* Images Tab */}
           <TabsContent value="images" className="flex-1 overflow-auto p-4 m-0">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-5xl mx-auto">
               <ImageGallery
                 projectId={id || ""}
                 images={generatedImages}
@@ -517,7 +556,7 @@ ${proj.description ? `\n${proj.description}\n` : ""}
 
           {/* Landing Page Tab */}
           <TabsContent value="landing" className="flex-1 overflow-auto p-4 m-0">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-5xl mx-auto">
               <LandingPageBuilder
                 projectId={id || ""}
                 projectName={project?.name || ""}
