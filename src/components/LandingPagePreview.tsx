@@ -4,6 +4,8 @@ import { Mail, CheckCircle, Star, Shield, Truck, Play, Pause } from "lucide-reac
 import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { getTemplateStyles, type TemplateStyle } from "./LandingPageTemplates";
 
 interface LandingPagePreviewProps {
   title: string;
@@ -18,6 +20,7 @@ interface LandingPagePreviewProps {
   targetAudience?: string;
   landingPageId?: string;
   isInteractive?: boolean;
+  templateStyle?: TemplateStyle;
 }
 
 export function LandingPagePreview({
@@ -33,12 +36,15 @@ export function LandingPagePreview({
   targetAudience,
   landingPageId,
   isInteractive = false,
+  templateStyle = "modern",
 }: LandingPagePreviewProps) {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const styles = getTemplateStyles(templateStyle);
 
   const handleSubmitEmail = async () => {
     if (!email.trim() || !landingPageId) return;
@@ -80,10 +86,12 @@ export function LandingPagePreview({
   const multiAngleImages = Array.isArray(marketingImages?.multiAngle) ? marketingImages.multiAngle : [];
   const detailImage = typeof marketingImages?.detail === 'string' ? marketingImages.detail : null;
 
+  const isDarkTheme = styles.hero.isDark;
+
   return (
-    <div className="bg-white text-gray-900 overflow-hidden rounded-lg">
+    <div className={cn("overflow-hidden rounded-lg", isDarkTheme ? "bg-slate-900 text-white" : "bg-white text-gray-900")}>
       {/* Hero Section */}
-      <section className="relative bg-gradient-to-br from-slate-50 to-slate-100 py-16 px-8">
+      <section className={cn("relative py-16 px-8 bg-gradient-to-br", styles.hero.gradient)}>
         <div className="max-w-4xl mx-auto text-center">
           {heroImageUrl && (
             <motion.div
@@ -102,7 +110,10 @@ export function LandingPagePreview({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent"
+            className={cn(
+              "text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r bg-clip-text text-transparent",
+              styles.hero.titleGradient
+            )}
           >
             {title}
           </motion.h1>
@@ -111,7 +122,7 @@ export function LandingPagePreview({
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
-              className="text-xl text-gray-600 mb-6 max-w-2xl mx-auto"
+              className={cn("text-xl mb-6 max-w-2xl mx-auto", styles.hero.subtitleColor)}
             >
               {subheadline}
             </motion.p>
@@ -120,7 +131,7 @@ export function LandingPagePreview({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-lg text-gray-500 max-w-2xl mx-auto"
+            className={cn("text-lg max-w-2xl mx-auto", isDarkTheme ? "text-gray-400" : "text-gray-500")}
           >
             {targetAudience || "创新设计，为您带来全新体验"}
           </motion.p>
@@ -132,7 +143,13 @@ export function LandingPagePreview({
             transition={{ delay: 0.3 }}
             className="mt-8"
           >
-            <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white px-8 py-6 text-lg">
+            <Button 
+              size="lg" 
+              className={cn(
+                "px-8 py-6 text-lg bg-gradient-to-r hover:opacity-90 text-white",
+                styles.cta.gradient
+              )}
+            >
               {ctaText}
             </Button>
           </motion.div>
@@ -141,9 +158,9 @@ export function LandingPagePreview({
 
       {/* Pain Points Section */}
       {painPoints && painPoints.length > 0 && (
-        <section className="py-16 px-8 bg-red-50">
+        <section className={cn("py-16 px-8", styles.painPoints.bg)}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
+            <h2 className={cn("text-2xl font-bold text-center mb-8", styles.painPoints.isDark ? "text-white" : "text-gray-800")}>
               😤 这些问题，你一定遇到过
             </h2>
             <div className="grid md:grid-cols-3 gap-6">
@@ -153,12 +170,12 @@ export function LandingPagePreview({
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="bg-white p-6 rounded-xl shadow-sm border border-red-100"
+                  className={cn("p-6 rounded-xl shadow-sm border", styles.painPoints.cardBg, styles.painPoints.cardBorder)}
                 >
-                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mb-4">
-                    <span className="text-red-500 text-xl">✕</span>
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center mb-4", styles.painPoints.iconBg)}>
+                    <span className={cn("text-xl", styles.painPoints.iconColor)}>✕</span>
                   </div>
-                  <p className="text-gray-700">{point}</p>
+                  <p className={styles.painPoints.isDark ? "text-gray-200" : "text-gray-700"}>{point}</p>
                 </motion.div>
               ))}
             </div>
@@ -168,7 +185,7 @@ export function LandingPagePreview({
 
       {/* Lifestyle Image */}
       {lifestyleImage && (
-        <section className="py-16 px-8">
+        <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-800" : "bg-white")}>
           <div className="max-w-4xl mx-auto">
             <img
               src={lifestyleImage}
@@ -181,9 +198,9 @@ export function LandingPagePreview({
 
       {/* Selling Points Section */}
       {sellingPoints && sellingPoints.length > 0 && (
-        <section className="py-16 px-8 bg-gradient-to-br from-green-50 to-emerald-50">
+        <section className={cn("py-16 px-8", styles.solutions.bg)}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
+            <h2 className={cn("text-2xl font-bold text-center mb-8", styles.solutions.isDark ? "text-white" : "text-gray-800")}>
               ✨ 我们的解决方案
             </h2>
             <div className="grid md:grid-cols-3 gap-6">
@@ -193,12 +210,12 @@ export function LandingPagePreview({
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="bg-white p-6 rounded-xl shadow-sm border border-green-100"
+                  className={cn("p-6 rounded-xl shadow-sm border", styles.solutions.cardBg, styles.solutions.cardBorder)}
                 >
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center mb-4", styles.solutions.iconBg)}>
+                    <CheckCircle className={cn("w-5 h-5", styles.solutions.iconColor)} />
                   </div>
-                  <p className="text-gray-700">{point}</p>
+                  <p className={styles.solutions.isDark ? "text-gray-200" : "text-gray-700"}>{point}</p>
                 </motion.div>
               ))}
             </div>
@@ -208,9 +225,9 @@ export function LandingPagePreview({
 
       {/* Usage Image */}
       {usageImage && (
-        <section className="py-16 px-8 bg-slate-50">
+        <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-900" : "bg-slate-50")}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
+            <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>
               🎯 简单易用
             </h2>
             <img
@@ -224,9 +241,9 @@ export function LandingPagePreview({
 
       {/* Video Section */}
       {videoUrl && (
-        <section className="py-16 px-8 bg-gray-900">
+        <section className={cn("py-16 px-8", styles.video.bg)}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-8 text-white">
+            <h2 className={cn("text-2xl font-bold text-center mb-8", styles.video.titleColor)}>
               🎬 产品展示
             </h2>
             <div className="relative rounded-2xl overflow-hidden shadow-2xl">
@@ -256,9 +273,9 @@ export function LandingPagePreview({
 
       {/* Multi-angle Gallery */}
       {(multiAngleImages.length > 0 || detailImage) && (
-        <section className="py-16 px-8 bg-slate-50">
+        <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-800" : "bg-slate-50")}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
+            <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>
               📸 产品细节展示
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -289,11 +306,11 @@ export function LandingPagePreview({
 
       {/* Trust Badges */}
       {trustBadges && trustBadges.length > 0 && (
-        <section className="py-12 px-8 border-t border-b border-gray-100">
+        <section className={cn("py-12 px-8 border-t border-b", isDarkTheme ? "border-slate-700" : "border-gray-100")}>
           <div className="max-w-4xl mx-auto">
             <div className="flex flex-wrap justify-center gap-6">
               {trustBadges.map((badge, i) => (
-                <div key={i} className="flex items-center gap-2 text-gray-600">
+                <div key={i} className={cn("flex items-center gap-2", isDarkTheme ? "text-gray-300" : "text-gray-600")}>
                   {i === 0 && <Shield className="w-5 h-5 text-blue-500" />}
                   {i === 1 && <Star className="w-5 h-5 text-yellow-500" />}
                   {i === 2 && <Truck className="w-5 h-5 text-green-500" />}
@@ -306,20 +323,20 @@ export function LandingPagePreview({
       )}
 
       {/* CTA Section */}
-      <section className="py-16 px-8 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+      <section className={cn("py-16 px-8 bg-gradient-to-r text-white", styles.cta.gradient)}>
         <div className="max-w-lg mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
             <h3 className="text-2xl font-bold mb-2">抢先体验</h3>
-            <p className="text-blue-100 mb-6">留下邮箱，第一时间获取产品动态</p>
+            <p className="text-white/70 mb-6">留下邮箱，第一时间获取产品动态</p>
             
             {isSubscribed ? (
               <div className="bg-white/20 backdrop-blur rounded-lg p-6">
                 <CheckCircle className="w-12 h-12 text-green-300 mx-auto mb-3" />
                 <p className="text-lg font-medium">感谢订阅！</p>
-                <p className="text-sm text-blue-100">我们会第一时间通知您</p>
+                <p className="text-sm text-white/70">我们会第一时间通知您</p>
               </div>
             ) : isInteractive ? (
               <div className="flex gap-2 max-w-sm mx-auto">
@@ -333,7 +350,7 @@ export function LandingPagePreview({
                 <Button
                   onClick={handleSubmitEmail}
                   disabled={isSubmitting || !email.trim()}
-                  className="bg-white text-blue-600 hover:bg-blue-50 px-6"
+                  className={cn("px-6", styles.cta.buttonBg, styles.cta.buttonText, "hover:opacity-90")}
                 >
                   {isSubmitting ? "..." : ctaText || "订阅"}
                 </Button>
@@ -343,7 +360,7 @@ export function LandingPagePreview({
                 <div className="flex-1 px-4 py-3 rounded-lg bg-white/20 text-white/50 text-left">
                   your@email.com
                 </div>
-                <div className="bg-white text-blue-600 px-6 py-3 rounded-lg font-medium">
+                <div className={cn("px-6 py-3 rounded-lg font-medium", styles.cta.buttonBg, styles.cta.buttonText)}>
                   {ctaText || "订阅"}
                 </div>
               </div>
@@ -353,7 +370,7 @@ export function LandingPagePreview({
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-8 bg-gray-900 text-gray-400 text-center text-sm">
+      <footer className={cn("py-8 px-8 text-center text-sm", styles.footer.bg, "text-gray-400")}>
         <p>© 2024 {title}. 由开品宝提供技术支持</p>
       </footer>
     </div>

@@ -33,6 +33,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LandingPagePreview } from "./LandingPagePreview";
+import { TemplateSelect, type TemplateStyle } from "./LandingPageTemplates";
 import { cn } from "@/lib/utils";
 
 interface LandingPageData {
@@ -50,6 +51,7 @@ interface LandingPageData {
   video_url?: string | null;
   marketing_images?: Record<string, string | string[]> | null;
   product_images?: string[] | null;
+  template_style?: string | null;
 }
 
 interface MarketingImage {
@@ -133,6 +135,7 @@ export function LandingPageBuilder({
   const [isPublishing, setIsPublishing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [generatedMarketingImages, setGeneratedMarketingImages] = useState<Record<string, string | string[]>>({});
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateStyle>("modern");
 
   const handleAIGenerateLandingPage = async () => {
     setIsGenerating(true);
@@ -164,6 +167,7 @@ export function LandingPageBuilder({
             },
             selectedImageUrl,
             targetMarket: "国际市场",
+            templateStyle: selectedTemplate,
             visualAssets: {
               selectedProductImage: selectedImageUrl,
               marketingImages: marketingImages,
@@ -206,6 +210,7 @@ export function LandingPageBuilder({
           video_url: respVideoUrl || videoUrl || null,
           generated_images: newlyGenerated || {},
           color_scheme: strategy?.colorScheme || null,
+          template_style: selectedTemplate,
           is_published: false,
         })
         .select()
@@ -308,10 +313,18 @@ export function LandingPageBuilder({
                 </motion.div>
                 
                 <h3 className="text-2xl font-bold mb-2">AI 生成广告落地页</h3>
-                <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                   基于 PRD 数据、产品视觉素材和竞品洞察，AI 将自动生成专业的广告级落地页，
                   包含文案优化和场景图片补充
                 </p>
+
+                {/* Template Selection */}
+                <div className="mb-8 text-left max-w-3xl mx-auto">
+                  <TemplateSelect 
+                    selectedTemplate={selectedTemplate}
+                    onSelect={setSelectedTemplate}
+                  />
+                </div>
 
                 <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
@@ -335,19 +348,19 @@ export function LandingPageBuilder({
                   <p className="text-sm font-medium mb-2">已有素材：</p>
                   <div className="flex flex-wrap gap-2 text-xs">
                     {selectedImageUrl && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">✓ 产品图</span>
+                      <span className="px-2 py-1 bg-primary/10 text-primary rounded">✓ 产品图</span>
                     )}
                     {marketingImages.length > 0 && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">✓ 营销图 x{marketingImages.length}</span>
+                      <span className="px-2 py-1 bg-primary/10 text-primary rounded">✓ 营销图 x{marketingImages.length}</span>
                     )}
                     {videoUrl && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">✓ 视频</span>
+                      <span className="px-2 py-1 bg-primary/10 text-primary rounded">✓ 视频</span>
                     )}
                     {prdData?.pain_points && prdData.pain_points.length > 0 && (
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">✓ 痛点分析</span>
+                      <span className="px-2 py-1 bg-accent/10 text-accent rounded">✓ 痛点分析</span>
                     )}
                     {prdData?.competitorInsights && (
-                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">✓ 竞品洞察</span>
+                      <span className="px-2 py-1 bg-secondary text-secondary-foreground rounded">✓ 竞品洞察</span>
                     )}
                   </div>
                 </div>
@@ -560,6 +573,7 @@ export function LandingPageBuilder({
             ctaText={landingPage.cta_text}
             landingPageId={landingPage.id}
             isInteractive={false}
+            templateStyle={(landingPage.template_style as TemplateStyle) || selectedTemplate}
           />
         </CardContent>
       </Card>

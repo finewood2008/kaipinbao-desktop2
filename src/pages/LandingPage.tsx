@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Mail, CheckCircle, Shield, Star, Truck, Play, Pause } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { getTemplateStyles, type TemplateStyle } from "@/components/LandingPageTemplates";
 
 interface LandingPageData {
   id: string;
@@ -19,6 +21,7 @@ interface LandingPageData {
   video_url: string | null;
   marketing_images: Record<string, string | string[]> | null;
   product_images: string[] | null;
+  template_style: string | null;
 }
 
 export default function LandingPage() {
@@ -123,10 +126,15 @@ export default function LandingPage() {
   const detailImage = typeof landingPage.marketing_images?.detail === 'string' ? landingPage.marketing_images.detail : null;
   const multiAngleImages = Array.isArray(landingPage.marketing_images?.multiAngle) ? landingPage.marketing_images.multiAngle : [];
 
+  // Get template styles
+  const templateStyle = (landingPage.template_style as TemplateStyle) || "modern";
+  const styles = getTemplateStyles(templateStyle);
+  const isDarkTheme = styles.hero.isDark;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className={cn("min-h-screen", isDarkTheme ? "bg-slate-900" : "bg-gradient-to-b from-gray-50 to-white")}>
       {/* Hero Section */}
-      <section className="pt-16 pb-12 px-4 bg-gradient-to-br from-slate-50 to-slate-100">
+      <section className={cn("pt-16 pb-12 px-4 bg-gradient-to-br", styles.hero.gradient)}>
         <div className="max-w-4xl mx-auto text-center">
           {landingPage.hero_image_url && (
             <motion.img
@@ -141,7 +149,10 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold text-gray-900 mb-4"
+            className={cn(
+              "text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r bg-clip-text text-transparent",
+              styles.hero.titleGradient
+            )}
           >
             {landingPage.title}
           </motion.h1>
@@ -150,7 +161,7 @@ export default function LandingPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 }}
-              className="text-xl text-gray-600 mb-6 max-w-2xl mx-auto"
+              className={cn("text-xl mb-6 max-w-2xl mx-auto", styles.hero.subtitleColor)}
             >
               {landingPage.subheadline}
             </motion.p>
@@ -160,7 +171,13 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white px-8 py-6 text-lg">
+            <Button 
+              size="lg" 
+              className={cn(
+                "px-8 py-6 text-lg bg-gradient-to-r hover:opacity-90 text-white",
+                styles.cta.gradient
+              )}
+            >
               {landingPage.cta_text || "立即订阅"}
             </Button>
           </motion.div>
@@ -169,12 +186,12 @@ export default function LandingPage() {
 
       {/* Pain Points */}
       {landingPage.pain_points && landingPage.pain_points.length > 0 && (
-        <section className="py-16 px-4 bg-red-50/50">
+        <section className={cn("py-16 px-4", styles.painPoints.bg)}>
           <div className="max-w-4xl mx-auto">
             <motion.h2
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
-              className="text-2xl font-bold text-center text-gray-800 mb-8"
+              className={cn("text-2xl font-bold text-center mb-8", styles.painPoints.isDark ? "text-white" : "text-gray-800")}
             >
               😤 您是否遇到这些问题？
             </motion.h2>
@@ -185,12 +202,12 @@ export default function LandingPage() {
                   initial={{ opacity: 0, x: -20 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="flex items-start gap-3 bg-white p-6 rounded-xl shadow-sm border border-red-100"
+                  className={cn("flex items-start gap-3 p-6 rounded-xl shadow-sm border", styles.painPoints.cardBg, styles.painPoints.cardBorder)}
                 >
-                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-red-500 text-xl">✕</span>
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", styles.painPoints.iconBg)}>
+                    <span className={cn("text-xl", styles.painPoints.iconColor)}>✕</span>
                   </div>
-                  <p className="text-gray-700">{point}</p>
+                  <p className={styles.painPoints.isDark ? "text-gray-200" : "text-gray-700"}>{point}</p>
                 </motion.div>
               ))}
             </div>
@@ -200,7 +217,7 @@ export default function LandingPage() {
 
       {/* Lifestyle Image */}
       {lifestyleImage && (
-        <section className="py-16 px-4">
+        <section className={cn("py-16 px-4", isDarkTheme ? "bg-slate-800" : "bg-white")}>
           <div className="max-w-4xl mx-auto">
             <img
               src={lifestyleImage}
@@ -213,12 +230,12 @@ export default function LandingPage() {
 
       {/* Selling Points */}
       {landingPage.selling_points && landingPage.selling_points.length > 0 && (
-        <section className="py-16 px-4 bg-gradient-to-br from-green-50 to-emerald-50">
+        <section className={cn("py-16 px-4", styles.solutions.bg)}>
           <div className="max-w-4xl mx-auto">
             <motion.h2
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
-              className="text-2xl font-bold text-center text-gray-800 mb-8"
+              className={cn("text-2xl font-bold text-center mb-8", styles.solutions.isDark ? "text-white" : "text-gray-800")}
             >
               ✨ 我们的解决方案
             </motion.h2>
@@ -229,12 +246,12 @@ export default function LandingPage() {
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="flex items-start gap-3 bg-white p-6 rounded-xl shadow-sm border border-green-100"
+                  className={cn("flex items-start gap-3 p-6 rounded-xl shadow-sm border", styles.solutions.cardBg, styles.solutions.cardBorder)}
                 >
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0", styles.solutions.iconBg)}>
+                    <CheckCircle className={cn("w-5 h-5", styles.solutions.iconColor)} />
                   </div>
-                  <p className="text-gray-700">{point}</p>
+                  <p className={styles.solutions.isDark ? "text-gray-200" : "text-gray-700"}>{point}</p>
                 </motion.div>
               ))}
             </div>
@@ -244,9 +261,9 @@ export default function LandingPage() {
 
       {/* Usage Image */}
       {usageImage && (
-        <section className="py-16 px-4 bg-slate-50">
+        <section className={cn("py-16 px-4", isDarkTheme ? "bg-slate-900" : "bg-slate-50")}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">🎯 简单易用</h2>
+            <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>🎯 简单易用</h2>
             <img
               src={usageImage}
               alt="产品使用演示"
@@ -258,9 +275,9 @@ export default function LandingPage() {
 
       {/* Video Section */}
       {landingPage.video_url && (
-        <section className="py-16 px-4 bg-gray-900">
+        <section className={cn("py-16 px-4", styles.video.bg)}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center text-white mb-8">🎬 产品展示</h2>
+            <h2 className={cn("text-2xl font-bold text-center mb-8", styles.video.titleColor)}>🎬 产品展示</h2>
             <div className="relative rounded-2xl overflow-hidden shadow-2xl">
               <video
                 ref={videoRef}
@@ -288,9 +305,9 @@ export default function LandingPage() {
 
       {/* Gallery */}
       {(multiAngleImages.length > 0 || detailImage) && (
-        <section className="py-16 px-4 bg-slate-50">
+        <section className={cn("py-16 px-4", isDarkTheme ? "bg-slate-800" : "bg-slate-50")}>
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">📸 产品细节展示</h2>
+            <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>📸 产品细节展示</h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {detailImage && (
                 <motion.div
@@ -319,7 +336,7 @@ export default function LandingPage() {
 
       {/* Trust Badges */}
       {landingPage.trust_badges && landingPage.trust_badges.length > 0 && (
-        <section className="py-8 px-4">
+        <section className={cn("py-8 px-4", isDarkTheme ? "bg-slate-800" : "bg-white")}>
           <div className="max-w-3xl mx-auto">
             <div className="flex justify-center gap-6 flex-wrap">
               {(landingPage.trust_badges as string[]).map((badge, i) => (
@@ -328,7 +345,10 @@ export default function LandingPage() {
                   initial={{ opacity: 0, scale: 0.9 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   transition={{ delay: i * 0.1 }}
-                  className="flex items-center gap-2 text-gray-600 bg-gray-100 px-4 py-2 rounded-full"
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-full",
+                    isDarkTheme ? "bg-slate-700 text-gray-300" : "bg-gray-100 text-gray-600"
+                  )}
                 >
                   {i === 0 && <Shield className="w-4 h-4 text-blue-500" />}
                   {i === 1 && <Star className="w-4 h-4 text-yellow-500" />}
@@ -342,11 +362,11 @@ export default function LandingPage() {
       )}
 
       {/* CTA Section */}
-      <section className="py-16 px-4">
+      <section className={cn("py-16 px-4", isDarkTheme ? "bg-slate-900" : "bg-white")}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          className="max-w-xl mx-auto bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-center text-white shadow-xl"
+          className={cn("max-w-xl mx-auto bg-gradient-to-r rounded-2xl p-8 text-center text-white shadow-xl", styles.cta.gradient)}
         >
           {isSubmitted ? (
             <div className="py-4">
@@ -371,7 +391,7 @@ export default function LandingPage() {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-white text-blue-600 hover:bg-gray-100 shrink-0"
+                  className={cn("shrink-0", styles.cta.buttonBg, styles.cta.buttonText, "hover:opacity-90")}
                 >
                   {isSubmitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -389,7 +409,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 text-center text-gray-400 text-sm">
+      <footer className={cn("py-8 text-center text-sm", styles.footer.bg, "text-gray-400")}>
         <p>Powered by 开品宝</p>
       </footer>
     </div>

@@ -299,6 +299,7 @@ export type Database = {
           selling_points: Json | null
           slug: string
           subheadline: string | null
+          template_style: string | null
           title: string
           trust_badges: Json | null
           updated_at: string
@@ -320,6 +321,7 @@ export type Database = {
           selling_points?: Json | null
           slug: string
           subheadline?: string | null
+          template_style?: string | null
           title: string
           trust_badges?: Json | null
           updated_at?: string
@@ -341,6 +343,7 @@ export type Database = {
           selling_points?: Json | null
           slug?: string
           subheadline?: string | null
+          template_style?: string | null
           title?: string
           trust_badges?: Json | null
           updated_at?: string
