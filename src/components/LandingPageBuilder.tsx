@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import {
   AlertDialog,
@@ -25,7 +24,6 @@ import {
   Eye, 
   Check,
   Sparkles,
-  Megaphone,
   RefreshCw,
   Wand2,
   ImageIcon,
@@ -34,7 +32,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { AdStrategyPanel } from "./AdStrategyPanel";
 import { LandingPagePreview } from "./LandingPagePreview";
 import { cn } from "@/lib/utils";
 
@@ -48,23 +45,45 @@ interface LandingPageData {
   trust_badges: string[] | null;
   is_published: boolean;
   view_count: number;
+  subheadline?: string | null;
+  cta_text?: string | null;
+  video_url?: string | null;
+  marketing_images?: Record<string, string | string[]> | null;
+  product_images?: string[] | null;
 }
 
-interface MarketingImages {
-  lifestyle?: string;
-  usage?: string;
-  multiAngle?: string[];
+interface MarketingImage {
+  id: string;
+  image_url: string;
+  image_type: string;
+}
+
+interface PrdDataInput {
+  pain_points?: string[];
+  selling_points?: string[];
+  target_audience?: string;
+  usageScenario?: string;
+  designStyle?: string;
+  coreFeatures?: string[];
+  marketingAssets?: {
+    sceneDescription?: string;
+    structureHighlights?: string[];
+    lifestyleContext?: string;
+  };
+  competitorInsights?: {
+    positivePoints?: string[];
+    negativePoints?: string[];
+    differentiationStrategy?: string;
+  };
 }
 
 interface LandingPageBuilderProps {
   projectId: string;
   projectName: string;
   selectedImageUrl?: string;
-  prdData?: {
-    pain_points?: string[];
-    selling_points?: string[];
-    target_audience?: string;
-  };
+  prdData?: PrdDataInput;
+  marketingImages?: MarketingImage[];
+  videoUrl?: string;
   landingPage: LandingPageData | null;
   onLandingPageChange: (data: LandingPageData) => void;
 }
@@ -82,11 +101,21 @@ const stepProgress: Record<GenerationStep, number> = {
 
 const stepLabels: Record<GenerationStep, string> = {
   idle: "准备中",
-  analyzing: "分析产品信息...",
-  designing: "生成设计思路...",
-  "generating-images": "生成营销图片...",
+  analyzing: "分析 PRD 数据...",
+  designing: "生成设计策略...",
+  "generating-images": "补充营销图片...",
   finalizing: "整合落地页...",
   complete: "生成完成！",
+};
+
+// Generate short slug for URLs
+const generateSlug = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let shortId = '';
+  for (let i = 0; i < 6; i++) {
+    shortId += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `p-${shortId}`;
 };
 
 export function LandingPageBuilder({
@@ -94,6 +123,8 @@ export function LandingPageBuilder({
   projectName,
   selectedImageUrl,
   prdData,
+  marketingImages = [],
+  videoUrl,
   landingPage,
   onLandingPageChange,
 }: LandingPageBuilderProps) {
@@ -101,22 +132,13 @@ export function LandingPageBuilder({
   const [generationStep, setGenerationStep] = useState<GenerationStep>("idle");
   const [isPublishing, setIsPublishing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [marketingImages, setMarketingImages] = useState<MarketingImages>({});
-
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .slice(0, 50) + "-" + Date.now().toString(36);
-  };
+  const [generatedMarketingImages, setGeneratedMarketingImages] = useState<Record<string, string | string[]>>({});
 
   const handleAIGenerateLandingPage = async () => {
     setIsGenerating(true);
     setGenerationStep("analyzing");
 
     try {
-      // Step 1: Call AI to generate landing page strategy and images
       setGenerationStep("designing");
       
       const response = await fetch(
@@ -134,9 +156,19 @@ export function LandingPageBuilder({
               pain_points: prdData?.pain_points,
               selling_points: prdData?.selling_points,
               target_audience: prdData?.target_audience,
+              usageScenario: prdData?.usageScenario,
+              designStyle: prdData?.designStyle,
+              coreFeatures: prdData?.coreFeatures,
+              marketingAssets: prdData?.marketingAssets,
+              competitorInsights: prdData?.competitorInsights,
             },
             selectedImageUrl,
-            targetMarket: "中国市场",
+            targetMarket: "国际市场",
+            visualAssets: {
+              selectedProductImage: selectedImageUrl,
+              marketingImages: marketingImages,
+              videoUrl: videoUrl,
+            },
           }),
         }
       );
@@ -149,13 +181,13 @@ export function LandingPageBuilder({
       setGenerationStep("generating-images");
       
       const data = await response.json();
-      const { strategy, marketingImages: generatedImages } = data;
+      const { strategy, marketingImages: generatedImages, generatedImages: newlyGenerated, videoUrl: respVideoUrl, productImages } = data;
 
-      setMarketingImages(generatedImages || {});
+      setGeneratedMarketingImages(generatedImages || {});
       setGenerationStep("finalizing");
 
-      // Step 2: Save to database
-      const slug = generateSlug(projectName);
+      // Save to database with new fields
+      const slug = generateSlug();
       
       const { data: savedPage, error } = await supabase
         .from("landing_pages")
@@ -164,9 +196,16 @@ export function LandingPageBuilder({
           title: strategy?.headline || projectName,
           slug,
           hero_image_url: selectedImageUrl || null,
+          subheadline: strategy?.subheadline || null,
+          cta_text: strategy?.ctaText || "立即订阅",
           pain_points: strategy?.painPoints || prdData?.pain_points || [],
           selling_points: strategy?.sellingPoints || prdData?.selling_points || [],
           trust_badges: strategy?.trustBadges || ["✓ 30天无理由退款", "✓ 专业团队研发", "✓ 全球用户信赖"],
+          marketing_images: generatedImages || {},
+          product_images: productImages || [],
+          video_url: respVideoUrl || videoUrl || null,
+          generated_images: newlyGenerated || {},
+          color_scheme: strategy?.colorScheme || null,
           is_published: false,
         })
         .select()
@@ -177,7 +216,6 @@ export function LandingPageBuilder({
       setGenerationStep("complete");
       onLandingPageChange(savedPage as unknown as LandingPageData);
       
-      // Celebrate!
       toast.success("🎉 落地页生成成功！");
       
       setTimeout(() => {
@@ -216,7 +254,7 @@ export function LandingPageBuilder({
 
   const getLandingPageUrl = () => {
     if (!landingPage) return "";
-    return `${window.location.origin}/lp/${landingPage.slug}`;
+    return `https://kaipinbao.lovable.app/lp/${landingPage.slug}`;
   };
 
   const copyToClipboard = () => {
@@ -229,13 +267,11 @@ export function LandingPageBuilder({
     
     setIsRegenerating(true);
     try {
-      // Delete existing landing page
       await supabase
         .from("landing_pages")
         .delete()
         .eq("id", landingPage.id);
 
-      // Generate new one
       await handleAIGenerateLandingPage();
     } catch (error) {
       console.error(error);
@@ -271,10 +307,10 @@ export function LandingPageBuilder({
                   <Wand2 className="w-10 h-10 text-white" />
                 </motion.div>
                 
-                <h3 className="text-2xl font-bold mb-2">AI 生成营销落地页</h3>
+                <h3 className="text-2xl font-bold mb-2">AI 生成广告落地页</h3>
                 <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                  基于您的产品 PRD 和选定的设计方案，AI 将自动生成专业的营销落地页，
-                  包括营销文案和场景图片
+                  基于 PRD 数据、产品视觉素材和竞品洞察，AI 将自动生成专业的广告级落地页，
+                  包含文案优化和场景图片补充
                 </p>
 
                 <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
@@ -285,12 +321,34 @@ export function LandingPageBuilder({
                   <div className="w-8 h-px bg-border" />
                   <div className="flex items-center gap-2">
                     <Palette className="w-4 h-4 text-stage-2" />
-                    <span>设计思路</span>
+                    <span>整合素材</span>
                   </div>
                   <div className="w-8 h-px bg-border" />
                   <div className="flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-stage-3" />
-                    <span>生成图片</span>
+                    <span>生成页面</span>
+                  </div>
+                </div>
+
+                {/* Show available assets summary */}
+                <div className="mb-8 p-4 bg-muted/50 rounded-lg text-left max-w-md mx-auto">
+                  <p className="text-sm font-medium mb-2">已有素材：</p>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {selectedImageUrl && (
+                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">✓ 产品图</span>
+                    )}
+                    {marketingImages.length > 0 && (
+                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">✓ 营销图 x{marketingImages.length}</span>
+                    )}
+                    {videoUrl && (
+                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">✓ 视频</span>
+                    )}
+                    {prdData?.pain_points && prdData.pain_points.length > 0 && (
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">✓ 痛点分析</span>
+                    )}
+                    {prdData?.competitorInsights && (
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">✓ 竞品洞察</span>
+                    )}
                   </div>
                 </div>
 
@@ -492,11 +550,14 @@ export function LandingPageBuilder({
         <CardContent className="p-0">
           <LandingPagePreview
             title={landingPage.title}
+            subheadline={landingPage.subheadline}
             heroImageUrl={landingPage.hero_image_url}
             painPoints={landingPage.pain_points}
             sellingPoints={landingPage.selling_points}
             trustBadges={landingPage.trust_badges}
-            marketingImages={marketingImages}
+            marketingImages={landingPage.marketing_images || generatedMarketingImages}
+            videoUrl={landingPage.video_url}
+            ctaText={landingPage.cta_text}
             landingPageId={landingPage.id}
             isInteractive={false}
           />
@@ -519,26 +580,6 @@ export function LandingPageBuilder({
           </CardContent>
         </Card>
       )}
-
-      {/* Ad Strategy Section */}
-      <Separator className="my-8" />
-      
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Megaphone className="w-6 h-6 text-accent" />
-          <h2 className="text-xl font-semibold">广告测款策略</h2>
-        </div>
-        <p className="text-muted-foreground">
-          AI 将根据您的产品信息生成受众画像、A/B测试文案和市场潜力评估
-        </p>
-        
-        <AdStrategyPanel
-          productName={projectName}
-          productDescription={landingPage.title}
-          painPoints={landingPage.pain_points as string[] | undefined}
-          sellingPoints={landingPage.selling_points as string[] | undefined}
-        />
-      </div>
     </div>
   );
 }

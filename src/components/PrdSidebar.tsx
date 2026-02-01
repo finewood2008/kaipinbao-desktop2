@@ -21,6 +21,8 @@ export interface PrdData {
   designStyle?: string | null;
   coreFeatures?: string[] | null;
   pricingRange?: string | null;
+  painPoints?: string[] | null;
+  sellingPoints?: string[] | null;
   marketingAssets?: {
     sceneDescription?: string | null;
     structureHighlights?: string[] | null;
@@ -32,6 +34,11 @@ export interface PrdData {
     storyLine?: string | null;
     keyActions?: string[] | null;
     emotionalTone?: string | null;
+  };
+  competitorInsights?: {
+    positivePoints?: string[] | null;
+    negativePoints?: string[] | null;
+    differentiationStrategy?: string | null;
   };
 }
 
