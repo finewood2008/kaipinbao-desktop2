@@ -285,45 +285,66 @@ export type Database = {
       }
       landing_pages: {
         Row: {
+          color_scheme: Json | null
           created_at: string
+          cta_text: string | null
+          generated_images: Json | null
           hero_image_url: string | null
           id: string
           is_published: boolean
+          marketing_images: Json | null
           pain_points: Json | null
+          product_images: Json | null
           project_id: string
           selling_points: Json | null
           slug: string
+          subheadline: string | null
           title: string
           trust_badges: Json | null
           updated_at: string
+          video_url: string | null
           view_count: number
         }
         Insert: {
+          color_scheme?: Json | null
           created_at?: string
+          cta_text?: string | null
+          generated_images?: Json | null
           hero_image_url?: string | null
           id?: string
           is_published?: boolean
+          marketing_images?: Json | null
           pain_points?: Json | null
+          product_images?: Json | null
           project_id: string
           selling_points?: Json | null
           slug: string
+          subheadline?: string | null
           title: string
           trust_badges?: Json | null
           updated_at?: string
+          video_url?: string | null
           view_count?: number
         }
         Update: {
+          color_scheme?: Json | null
           created_at?: string
+          cta_text?: string | null
+          generated_images?: Json | null
           hero_image_url?: string | null
           id?: string
           is_published?: boolean
+          marketing_images?: Json | null
           pain_points?: Json | null
+          product_images?: Json | null
           project_id?: string
           selling_points?: Json | null
           slug?: string
+          subheadline?: string | null
           title?: string
           trust_badges?: Json | null
           updated_at?: string
+          video_url?: string | null
           view_count?: number
         }
         Relationships: [

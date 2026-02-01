@@ -894,6 +894,30 @@ export default function ProjectPage() {
                 projectId={id || ""}
                 projectName={project?.name || ""}
                 selectedImageUrl={getSelectedImageUrl()}
+                prdData={prdData ? {
+                  pain_points: prdData.painPoints || [],
+                  selling_points: prdData.sellingPoints || [],
+                  target_audience: prdData.targetAudience || undefined,
+                  usageScenario: prdData.usageScenario || undefined,
+                  designStyle: prdData.designStyle || undefined,
+                  coreFeatures: prdData.coreFeatures || [],
+                  marketingAssets: prdData.marketingAssets ? {
+                    sceneDescription: prdData.marketingAssets.sceneDescription || undefined,
+                    structureHighlights: prdData.marketingAssets.structureHighlights || [],
+                    lifestyleContext: prdData.marketingAssets.lifestyleContext || undefined,
+                  } : undefined,
+                  competitorInsights: prdData.competitorInsights ? {
+                    positivePoints: prdData.competitorInsights.positivePoints || [],
+                    negativePoints: prdData.competitorInsights.negativePoints || [],
+                    differentiationStrategy: prdData.competitorInsights.differentiationStrategy || undefined,
+                  } : undefined,
+                } : undefined}
+                marketingImages={marketingImages.map(img => ({
+                  id: img.id,
+                  image_url: img.image_url,
+                  image_type: img.image_type || 'marketing',
+                }))}
+                videoUrl={videos.find(v => v.video_url)?.video_url || undefined}
                 landingPage={landingPage}
                 onLandingPageChange={setLandingPage}
               />

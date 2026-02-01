@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, Mail, CheckCircle } from "lucide-react";
+import { Loader2, Mail, CheckCircle, Shield, Star, Truck, Play, Pause } from "lucide-react";
 
 interface LandingPageData {
   id: string;
@@ -14,6 +14,11 @@ interface LandingPageData {
   pain_points: string[] | null;
   selling_points: string[] | null;
   trust_badges: string[] | null;
+  subheadline: string | null;
+  cta_text: string | null;
+  video_url: string | null;
+  marketing_images: Record<string, string | string[]> | null;
+  product_images: string[] | null;
 }
 
 export default function LandingPage() {
@@ -24,6 +29,8 @@ export default function LandingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     fetchLandingPage();
@@ -80,6 +87,17 @@ export default function LandingPage() {
     }
   };
 
+  const toggleVideo = () => {
+    if (videoRef.current) {
+      if (isVideoPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsVideoPlaying(!isVideoPlaying);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white">
@@ -99,10 +117,16 @@ export default function LandingPage() {
     );
   }
 
+  // Get marketing images
+  const lifestyleImage = typeof landingPage.marketing_images?.lifestyle === 'string' ? landingPage.marketing_images.lifestyle : null;
+  const usageImage = typeof landingPage.marketing_images?.usage === 'string' ? landingPage.marketing_images.usage : null;
+  const detailImage = typeof landingPage.marketing_images?.detail === 'string' ? landingPage.marketing_images.detail : null;
+  const multiAngleImages = Array.isArray(landingPage.marketing_images?.multiAngle) ? landingPage.marketing_images.multiAngle : [];
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       {/* Hero Section */}
-      <section className="pt-16 pb-12 px-4">
+      <section className="pt-16 pb-12 px-4 bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="max-w-4xl mx-auto text-center">
           {landingPage.hero_image_url && (
             <motion.img
@@ -117,34 +141,55 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-5xl font-bold text-gray-900 mb-6"
+            className="text-4xl md:text-5xl font-bold text-gray-900 mb-4"
           >
             {landingPage.title}
           </motion.h1>
+          {landingPage.subheadline && (
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="text-xl text-gray-600 mb-6 max-w-2xl mx-auto"
+            >
+              {landingPage.subheadline}
+            </motion.p>
+          )}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white px-8 py-6 text-lg">
+              {landingPage.cta_text || "立即订阅"}
+            </Button>
+          </motion.div>
         </div>
       </section>
 
       {/* Pain Points */}
       {landingPage.pain_points && landingPage.pain_points.length > 0 && (
-        <section className="py-12 px-4 bg-red-50/50">
-          <div className="max-w-3xl mx-auto">
+        <section className="py-16 px-4 bg-red-50/50">
+          <div className="max-w-4xl mx-auto">
             <motion.h2
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               className="text-2xl font-bold text-center text-gray-800 mb-8"
             >
-              您是否遇到这些问题？
+              😤 您是否遇到这些问题？
             </motion.h2>
-            <div className="space-y-4">
+            <div className="grid md:grid-cols-3 gap-6">
               {(landingPage.pain_points as string[]).map((point, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -20 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="flex items-start gap-3 bg-white p-4 rounded-lg shadow-sm"
+                  className="flex items-start gap-3 bg-white p-6 rounded-xl shadow-sm border border-red-100"
                 >
-                  <span className="text-red-500 text-xl">✗</span>
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-red-500 text-xl">✕</span>
+                  </div>
                   <p className="text-gray-700">{point}</p>
                 </motion.div>
               ))}
@@ -153,28 +198,118 @@ export default function LandingPage() {
         </section>
       )}
 
+      {/* Lifestyle Image */}
+      {lifestyleImage && (
+        <section className="py-16 px-4">
+          <div className="max-w-4xl mx-auto">
+            <img
+              src={lifestyleImage}
+              alt="产品使用场景"
+              className="w-full rounded-2xl shadow-lg"
+            />
+          </div>
+        </section>
+      )}
+
       {/* Selling Points */}
       {landingPage.selling_points && landingPage.selling_points.length > 0 && (
-        <section className="py-12 px-4 bg-green-50/50">
-          <div className="max-w-3xl mx-auto">
+        <section className="py-16 px-4 bg-gradient-to-br from-green-50 to-emerald-50">
+          <div className="max-w-4xl mx-auto">
             <motion.h2
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               className="text-2xl font-bold text-center text-gray-800 mb-8"
             >
-              我们的解决方案
+              ✨ 我们的解决方案
             </motion.h2>
-            <div className="space-y-4">
+            <div className="grid md:grid-cols-3 gap-6">
               {(landingPage.selling_points as string[]).map((point, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
-                  className="flex items-start gap-3 bg-white p-4 rounded-lg shadow-sm"
+                  className="flex items-start gap-3 bg-white p-6 rounded-xl shadow-sm border border-green-100"
                 >
-                  <span className="text-green-500 text-xl">✓</span>
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  </div>
                   <p className="text-gray-700">{point}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Usage Image */}
+      {usageImage && (
+        <section className="py-16 px-4 bg-slate-50">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">🎯 简单易用</h2>
+            <img
+              src={usageImage}
+              alt="产品使用演示"
+              className="w-full rounded-2xl shadow-lg"
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Video Section */}
+      {landingPage.video_url && (
+        <section className="py-16 px-4 bg-gray-900">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-2xl font-bold text-center text-white mb-8">🎬 产品展示</h2>
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+              <video
+                ref={videoRef}
+                src={landingPage.video_url}
+                className="w-full"
+                loop
+                playsInline
+                onPlay={() => setIsVideoPlaying(true)}
+                onPause={() => setIsVideoPlaying(false)}
+              />
+              <button
+                onClick={toggleVideo}
+                className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
+              >
+                {isVideoPlaying ? (
+                  <Pause className="w-16 h-16 text-white" />
+                ) : (
+                  <Play className="w-16 h-16 text-white" />
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Gallery */}
+      {(multiAngleImages.length > 0 || detailImage) && (
+        <section className="py-16 px-4 bg-slate-50">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-2xl font-bold text-center text-gray-800 mb-8">📸 产品细节展示</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {detailImage && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  className="aspect-square rounded-xl overflow-hidden shadow-md col-span-2"
+                >
+                  <img src={detailImage} alt="产品细节" className="w-full h-full object-cover" />
+                </motion.div>
+              )}
+              {multiAngleImages.map((img, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="aspect-square rounded-xl overflow-hidden shadow-md"
+                >
+                  <img src={img} alt={`产品角度 ${i + 1}`} className="w-full h-full object-cover" />
                 </motion.div>
               ))}
             </div>
@@ -186,17 +321,20 @@ export default function LandingPage() {
       {landingPage.trust_badges && landingPage.trust_badges.length > 0 && (
         <section className="py-8 px-4">
           <div className="max-w-3xl mx-auto">
-            <div className="flex justify-center gap-4 flex-wrap">
+            <div className="flex justify-center gap-6 flex-wrap">
               {(landingPage.trust_badges as string[]).map((badge, i) => (
-                <motion.span
+                <motion.div
                   key={i}
                   initial={{ opacity: 0, scale: 0.9 }}
                   whileInView={{ opacity: 1, scale: 1 }}
                   transition={{ delay: i * 0.1 }}
-                  className="text-sm text-gray-600 bg-gray-100 px-4 py-2 rounded-full"
+                  className="flex items-center gap-2 text-gray-600 bg-gray-100 px-4 py-2 rounded-full"
                 >
-                  {badge}
-                </motion.span>
+                  {i === 0 && <Shield className="w-4 h-4 text-blue-500" />}
+                  {i === 1 && <Star className="w-4 h-4 text-yellow-500" />}
+                  {i === 2 && <Truck className="w-4 h-4 text-green-500" />}
+                  <span className="text-sm">{badge}</span>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -238,7 +376,7 @@ export default function LandingPage() {
                   {isSubmitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    "订阅"
+                    landingPage.cta_text || "订阅"
                   )}
                 </Button>
               </form>

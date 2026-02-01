@@ -1,21 +1,20 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Mail, CheckCircle, Star, Shield, Truck } from "lucide-react";
-import { useState } from "react";
+import { Mail, CheckCircle, Star, Shield, Truck, Play, Pause } from "lucide-react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface LandingPagePreviewProps {
   title: string;
+  subheadline?: string | null;
   heroImageUrl?: string | null;
   painPoints?: string[] | null;
   sellingPoints?: string[] | null;
   trustBadges?: string[] | null;
-  marketingImages?: {
-    lifestyle?: string;
-    multiAngle?: string[];
-    usage?: string;
-  };
+  marketingImages?: Record<string, string | string[]> | null;
+  videoUrl?: string | null;
+  ctaText?: string | null;
   targetAudience?: string;
   landingPageId?: string;
   isInteractive?: boolean;
@@ -23,11 +22,14 @@ interface LandingPagePreviewProps {
 
 export function LandingPagePreview({
   title,
+  subheadline,
   heroImageUrl,
   painPoints,
   sellingPoints,
   trustBadges,
   marketingImages,
+  videoUrl,
+  ctaText = "立即订阅",
   targetAudience,
   landingPageId,
   isInteractive = false,
@@ -35,6 +37,8 @@ export function LandingPagePreview({
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleSubmitEmail = async () => {
     if (!email.trim() || !landingPageId) return;
@@ -58,6 +62,23 @@ export function LandingPagePreview({
       setIsSubmitting(false);
     }
   };
+
+  const toggleVideo = () => {
+    if (videoRef.current) {
+      if (isVideoPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsVideoPlaying(!isVideoPlaying);
+    }
+  };
+
+  // Get marketing images
+  const lifestyleImage = typeof marketingImages?.lifestyle === 'string' ? marketingImages.lifestyle : null;
+  const usageImage = typeof marketingImages?.usage === 'string' ? marketingImages.usage : null;
+  const multiAngleImages = Array.isArray(marketingImages?.multiAngle) ? marketingImages.multiAngle : [];
+  const detailImage = typeof marketingImages?.detail === 'string' ? marketingImages.detail : null;
 
   return (
     <div className="bg-white text-gray-900 overflow-hidden rounded-lg">
@@ -85,14 +106,36 @@ export function LandingPagePreview({
           >
             {title}
           </motion.h1>
+          {subheadline && (
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="text-xl text-gray-600 mb-6 max-w-2xl mx-auto"
+            >
+              {subheadline}
+            </motion.p>
+          )}
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-lg text-gray-600 max-w-2xl mx-auto"
+            className="text-lg text-gray-500 max-w-2xl mx-auto"
           >
             {targetAudience || "创新设计，为您带来全新体验"}
           </motion.p>
+          
+          {/* Hero CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="mt-8"
+          >
+            <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:opacity-90 text-white px-8 py-6 text-lg">
+              {ctaText}
+            </Button>
+          </motion.div>
         </div>
       </section>
 
@@ -124,11 +167,11 @@ export function LandingPagePreview({
       )}
 
       {/* Lifestyle Image */}
-      {marketingImages?.lifestyle && (
+      {lifestyleImage && (
         <section className="py-16 px-8">
           <div className="max-w-4xl mx-auto">
             <img
-              src={marketingImages.lifestyle}
+              src={lifestyleImage}
               alt="产品使用场景"
               className="w-full rounded-2xl shadow-lg"
             />
@@ -163,15 +206,72 @@ export function LandingPagePreview({
         </section>
       )}
 
+      {/* Usage Image */}
+      {usageImage && (
+        <section className="py-16 px-8 bg-slate-50">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
+              🎯 简单易用
+            </h2>
+            <img
+              src={usageImage}
+              alt="产品使用演示"
+              className="w-full rounded-2xl shadow-lg"
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Video Section */}
+      {videoUrl && (
+        <section className="py-16 px-8 bg-gray-900">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-2xl font-bold text-center mb-8 text-white">
+              🎬 产品展示
+            </h2>
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl">
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                className="w-full"
+                loop
+                playsInline
+                onPlay={() => setIsVideoPlaying(true)}
+                onPause={() => setIsVideoPlaying(false)}
+              />
+              <button
+                onClick={toggleVideo}
+                className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
+              >
+                {isVideoPlaying ? (
+                  <Pause className="w-16 h-16 text-white" />
+                ) : (
+                  <Play className="w-16 h-16 text-white" />
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Multi-angle Gallery */}
-      {marketingImages?.multiAngle && marketingImages.multiAngle.length > 0 && (
+      {(multiAngleImages.length > 0 || detailImage) && (
         <section className="py-16 px-8 bg-slate-50">
           <div className="max-w-4xl mx-auto">
             <h2 className="text-2xl font-bold text-center mb-8 text-gray-800">
               📸 产品细节展示
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {marketingImages.multiAngle.map((img, i) => (
+              {detailImage && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="aspect-square rounded-xl overflow-hidden shadow-md col-span-2"
+                >
+                  <img src={detailImage} alt="产品细节" className="w-full h-full object-cover" />
+                </motion.div>
+              )}
+              {multiAngleImages.map((img, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -235,7 +335,7 @@ export function LandingPagePreview({
                   disabled={isSubmitting || !email.trim()}
                   className="bg-white text-blue-600 hover:bg-blue-50 px-6"
                 >
-                  {isSubmitting ? "..." : "订阅"}
+                  {isSubmitting ? "..." : ctaText || "订阅"}
                 </Button>
               </div>
             ) : (
@@ -244,7 +344,7 @@ export function LandingPagePreview({
                   your@email.com
                 </div>
                 <div className="bg-white text-blue-600 px-6 py-3 rounded-lg font-medium">
-                  订阅
+                  {ctaText || "订阅"}
                 </div>
               </div>
             )}

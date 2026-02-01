@@ -105,7 +105,7 @@ serve(async (req) => {
     // Extract and save reviews
     const reviews = extractReviews(markdown);
     if (reviews.length > 0) {
-      const reviewsToInsert = reviews.slice(0, 50).map((review) => ({
+      const reviewsToInsert = reviews.slice(0, 100).map((review) => ({
         competitor_product_id: productId,
         review_text: review.text,
         rating: review.rating,

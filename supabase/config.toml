@@ -6,9 +6,6 @@ verify_jwt = false
 [functions.generate-image]
 verify_jwt = false
 
-[functions.generate-ad-strategy]
-verify_jwt = false
-
 [functions.generate-landing-page]
 verify_jwt = false
 
