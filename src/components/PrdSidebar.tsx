@@ -54,6 +54,7 @@ interface PrdSidebarProps {
   prdData?: PrdData | null;
   competitorInsight?: CompetitorInsight | null;
   onItemClick?: (item: keyof PrdProgress) => void;
+  onViewPrd?: () => void;
   className?: string;
 }
 
@@ -71,7 +72,7 @@ const assetReminders = [
   { icon: Video, label: "视频场景", items: ["6秒故事线", "情感基调"], dataKey: "storyLine" as const },
 ];
 
-export function PrdSidebar({ progress, prdData, competitorInsight, onItemClick, className }: PrdSidebarProps) {
+export function PrdSidebar({ progress, prdData, competitorInsight, onItemClick, onViewPrd, className }: PrdSidebarProps) {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   
   const completedCount = Object.values(progress).filter(Boolean).length;
@@ -280,7 +281,7 @@ export function PrdSidebar({ progress, prdData, competitorInsight, onItemClick, 
 
         <Separator className="bg-border/50" />
 
-        {/* Asset Data Collection Status */}
+        {/* AI Generated Assets Status */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -288,53 +289,26 @@ export function PrdSidebar({ progress, prdData, competitorInsight, onItemClick, 
           className="space-y-3"
         >
           <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Lightbulb className="w-4 h-4 text-yellow-500" />
-            素材数据采集
+            <Lightbulb className="w-4 h-4 text-primary" />
+            AI 素材方案
           </h4>
           <p className="text-xs text-muted-foreground">
-            用于后续视觉生成
+            营销素材和视频将由 AI 自动生成
           </p>
-          <div className="space-y-2">
-            {assetReminders.map((reminder, index) => {
-              const Icon = reminder.icon;
-              const status = getAssetStatus(reminder.dataKey);
-              
-              return (
-                <div 
-                  key={index} 
-                  className={cn(
-                    "rounded-lg p-2 transition-colors",
-                    status.collected ? "bg-primary/10" : "bg-muted/30"
-                  )}
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-foreground mb-1">
-                    {status.collected ? (
-                      <Check className="w-3 h-3 text-primary" />
-                    ) : (
-                      <Icon className="w-3 h-3 text-muted-foreground" />
-                    )}
-                    <span className={status.collected ? "text-primary" : ""}>{reminder.label}</span>
-                    {status.collected && (
-                      <span className="ml-auto text-xs text-primary">✓ 已采集</span>
-                    )}
-                  </div>
-                  {status.collected && status.value ? (
-                    <p className="text-xs text-muted-foreground pl-4 truncate">
-                      {Array.isArray(status.value) ? status.value.join(", ") : status.value}
-                    </p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {reminder.items.map((item, i) => (
-                        <span key={i} className="text-xs bg-background/50 text-muted-foreground px-1.5 py-0.5 rounded">
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          
+          {/* View PRD Button */}
+          {onViewPrd && prdData && (prdData.usageScenario || prdData.coreFeatures?.length) && (
+            <button
+              onClick={onViewPrd}
+              className="w-full mt-2 px-3 py-2.5 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 transition-colors text-left"
+            >
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium text-primary">查看完整 PRD</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">审核并编辑产品需求定义</p>
+            </button>
+          )}
         </motion.div>
 
         {/* Video Assets Status */}

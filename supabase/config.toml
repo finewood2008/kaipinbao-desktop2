@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.analyze-reviews]
 verify_jwt = false
+
+[functions.regenerate-prd-section]
+verify_jwt = false

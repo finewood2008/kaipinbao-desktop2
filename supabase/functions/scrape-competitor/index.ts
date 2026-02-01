@@ -51,7 +51,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url,
-        formats: ["markdown", "html"],
+        formats: ["markdown", "html", "links"],
         onlyMainContent: true,
         waitFor: 3000,
       }),
@@ -75,9 +75,14 @@ serve(async (req) => {
     // Extract product info from scraped data
     const markdown = scrapeData.data?.markdown || "";
     const metadata = scrapeData.data?.metadata || {};
+    const links = scrapeData.data?.links || [];
 
     // Try to extract product details
     const productInfo = extractProductInfo(markdown, metadata, url);
+    
+    // Extract product images
+    const productImages = extractProductImages(markdown, links, url);
+    console.log(`Extracted ${productImages.length} product images`);
 
     // Update product with scraped data
     const { error: updateError } = await supabase
@@ -88,6 +93,7 @@ serve(async (req) => {
         price: productInfo.price,
         rating: productInfo.rating,
         review_count: productInfo.reviewCount,
+        product_images: productImages,
         scraped_data: {
           markdown: markdown.slice(0, 50000), // Limit size
           metadata,
@@ -201,6 +207,105 @@ function extractProductInfo(markdown: string, metadata: any, url: string) {
   }
 
   return { title, description, price, rating, reviewCount };
+}
+
+function extractProductImages(markdown: string, links: string[], url: string): string[] {
+  const images: Set<string> = new Set();
+  const lowerUrl = url.toLowerCase();
+  
+  // Extract image URLs from markdown (![alt](url) format)
+  const markdownImagePattern = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/gi;
+  let match;
+  while ((match = markdownImagePattern.exec(markdown)) !== null) {
+    const imgUrl = match[1];
+    if (isProductImage(imgUrl, lowerUrl)) {
+      images.add(imgUrl);
+    }
+  }
+  
+  // Extract from HTML img tags in markdown
+  const htmlImagePattern = /<img[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
+  while ((match = htmlImagePattern.exec(markdown)) !== null) {
+    const imgUrl = match[1];
+    if (isProductImage(imgUrl, lowerUrl)) {
+      images.add(imgUrl);
+    }
+  }
+  
+  // Extract from links array (filter for image URLs)
+  for (const link of links) {
+    if (/\.(jpg|jpeg|png|webp|gif)/i.test(link) && isProductImage(link, lowerUrl)) {
+      images.add(link);
+    }
+  }
+  
+  // Convert to array and limit to first 10 images
+  return Array.from(images).slice(0, 10);
+}
+
+function isProductImage(imgUrl: string, sourceUrl: string): boolean {
+  const lowerImg = imgUrl.toLowerCase();
+  
+  // Exclude common non-product images
+  const excludePatterns = [
+    /logo/i,
+    /icon/i,
+    /favicon/i,
+    /avatar/i,
+    /banner/i,
+    /ad[_-]/i,
+    /advertisement/i,
+    /sprite/i,
+    /button/i,
+    /arrow/i,
+    /loader/i,
+    /loading/i,
+    /placeholder/i,
+    /1x1/,
+    /transparent/i,
+    /pixel/i,
+  ];
+  
+  if (excludePatterns.some(pattern => pattern.test(lowerImg))) {
+    return false;
+  }
+  
+  // For Amazon, look for product images
+  if (sourceUrl.includes("amazon")) {
+    // Amazon product images typically contain these patterns
+    if (lowerImg.includes("images-amazon") || lowerImg.includes("m.media-amazon")) {
+      // Filter for larger images (product photos are usually larger)
+      if (lowerImg.includes("._sl") || lowerImg.includes("._ac_") || lowerImg.includes("._ss")) {
+        return true;
+      }
+      // Include if it looks like a product image size
+      if (/\d{3,4}x\d{3,4}|_\d{3,4}_/i.test(lowerImg)) {
+        return true;
+      }
+      return true; // Include most Amazon images by default
+    }
+  }
+  
+  // For AliExpress
+  if (sourceUrl.includes("aliexpress")) {
+    if (lowerImg.includes("ae01.alicdn") || lowerImg.includes("ae04.alicdn")) {
+      return true;
+    }
+  }
+  
+  // For eBay
+  if (sourceUrl.includes("ebay")) {
+    if (lowerImg.includes("ebayimg.com")) {
+      return true;
+    }
+  }
+  
+  // General: include if it's a large enough image URL
+  if (/\.(jpg|jpeg|png|webp)/i.test(lowerImg)) {
+    return true;
+  }
+  
+  return false;
 }
 
 function extractReviews(markdown: string): Array<{ text: string; rating?: number }> {
