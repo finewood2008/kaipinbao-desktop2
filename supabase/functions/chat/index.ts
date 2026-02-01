@@ -72,10 +72,10 @@ serve(async (req) => {
 
   try {
     const { messages, projectId, currentStage } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_API_KEY) {
+      throw new Error("GOOGLE_API_KEY is not configured");
     }
 
     // Add stage context to system prompt
@@ -83,21 +83,32 @@ serve(async (req) => {
     const stageName = stageNames[currentStage - 1] || "PRD细化";
     const systemPromptWithStage = `${SYSTEM_PROMPT}\n\n当前阶段：${currentStage} - ${stageName}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPromptWithStage },
-          ...messages,
-        ],
-        stream: true,
-      }),
-    });
+    // Convert messages to Google AI Studio format
+    const googleMessages = messages.map((msg: { role: string; content: string }) => ({
+      role: msg.role === "assistant" ? "model" : "user",
+      parts: [{ text: msg.content }],
+    }));
+
+    // Use Google AI Studio Gemini API with streaming
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${GOOGLE_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: systemPromptWithStage }],
+          },
+          contents: googleMessages,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 8192,
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -106,21 +117,63 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI 额度已用完，请充值后继续" }), {
+      if (response.status === 402 || response.status === 403) {
+        return new Response(JSON.stringify({ error: "API 额度已用完或权限不足" }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
+      console.error("Google AI Studio error:", response.status, text);
       return new Response(JSON.stringify({ error: "AI 服务暂时不可用" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    return new Response(response.body, {
+    // Transform Google SSE format to OpenAI-compatible SSE format
+    const transformStream = new TransformStream({
+      transform(chunk, controller) {
+        const text = new TextDecoder().decode(chunk);
+        const lines = text.split("\n");
+        
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === "[DONE]") {
+              controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+              continue;
+            }
+            
+            try {
+              const data = JSON.parse(jsonStr);
+              const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              
+              if (content) {
+                // Convert to OpenAI-compatible format
+                const openAIFormat = {
+                  choices: [
+                    {
+                      delta: { content },
+                      index: 0,
+                    },
+                  ],
+                };
+                controller.enqueue(
+                  new TextEncoder().encode(`data: ${JSON.stringify(openAIFormat)}\n\n`)
+                );
+              }
+            } catch (e) {
+              // Skip malformed JSON
+            }
+          }
+        }
+      },
+    });
+
+    const transformedStream = response.body?.pipeThrough(transformStream);
+
+    return new Response(transformedStream, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (error) {
