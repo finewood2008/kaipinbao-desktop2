@@ -871,6 +871,120 @@ ${projectDescription ? `**项目描述**：${projectDescription}` : ""}
   return prompt;
 }
 
+// Call Lovable AI Gateway (primary)
+async function callLovableAI(
+  messages: OpenAIMessage[],
+  systemPrompt: string
+): Promise<Response> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-pro-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.filter(m => m.role !== "system"),
+      ],
+      stream: true,
+      temperature: 0.85,
+      max_tokens: 16384,
+    }),
+  });
+
+  return response;
+}
+
+// Call Google Gemini API directly (fallback)
+async function callGeminiDirect(
+  messages: OpenAIMessage[],
+  systemPrompt: string
+): Promise<Response> {
+  const googleApiKey = Deno.env.get("GOOGLE_API_KEY");
+  if (!googleApiKey) {
+    throw new Error("GOOGLE_API_KEY not configured");
+  }
+
+  // Convert to Gemini format
+  const geminiPayload = convertToGeminiFormat(messages, systemPrompt);
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": googleApiKey,
+      },
+      body: JSON.stringify({
+        ...geminiPayload,
+        generationConfig: {
+          temperature: 0.85,
+          maxOutputTokens: 16384,
+        },
+      }),
+    }
+  );
+
+  return response;
+}
+
+// Transform Gemini SSE to OpenAI format
+function createGeminiToOpenAITransformer(): TransformStream {
+  return new TransformStream({
+    transform(chunk, controller) {
+      const text = new TextDecoder().decode(chunk);
+      const lines = text.split("\n");
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6);
+          
+          if (data === "[DONE]") {
+            controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+            
+            // Extract text from Gemini format
+            const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            
+            if (content) {
+              // Convert to OpenAI format
+              const openAIChunk = {
+                choices: [{
+                  index: 0,
+                  delta: { content },
+                }],
+              };
+              controller.enqueue(
+                new TextEncoder().encode(`data: ${JSON.stringify(openAIChunk)}\n\n`)
+              );
+            }
+
+            // Check for finish reason
+            if (parsed.candidates?.[0]?.finishReason) {
+              controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+            }
+          } catch (e) {
+            // Skip malformed JSON
+            console.warn("Failed to parse SSE chunk:", data);
+          }
+        }
+      }
+    },
+  });
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -882,13 +996,6 @@ serve(async (req) => {
 
     if (!projectId) {
       throw new Error("Project ID is required");
-    }
-
-    // Get API key
-    const googleApiKey = Deno.env.get("GOOGLE_API_KEY");
-    if (!googleApiKey) {
-      console.error("GOOGLE_API_KEY not found");
-      throw new Error("Google API key not configured");
     }
 
     // Initialize Supabase client
@@ -926,93 +1033,56 @@ serve(async (req) => {
       initialMarketAnalysis
     );
 
-    // Prepare messages for Gemini
+    // Prepare messages for API
     const apiMessages: OpenAIMessage[] = [
       { role: "system", content: systemPrompt },
       ...(messages || []),
     ];
 
-    // Convert to Gemini format
-    const geminiPayload = convertToGeminiFormat(apiMessages, systemPrompt);
+    console.log("Attempting to call Lovable AI (Gemini 3 Pro)...");
 
-    console.log("Calling Gemini API with streaming...");
+    // Try Lovable AI first (Gemini 3 Pro)
+    let response: Response;
+    let usedFallback = false;
 
-    // Call Google Gemini API with streaming
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": googleApiKey,
-        },
-        body: JSON.stringify({
-          ...geminiPayload,
-          generationConfig: {
-            temperature: 0.85,
-            maxOutputTokens: 16384,
-          },
-        }),
+    try {
+      response = await callLovableAI(apiMessages, systemPrompt);
+      
+      // Check for rate limit or payment errors
+      if (response.status === 429 || response.status === 402 || response.status >= 500) {
+        console.log(`Lovable AI returned ${response.status}, falling back to Gemini direct...`);
+        usedFallback = true;
+        response = await callGeminiDirect(apiMessages, systemPrompt);
       }
-    );
+    } catch (lovableError) {
+      console.error("Lovable AI error, falling back to Gemini direct:", lovableError);
+      usedFallback = true;
+      response = await callGeminiDirect(apiMessages, systemPrompt);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      console.error("AI API error:", response.status, errorText);
+      throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
-    // Create a transform stream to convert Gemini SSE to OpenAI format
-    const transformStream = new TransformStream({
-      transform(chunk, controller) {
-        const text = new TextDecoder().decode(chunk);
-        const lines = text.split("\n");
+    // If using fallback (Gemini direct), transform the response
+    if (usedFallback) {
+      const transformStream = createGeminiToOpenAITransformer();
+      const readableStream = response.body!.pipeThrough(transformStream);
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            
-            if (data === "[DONE]") {
-              controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-              continue;
-            }
+      return new Response(readableStream, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    }
 
-            try {
-              const parsed = JSON.parse(data);
-              
-              // Extract text from Gemini format
-              const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
-              
-              if (content) {
-                // Convert to OpenAI format
-                const openAIChunk = {
-                  choices: [{
-                    index: 0,
-                    delta: { content },
-                  }],
-                };
-                controller.enqueue(
-                  new TextEncoder().encode(`data: ${JSON.stringify(openAIChunk)}\n\n`)
-                );
-              }
-
-              // Check for finish reason
-              if (parsed.candidates?.[0]?.finishReason) {
-                controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-              }
-            } catch (e) {
-              // Skip malformed JSON
-              console.warn("Failed to parse SSE chunk:", data);
-            }
-          }
-        }
-      },
-    });
-
-    // Pipe response through transform stream
-    const readableStream = response.body!.pipeThrough(transformStream);
-
-    return new Response(readableStream, {
+    // Lovable AI already returns OpenAI-compatible format
+    return new Response(response.body, {
       headers: {
         ...corsHeaders,
         "Content-Type": "text/event-stream",
