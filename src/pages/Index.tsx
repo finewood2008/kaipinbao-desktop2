@@ -103,12 +103,12 @@ export default function Index() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center justify-center pt-20 pb-16">
+      <section className="relative min-h-[75vh] flex items-center justify-center pt-16 pb-10">
         {/* Background gradient effects */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-to-b from-primary/15 via-primary/5 to-transparent rounded-full blur-3xl" />
-          <div className="absolute top-1/3 left-1/3 w-[300px] h-[300px] bg-cyan-500/10 rounded-full blur-3xl" />
-          <div className="absolute top-1/3 right-1/3 w-[200px] h-[200px] bg-orange-500/10 rounded-full blur-3xl" />
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-gradient-to-b from-primary/15 via-primary/5 to-transparent rounded-full blur-3xl" />
+          <div className="absolute top-1/3 left-1/3 w-[250px] h-[250px] bg-cyan-500/10 rounded-full blur-3xl" />
+          <div className="absolute top-1/3 right-1/3 w-[150px] h-[150px] bg-orange-500/10 rounded-full blur-3xl" />
         </div>
 
         <div className="container mx-auto px-6 relative z-10 text-center">
@@ -116,10 +116,10 @@ export default function Index() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex justify-center mb-6"
+            className="flex justify-center mb-4"
           >
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-xs text-muted-foreground">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-muted-foreground">
+              <Sparkles className="w-3 h-3 text-cyan-400" />
               跨境开品神器
             </span>
           </motion.div>
@@ -129,17 +129,17 @@ export default function Index() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black tracking-tight mb-4"
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight mb-3"
           >
             开品宝
           </motion.h1>
 
-          {/* Subtitle - No italic */}
+          {/* Subtitle */}
           <motion.h2
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-medium mb-6"
+            className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-medium mb-4"
           >
             <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
               您的第二
@@ -154,7 +154,7 @@ export default function Index() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-sm md:text-base text-muted-foreground mb-3 max-w-xl mx-auto"
+            className="text-xs md:text-sm text-muted-foreground mb-2 max-w-md mx-auto"
           >
             专为跨境电商打造的一站式产品研发平台，开品从未如此简单
           </motion.p>
@@ -163,34 +163,34 @@ export default function Index() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.25 }}
-            className="text-xs text-muted-foreground/60 mb-8"
+            className="text-[11px] text-muted-foreground/60 mb-6"
           >
             市场调研 · 竞品分析 · 产品设计 · ID生成 · 落地页
           </motion.p>
 
-          {/* CTA Button - Smaller */}
+          {/* CTA Button */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="mb-12"
+            className="mb-8"
           >
             <Button
-              className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm px-6 py-5 h-auto rounded-lg shadow-[0_0_30px_rgba(251,146,60,0.25)] hover:shadow-[0_0_40px_rgba(251,146,60,0.35)] transition-all duration-300"
+              className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm px-5 py-4 h-auto rounded-lg shadow-[0_0_25px_rgba(251,146,60,0.2)] hover:shadow-[0_0_35px_rgba(251,146,60,0.3)] transition-all duration-300"
               onClick={() => navigate("/auth")}
             >
-              <Sparkles className="w-4 h-4 mr-1.5" />
+              <Sparkles className="w-3.5 h-3.5 mr-1.5" />
               开始设计
-              <ArrowRight className="w-4 h-4 ml-1.5" />
+              <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
             </Button>
           </motion.div>
 
-          {/* Stats - Smaller */}
+          {/* Stats */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="flex flex-wrap justify-center gap-10 md:gap-16"
+            className="flex flex-wrap justify-center gap-8 md:gap-12"
           >
             {stats.map((stat, i) => (
               <motion.div
@@ -200,13 +200,13 @@ export default function Index() {
                 transition={{ delay: 0.5 + i * 0.1 }}
                 className="text-center"
               >
-                <div className="text-2xl md:text-3xl lg:text-4xl font-light mb-1">
+                <div className="text-xl md:text-2xl lg:text-3xl font-light mb-0.5">
                   <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
                     {stat.value}
                   </span>
                   <span className="text-orange-400">{stat.unit}</span>
                 </div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground/50">
+                <div className="text-[9px] uppercase tracking-wider text-muted-foreground/50">
                   {stat.labelCn}
                 </div>
               </motion.div>
@@ -216,10 +216,10 @@ export default function Index() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 relative">
+      <section className="py-12 relative">
         {/* Background subtle glow */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-gradient-to-r from-cyan-500/5 via-primary/10 to-orange-500/5 rounded-full blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-gradient-to-r from-cyan-500/5 via-primary/10 to-orange-500/5 rounded-full blur-3xl" />
         </div>
         
         <div className="container mx-auto px-6 relative z-10">
@@ -227,18 +227,18 @@ export default function Index() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-8"
           >
-            <div className="inline-flex items-center gap-2 mb-3">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-              <span className="text-cyan-400 text-xs uppercase tracking-widest">Core Features</span>
+            <div className="inline-flex items-center gap-2 mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-cyan-400 text-[10px] uppercase tracking-widest">Core Features</span>
             </div>
-            <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold">
+            <h3 className="text-xl md:text-2xl lg:text-3xl font-bold">
               五大核心能力
             </h3>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-3">
             {features.map((feature, i) => (
               <motion.div
                 key={feature.title}
@@ -246,24 +246,20 @@ export default function Index() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08 }}
-                className="group relative p-5 rounded-xl bg-gradient-to-b from-white/[0.03] to-white/[0.01] border border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden"
+                className="group relative p-4 rounded-xl bg-gradient-to-b from-white/[0.03] to-white/[0.01] border border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden"
               >
-                {/* Animated gradient background on hover */}
                 <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-cyan-500/10 via-primary/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-all duration-500" />
-                
-                {/* Top light bar */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
                 <div className="relative z-10">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 via-cyan-500/15 to-orange-500/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-all duration-300">
-                    <feature.icon className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 via-cyan-500/15 to-orange-500/10 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all duration-300">
+                    <feature.icon className="w-4 h-4 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
                   </div>
-                  <h4 className="text-base font-semibold mb-1.5 group-hover:text-cyan-400 transition-colors">{feature.title}</h4>
-                  <p className="text-xs text-muted-foreground/60 leading-relaxed">{feature.description}</p>
+                  <h4 className="text-sm font-semibold mb-1 group-hover:text-cyan-400 transition-colors">{feature.title}</h4>
+                  <p className="text-[11px] text-muted-foreground/60 leading-relaxed">{feature.description}</p>
                 </div>
 
-                {/* Corner glow */}
-                <div className="absolute -bottom-10 -right-10 w-20 h-20 bg-cyan-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="absolute -bottom-8 -right-8 w-16 h-16 bg-cyan-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               </motion.div>
             ))}
           </div>
@@ -271,45 +267,45 @@ export default function Index() {
       </section>
 
       {/* Target Audience Section */}
-      <section className="py-20 relative">
+      <section className="py-12 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/5 to-transparent" />
         <div className="container mx-auto px-6 relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-8"
           >
-            <div className="inline-flex items-center gap-2 mb-3">
-              <Sparkles className="w-4 h-4 text-orange-400" />
-              <span className="text-orange-400 text-xs uppercase tracking-widest">Target Audience</span>
+            <div className="inline-flex items-center gap-2 mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+              <span className="text-orange-400 text-[10px] uppercase tracking-widest">Target Audience</span>
             </div>
-            <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-3">
+            <h3 className="text-xl md:text-2xl lg:text-3xl font-bold mb-2">
               专为跨境电商打造
             </h3>
-            <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
               开品宝是跨境开品的神器，让产品研发效率提升20倍
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-4 max-w-2xl mx-auto">
             <motion.div
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              className="group relative p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] hover:border-cyan-500/20 transition-all duration-500 overflow-hidden"
+              className="group relative p-5 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] hover:border-cyan-500/20 transition-all duration-500 overflow-hidden"
             >
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               
               <div className="relative z-10">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <ShoppingCart className="w-6 h-6 text-cyan-400" />
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <ShoppingCart className="w-5 h-5 text-cyan-400" />
                 </div>
-                <h4 className="text-xl font-bold mb-2 group-hover:text-cyan-400 transition-colors">跨境电商公司</h4>
-                <p className="text-sm text-muted-foreground mb-4">
+                <h4 className="text-lg font-bold mb-1.5 group-hover:text-cyan-400 transition-colors">跨境电商公司</h4>
+                <p className="text-xs text-muted-foreground mb-3">
                   快速验证市场机会，降低试错成本
                 </p>
-                <ul className="space-y-2 text-xs text-muted-foreground/70">
+                <ul className="space-y-1.5 text-[11px] text-muted-foreground/70">
                   <li className="flex items-center gap-2">
                     <span className="w-1 h-1 rounded-full bg-cyan-400" />
                     快速生成产品方案
@@ -330,19 +326,19 @@ export default function Index() {
               initial={{ opacity: 0, x: 30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              className="group relative p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] hover:border-orange-500/20 transition-all duration-500 overflow-hidden"
+              className="group relative p-5 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] hover:border-orange-500/20 transition-all duration-500 overflow-hidden"
             >
-              <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-orange-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               
               <div className="relative z-10">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <Factory className="w-6 h-6 text-orange-400" />
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                  <Factory className="w-5 h-5 text-orange-400" />
                 </div>
-                <h4 className="text-xl font-bold mb-2 group-hover:text-orange-400 transition-colors">外贸工厂</h4>
-                <p className="text-sm text-muted-foreground mb-4">
+                <h4 className="text-lg font-bold mb-1.5 group-hover:text-orange-400 transition-colors">外贸工厂</h4>
+                <p className="text-xs text-muted-foreground mb-3">
                   专业产品输出，提升开发效率
                 </p>
-                <ul className="space-y-2 text-xs text-muted-foreground/70">
+                <ul className="space-y-1.5 text-[11px] text-muted-foreground/70">
                   <li className="flex items-center gap-2">
                     <span className="w-1 h-1 rounded-full bg-orange-400" />
                     专业PRD文档生成
@@ -363,15 +359,15 @@ export default function Index() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-white/5 py-12 bg-[#080c14]">
+      <footer className="border-t border-white/5 py-8 bg-[#080c14]">
         <div className="container mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <img src={logoImage} alt="开品宝" className="h-8" />
-              <span className="font-semibold">开品宝</span>
-              <span className="text-muted-foreground/60">— AI产品研发平台</span>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <img src={logoImage} alt="开品宝" className="h-6" />
+              <span className="text-sm font-semibold">开品宝</span>
+              <span className="text-xs text-muted-foreground/60">— AI产品研发平台</span>
             </div>
-            <p className="text-sm text-muted-foreground/50">
+            <p className="text-xs text-muted-foreground/50">
               © 2025 开品宝. All rights reserved.
             </p>
           </div>
