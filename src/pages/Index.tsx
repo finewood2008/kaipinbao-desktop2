@@ -19,6 +19,8 @@ import {
   Sparkles
 } from "lucide-react";
 import logoImage from "@/assets/logo.png";
+import featureProductDesign from "@/assets/feature-product-design.jpg";
+import featureIdRender from "@/assets/feature-id-render.jpg";
 
 export default function Index() {
   const { user, isLoading } = useAuth();
@@ -55,13 +57,13 @@ export default function Index() {
       icon: Palette,
       title: "产品设计",
       description: "AI辅助产品定义，生成专业PRD文档",
-      image: "https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=400&h=300&fit=crop&q=80",
+      image: featureProductDesign,
     },
     {
       icon: Image,
       title: "ID渲染生成",
       description: "基于PRD自动生成产品渲染图",
-      image: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&h=300&fit=crop&q=80",
+      image: featureIdRender,
     },
     {
       icon: FileText,
@@ -305,8 +307,8 @@ export default function Index() {
                   <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-primary/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-all duration-500" />
                   
                   <div className="relative z-10">
-                    <h4 className="text-sm font-semibold mb-1 group-hover:text-cyan-400 transition-colors">{feature.title}</h4>
-                    <p className="text-xs text-muted-foreground/60 leading-relaxed">{feature.description}</p>
+                    <h4 className="text-base font-bold mb-1.5 text-white group-hover:text-cyan-300 transition-colors drop-shadow-[0_0_10px_rgba(34,211,238,0.3)]">{feature.title}</h4>
+                    <p className="text-xs text-muted-foreground/80 leading-relaxed font-medium">{feature.description}</p>
                   </div>
                 </div>
 
