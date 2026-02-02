@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { Sparkles, ArrowRight, MessageSquare, Palette, Rocket, Loader2 } from "lucide-react";
+import { ArrowRight, MessageSquare, Palette, Rocket, Loader2 } from "lucide-react";
+import logoImage from "@/assets/logo.png";
 
 export default function Index() {
   const { user, isLoading } = useAuth();
@@ -36,12 +37,9 @@ export default function Index() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-center gap-3 mb-16"
+            className="flex items-center justify-center mb-16"
           >
-            <div className="w-14 h-14 rounded-2xl bg-gradient-primary flex items-center justify-center glow-primary">
-              <Sparkles className="w-7 h-7 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold text-gradient">开品宝</span>
+            <img src={logoImage} alt="KAI Logo" className="h-14" />
           </motion.div>
 
           {/* Headline */}
