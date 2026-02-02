@@ -1,100 +1,199 @@
 
-目标：让“AI 产品经理”对话区始终呈现为“内部可滚动的滚动框”，而不是把整个页面撑高；并保证左侧信息收集栏固定可见（不跟随对话滚动）。
+# AI 产品经理对话模块重构方案
+
+## 问题诊断
+
+通过代码审查，发现当前模块存在以下问题：
+
+1. **ScrollArea 高度继承链断裂**：虽然已多次尝试添加 `min-h-0`，但整个布局层级过于复杂，Radix ScrollArea 仍无法正确计算高度
+2. **思考进度条存在但不稳定**：`isSending && !isStreaming` 条件下的进度组件渲染正常，但由于布局问题可能被挤出可视区
+3. **模型需升级**：当前使用 `gemini-2.5-flash`，需改为 `google/gemini-3-pro-preview`（主）+ 回退机制
 
 ---
 
-## 现状定位（基于代码检查）
-当前 `AiProductManagerPanel.tsx` 内部已经用了：
-- 外层：`flex-1 flex h-full overflow-hidden`
-- 对话区：`<div className="flex-1 min-h-0 relative">` + `<ScrollArea className="h-full">`
+## 重构策略
 
-这套写法在“父容器高度被正确约束”的前提下是可滚动的。
-
-问题点通常不在这个组件内部，而在它的父级链路上：只要任意一层父容器缺少 `min-h-0`（或没有形成可计算高度），`ScrollArea` 就会被内容撑高，导致“看起来没有滚动框”。
-
-在本项目中，`AiProductManagerPanel` 位于：
-`Project.tsx (TabsContent chat)` → `PrdPhase.tsx (flex column)` → `AiProductManagerPanel.tsx`
-
-目前看到：
-- `Project.tsx` 的 `Tabs`/`TabsContent` 虽然有 `flex-1` 和 `overflow-hidden`，但缺少关键的 `min-h-0`（Radix TabsContent 默认可能会让子元素高度无法收敛）
-- `PrdPhase.tsx` 顶层容器 `h-full overflow-hidden`，但中间“Phase Content”容器是 `flex-1 overflow-hidden mt-4`，也缺少 `min-h-0`，会导致内部滚动失效（常见的 flex 子项最小高度问题）
+采用"**删除重写**"策略，彻底重建 `AiProductManagerPanel` 组件，使用更简洁、可靠的布局方案。
 
 ---
 
-## 实施方案（以“高度约束链路”为核心）
-### 1) 修复高度约束链路：在父级补齐 `min-h-0`
-修改文件：`src/pages/Project.tsx`
-- 给 Tabs 容器补齐 `min-h-0`
-  - 现有：`className="flex-1 flex flex-col"`
-  - 计划：改为 `className="flex-1 flex flex-col min-h-0"`
-- 给 `TabsContent value="chat"` 补齐 `min-h-0`
-  - 现有：`className="flex-1 flex overflow-hidden m-0"`
-  - 计划：改为 `className="flex-1 flex overflow-hidden min-h-0 m-0"`
+## 技术方案
 
-预期效果：
-- `PrdPhase` 能拿到一个“可计算且被约束的高度”，内部滚动才会触发。
+### 1. 布局方案（核心）
+
+采用 **CSS Grid + absolute positioning** 替代复杂的 Flexbox 嵌套：
+
+```text
++--------------------------------------------------+
+|  AiProductManagerPanel (grid cols: 280px 1fr)    |
+|  ┌─────────────────┬────────────────────────────┐|
+|  │ Left Sidebar    │ Right Chat Area            ││
+|  │ (fixed width)   │ (flex-1, relative)         ││
+|  │ ScrollArea      │ ┌────────────────────────┐ ││
+|  │                 │ │ Header (fixed height)  │ ││
+|  │                 │ ├────────────────────────┤ ││
+|  │                 │ │ Messages Container     │ ││
+|  │                 │ │ (absolute inset)       │ ││
+|  │                 │ │ ┌──────────────────┐   │ ││
+|  │                 │ │ │ ScrollArea       │   │ ││
+|  │                 │ │ │ (h-full)         │   │ ││
+|  │                 │ │ └──────────────────┘   │ ││
+|  │                 │ ├────────────────────────┤ ││
+|  │                 │ │ Input (fixed height)  │ ││
+|  └─────────────────┴────────────────────────────┘|
++--------------------------------------------------+
+```
+
+关键技术点：
+- 外层使用 `display: grid; grid-template-columns: 280px 1fr;`
+- 右侧聊天区使用 `position: relative` + 内部 `position: absolute` 容器
+- 消息容器使用 `absolute inset-x-0 top-[header] bottom-[input]`
+- 这样 ScrollArea 可以获得明确的像素高度，滚动必定生效
+
+### 2. AI 思考进度条
+
+提取为独立组件 `AiThinkingIndicator`：
+
+```text
+┌──────────────────────────────────────────────────┐
+│  💭 AI 产品经理正在思考...                        │
+│  ┌──────────────────────────────────────────────┐│
+│  │ ████████████████░░░░░░░░░░░░ 45%            ││
+│  │ [分析数据 ✓] → [整合洞察 ●] → [生成提案 ○]   ││
+│  └──────────────────────────────────────────────┘│
+│  预计等待 10-15 秒                               │
+└──────────────────────────────────────────────────┘
+```
+
+特点：
+- 3 步骤可视化（分析数据 → 整合洞察 → 生成提案）
+- 步骤之间有流畅的过渡动画
+- 主进度条带发光脉冲效果
+- 每个步骤有独立的小进度条
+
+### 3. 模型升级（chat Edge Function）
+
+**策略：主用 Lovable AI Gemini 3 Pro + 自动回退**
+
+```text
+1. 首选：调用 Lovable AI Gateway
+   - 模型：google/gemini-3-pro-preview
+   - API：https://ai.gateway.lovable.dev/v1/chat/completions
+   - 密钥：LOVABLE_API_KEY（自动提供）
+
+2. 回退：调用 Google Gemini 直连
+   - 模型：gemini-2.5-flash
+   - API：https://generativelanguage.googleapis.com/v1beta/models/
+   - 密钥：GOOGLE_API_KEY（用户已配置）
+
+3. 触发回退条件：
+   - 429 Too Many Requests（速率限制）
+   - 402 Payment Required（额度不足）
+   - 5xx 服务器错误
+```
+
+前端调用方式保持不变（OpenAI 兼容 SSE 格式）。
 
 ---
 
-### 2) PrdPhase 内部补齐 `min-h-0` 并消除“h-full 依赖”
-修改文件：`src/components/PrdPhase.tsx`
-- 顶层容器保持 flex column，但确保可收敛：
-  - 现有：`className="flex-1 flex flex-col h-full overflow-hidden"`
-  - 计划：改为 `className="flex-1 flex flex-col min-h-0 overflow-hidden"`
-- Phase Content 容器补齐 `min-h-0`
-  - 现有：`className="flex-1 overflow-hidden mt-4"`
-  - 计划：改为 `className="flex-1 min-h-0 overflow-hidden mt-4"`
-- 各 phase 的 `motion.div className="h-full"` 改为更稳的写法（避免 h-full 依赖父级高度计算不稳定）：
-  - 计划：改为 `className="flex-1 min-h-0"`（或 `className="h-full min-h-0"`，依据现有布局最少改动）
+## 文件变更清单
 
-预期效果：
-- Phase 3（AI 产品经理）永远不会把父级撑开。
-- `AiProductManagerPanel` 的 ScrollArea “一定”出现内部滚动。
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `src/components/AiProductManagerPanel.tsx` | **重写** | 全新布局 + 滚动方案 |
+| `src/components/AiThinkingIndicator.tsx` | **新建** | 独立的思考进度组件 |
+| `supabase/functions/chat/index.ts` | **修改** | Gemini 3 Pro 主模型 + 回退逻辑 |
 
 ---
 
-### 3) AiProductManagerPanel：把“滚动容器”写得更不依赖 h-full
-修改文件：`src/components/AiProductManagerPanel.tsx`
-虽然内部看起来接近正确，但为了更稳：
-- 将 `<ScrollArea className="h-full">` 改为更典型的 flex 写法：
-  - 计划：`className="flex-1 min-h-0"`（并确保它的父容器也是 `flex flex-col` 或者当前 `relative` 容器仍能给它高度）
-- 同时确保右侧 Chat Area（header + content + input）这三段结构：
-  - header：`flex-shrink-0`
-  - messages：`flex-1 min-h-0`（已有）
-  - input：`flex-shrink-0`（已有）
+## 详细实现
 
-预期效果：
-- 即使某些情况下 `h-full` 在不同浏览器/容器下高度继承不稳定，仍然能滚动。
+### AiProductManagerPanel.tsx（重写）
+
+```text
+组件结构：
+1. 外层 Grid 容器
+   - grid-template-columns: 280px 1fr
+   - h-full overflow-hidden
+
+2. 左侧边栏（保持现有 PrdExtractionSidebar）
+   - flex-shrink-0
+   - 内部自带 ScrollArea
+
+3. 右侧聊天区
+   - flex flex-col min-h-0
+   - Header: 56px 固定高度
+   - Messages: relative flex-1 min-h-0
+     - absolute inset-0 容器
+     - ScrollArea h-full
+   - Input: 80px 固定高度
+
+4. 消息列表
+   - 空状态
+   - 消息渲染
+   - AI 思考指示器
+   - 滚动锚点
+
+5. 滚动控制
+   - IntersectionObserver 检测底部
+   - "回到底部" 浮动按钮
+```
+
+### AiThinkingIndicator.tsx（新建）
+
+```text
+Props:
+  - currentStep: 0 | 1 | 2（当前步骤）
+  - progress: number（0-100，模拟进度）
+
+内部状态：
+  - 使用 useEffect 模拟步骤推进
+  - 0-5s: Step 1 (分析数据)
+  - 5-10s: Step 2 (整合洞察)
+  - 10s+: Step 3 (生成提案)
+
+UI 元素：
+  - 头部：图标 + 标题 + 脉冲动画
+  - 主进度条：渐变色 + 发光效果
+  - 步骤指示器：3 个卡片，当前步骤高亮
+  - 预计时间提示
+```
+
+### chat/index.ts 修改
+
+```text
+修改点：
+1. 新增 callLovableAI() 函数
+   - 调用 ai.gateway.lovable.dev
+   - 模型：google/gemini-3-pro-preview
+   - 返回 OpenAI 兼容 SSE 流
+
+2. 修改主函数逻辑
+   - 首先尝试 Lovable AI
+   - 捕获 429/402/5xx 错误
+   - 错误时回退到现有 Gemini 直连
+
+3. 保留现有功能
+   - 系统提示词不变
+   - PRD 数据提取逻辑不变
+   - 响应格式转换不变
+```
 
 ---
 
-## 验证方法（必须逐条验证）
-1. 进入 `/project/:id` → PRD 阶段 → AI 产品经理对话页面
-2. 人为制造长对话（至少 30+ 条消息，或让 AI 输出很长的 markdown）
-3. 观察：
-   - 页面整体不应该出现“整个页面变长”的趋势（主要滚动发生在对话框内部）
-   - 对话区域出现独立滚动条/可滚动行为
-   - 左侧信息收集栏始终固定在视窗内（不跟随对话上下移动）
-4. 验证“回到底部”按钮：手动上滚后出现，点击能回到底部
+## 预期效果
+
+1. ✅ 对话区域可靠滚动，无论消息多少都不会撑破布局
+2. ✅ 左侧 PRD 信息收集栏固定可见
+3. ✅ AI 思考时显示清晰的 3 步骤进度条
+4. ✅ 使用 Gemini 3 Pro 作为主模型，提升回复质量
+5. ✅ 自动回退机制确保高可用性
 
 ---
 
-## 可能的边界问题与处理
-- Radix TabsContent/AnimatePresence 动画切换可能导致初次进入时高度尚未稳定：
-  - 处理：必要时在进入 phase3 时触发一次 `scrollToBottom("auto")`（你目前已经有这套逻辑）
-- 如果外层布局（Project 页面）某一层容器并非 `overflow-hidden` 而是 `overflow-auto`，会导致页面也滚动：
-  - 处理：保持“内容区容器”只作为高度约束与裁剪，滚动只发生在对话 ScrollArea
+## 测试要点
 
----
-
-## 涉及文件清单
-- `src/pages/Project.tsx`（Tabs/TabsContent 增加 min-h-0，保证高度链路）
-- `src/components/PrdPhase.tsx`（容器 min-h-0，phase wrapper 由 h-full 调整为 flex/min-h-0）
-- `src/components/AiProductManagerPanel.tsx`（ScrollArea 用 flex-1/min-h-0 更稳地实现内部滚动）
-
----
-
-## 交付结果
-- AI 产品经理对话区稳定为“内部滚动框”
-- 左侧信息收集栏固定可见
-- 不再出现“对话始终无法正确显示滚动框/页面被撑高”的问题
+1. 发送多条消息，验证滚动框正常工作
+2. 观察 AI 思考时的进度条动画是否流畅
+3. 检查网络请求确认使用了正确的模型
+4. 模拟高负载场景验证回退机制
