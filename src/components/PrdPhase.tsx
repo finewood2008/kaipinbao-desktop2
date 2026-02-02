@@ -661,7 +661,7 @@ export function PrdPhase({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Phase Indicator */}
       <Card className="glass border-border/50 overflow-hidden mx-4 mt-4">
         <CardContent className="p-2">
@@ -788,7 +788,7 @@ export function PrdPhase({
       </AnimatePresence>
 
       {/* Phase Content */}
-      <div className="flex-1 overflow-hidden mt-4">
+      <div className="flex-1 min-h-0 overflow-hidden mt-4">
         <AnimatePresence mode="wait">
           {currentPhase === 1 && (
             <motion.div
@@ -797,7 +797,7 @@ export function PrdPhase({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
-              className="h-full"
+              className="h-full min-h-0"
             >
               <MarketAnalysisPhase
                 projectId={projectId}
@@ -814,7 +814,7 @@ export function PrdPhase({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
-              className="h-full"
+              className="h-full min-h-0"
             >
               <CompetitorResearch
                 projectId={projectId}
@@ -831,7 +831,7 @@ export function PrdPhase({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
-              className="h-full"
+              className="h-full min-h-0"
             >
               <AiProductManagerPanel
                 projectId={projectId}
@@ -858,7 +858,7 @@ export function PrdPhase({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
-              className="h-full"
+              className="h-full min-h-0"
             >
               <PrdDocumentPanel
                 prdData={prdData}
