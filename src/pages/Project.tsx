@@ -451,43 +451,20 @@ export default function ProjectPage() {
               </div>
             </div>
           </div>
-          <StageIndicator currentStage={project?.current_stage || 1} />
+          <StageIndicator 
+            currentStage={project?.current_stage || 1} 
+            onStageClick={(stageId) => {
+              if (stageId === 1) setActiveTab("chat");
+              else if (stageId === 2) setActiveTab("images");
+              else if (stageId === 3) setActiveTab("landing");
+            }}
+          />
         </div>
       </header>
 
       {/* Content Area with Tabs */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <div className="border-b border-border/50 px-4">
-            <TabsList className="bg-transparent">
-              <TabsTrigger value="chat" className="data-[state=active]:bg-muted gap-2">
-                <MessageSquare className="w-4 h-4" />
-                PRD 定义
-              </TabsTrigger>
-              <TabsTrigger 
-                value="images" 
-                className="data-[state=active]:bg-muted gap-2"
-                disabled={project?.current_stage === 1}
-              >
-                <Image className="w-4 h-4" />
-                视觉生成
-                {project?.current_stage === 1 && (
-                  <span className="text-xs text-muted-foreground ml-1">(完成PRD解锁)</span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="landing" 
-                className="data-[state=active]:bg-muted gap-2"
-                disabled={project?.current_stage !== 3}
-              >
-                <Globe className="w-4 h-4" />
-                落地页
-                {project?.current_stage !== 3 && (
-                  <span className="text-xs text-muted-foreground ml-1">(选择设计解锁)</span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-          </div>
 
           {/* PRD Tab - Using new PrdPhase component */}
           <TabsContent value="chat" className="flex-1 flex overflow-hidden m-0">

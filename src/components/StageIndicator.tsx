@@ -5,35 +5,53 @@ import { cn } from "@/lib/utils";
 interface StageIndicatorProps {
   currentStage: number;
   className?: string;
+  onStageClick?: (stageId: number) => void;
 }
 
 const stages = [
-  { id: 1, name: "PRD 细化", icon: MessageSquare, description: "ID探索与产品定义" },
-  { id: 2, name: "视觉生成", icon: Palette, description: "AI图像生成与迭代" },
+  { id: 1, name: "产品定义", icon: MessageSquare, description: "ID探索与产品定义" },
+  { id: 2, name: "产品设计", icon: Palette, description: "AI图像生成与迭代" },
   { id: 3, name: "落地页", icon: Rocket, description: "营销页面与发布" },
 ];
 
-export function StageIndicator({ currentStage, className }: StageIndicatorProps) {
+export function StageIndicator({ currentStage, className, onStageClick }: StageIndicatorProps) {
+  const handleStageClick = (stageId: number) => {
+    // Only allow clicking on completed stages or current stage
+    if (stageId <= currentStage && onStageClick) {
+      onStageClick(stageId);
+    }
+  };
+
   return (
     <div className={cn("flex items-center justify-between", className)}>
       {stages.map((stage, index) => {
         const isCompleted = currentStage > stage.id;
         const isCurrent = currentStage === stage.id;
+        const isClickable = stage.id <= currentStage;
         const Icon = stage.icon;
 
         return (
           <div key={stage.id} className="flex items-center flex-1">
             {/* Stage circle */}
-            <div className="flex flex-col items-center">
+            <div 
+              className={cn(
+                "flex flex-col items-center",
+                isClickable && "cursor-pointer group"
+              )}
+              onClick={() => handleStageClick(stage.id)}
+            >
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: index * 0.1 }}
+                whileHover={isClickable ? { scale: 1.1 } : undefined}
+                whileTap={isClickable ? { scale: 0.95 } : undefined}
                 className={cn(
                   "relative flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300",
                   isCompleted && "bg-stage-3 border-stage-3",
                   isCurrent && "border-primary bg-primary/20 glow-primary",
-                  !isCompleted && !isCurrent && "border-muted bg-muted/20"
+                  !isCompleted && !isCurrent && "border-muted bg-muted/20",
+                  isClickable && "hover:border-primary/80"
                 )}
               >
                 {isCompleted ? (
@@ -57,8 +75,9 @@ export function StageIndicator({ currentStage, className }: StageIndicatorProps)
               <div className="mt-2 text-center">
                 <p
                   className={cn(
-                    "text-sm font-medium",
-                    isCurrent ? "text-primary" : isCompleted ? "text-foreground" : "text-muted-foreground"
+                    "text-sm font-medium transition-colors",
+                    isCurrent ? "text-primary" : isCompleted ? "text-foreground" : "text-muted-foreground",
+                    isClickable && "group-hover:text-primary"
                   )}
                 >
                   {stage.name}
