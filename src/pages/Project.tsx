@@ -463,11 +463,11 @@ export default function ProjectPage() {
       </header>
 
       {/* Content Area with Tabs */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
 
           {/* PRD Tab - Using new PrdPhase component */}
-          <TabsContent value="chat" className="flex-1 flex overflow-hidden m-0">
+          <TabsContent value="chat" className="flex-1 flex min-h-0 overflow-hidden m-0">
             {project?.current_stage === 1 ? (
               <PrdPhase
                 projectId={id || ""}
