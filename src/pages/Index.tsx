@@ -80,7 +80,7 @@ export default function Index() {
           <div className="flex items-center gap-3">
             <img src={logoImage} alt="开品宝" className="h-9" />
             <div className="flex flex-col">
-              <span className="text-xs text-muted-foreground leading-none">AI造物所</span>
+              <span className="text-xs text-muted-foreground leading-none">半人马AI</span>
               <span className="text-base font-bold text-foreground leading-tight">开品宝</span>
             </div>
           </div>
