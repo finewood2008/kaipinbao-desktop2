@@ -121,8 +121,9 @@ export default function Dashboard() {
       <header className="border-b border-border/50 glass sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logoImage} alt="KAI Logo" className="h-10" />
-            <p className="text-xs text-muted-foreground">产品研发工作台</p>
+            <img src={logoImage} alt="开品宝" className="h-10" />
+            <span className="text-xl font-bold text-foreground">开品宝</span>
+            <span className="text-xs text-muted-foreground hidden md:block">产品研发工作台</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground hidden md:block">
