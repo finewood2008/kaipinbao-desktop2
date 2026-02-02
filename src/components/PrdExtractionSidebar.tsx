@@ -1,9 +1,37 @@
-import { motion } from "framer-motion";
-import { MapPin, Users, Palette, Zap, Check, Circle, Image as ImageIcon, Tag, DollarSign, Package, Lightbulb } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  MapPin, 
+  Users, 
+  Palette, 
+  Zap, 
+  Check, 
+  Circle, 
+  Image as ImageIcon, 
+  Tag, 
+  DollarSign, 
+  Lightbulb,
+  Pencil,
+  X,
+  ArrowRight,
+  Asterisk
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export interface PrdData {
@@ -113,15 +141,18 @@ interface PrdExtractionSidebarProps {
   prdData: PrdData | null;
   competitorProducts?: CompetitorProduct[];
   className?: string;
+  isEditable?: boolean;
+  onFieldEdit?: (field: string, value: unknown) => void;
+  onProceedToDesign?: () => void;
 }
 
 const progressItems = [
-  { key: "selectedDirection", label: "产品方向", icon: Lightbulb },
-  { key: "usageScenario", label: "使用场景", icon: MapPin },
-  { key: "targetAudience", label: "目标用户", icon: Users },
-  { key: "designStyle", label: "外观风格", icon: Palette },
-  { key: "coreFeatures", label: "核心功能", icon: Zap },
-  { key: "pricingRange", label: "定价策略", icon: DollarSign },
+  { key: "selectedDirection", label: "产品方向", icon: Lightbulb, placeholder: "例如：智能便携方向、专业高端路线" },
+  { key: "usageScenario", label: "使用场景", icon: MapPin, placeholder: "例如：户外露营、办公室使用" },
+  { key: "targetAudience", label: "目标用户", icon: Users, placeholder: "例如：25-35岁都市白领、户外爱好者" },
+  { key: "designStyle", label: "外观风格", icon: Palette, placeholder: "例如：极简北欧风、科技感、复古风" },
+  { key: "coreFeatures", label: "核心功能", icon: Zap, placeholder: "每行一个功能，例如：\n快速加热\n智能温控\n便携设计", isArray: true },
+  { key: "pricingRange", label: "定价策略", icon: DollarSign, placeholder: "例如：中高端 ¥299-399" },
 ] as const;
 
 // Helper function to get display value for progress item
@@ -163,7 +194,7 @@ function getPhaseLabel(phase: string | undefined): { label: string; color: strin
     case "details-refinement":
       return { label: "细化细节", color: "bg-orange-500/20 text-orange-400" };
     case "prd-ready":
-      return { label: "PRD完成", color: "bg-green-500/20 text-green-400" };
+      return { label: "定义完成", color: "bg-green-500/20 text-green-400" };
     default:
       return { label: "开始对话", color: "bg-muted text-muted-foreground" };
   }
@@ -173,13 +204,20 @@ export function PrdExtractionSidebar({
   prdData,
   competitorProducts = [],
   className,
+  isEditable = false,
+  onFieldEdit,
+  onProceedToDesign,
 }: PrdExtractionSidebarProps) {
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+
   const completedCount = progressItems.filter((item) => 
     isItemCompleted(prdData, item.key)
   ).length;
 
   const progressPercent = (completedCount / progressItems.length) * 100;
   const phase = getPhaseLabel(prdData?.dialoguePhase);
+  const isAllCompleted = completedCount === progressItems.length;
 
   // Get competitor images
   const competitorImages = competitorProducts
@@ -191,6 +229,41 @@ export function PrdExtractionSidebar({
       return images;
     })
     .slice(0, 6);
+
+  const handleEditClick = (key: string) => {
+    if (!isEditable) return;
+    
+    const currentValue = prdData?.[key as keyof PrdData];
+    if (key === "coreFeatures" && Array.isArray(currentValue)) {
+      setEditValue(currentValue.join("\n"));
+    } else {
+      setEditValue(typeof currentValue === "string" ? currentValue : "");
+    }
+    setEditingField(key);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingField || !onFieldEdit) return;
+    
+    const item = progressItems.find(i => i.key === editingField);
+    if (item && 'isArray' in item && item.isArray) {
+      // Split by newlines and filter empty strings
+      const arrayValue = editValue.split("\n").map(s => s.trim()).filter(Boolean);
+      onFieldEdit(editingField, arrayValue);
+    } else {
+      onFieldEdit(editingField, editValue.trim());
+    }
+    
+    setEditingField(null);
+    setEditValue("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingField(null);
+    setEditValue("");
+  };
+
+  const currentEditItem = progressItems.find(i => i.key === editingField);
 
   return (
     <div className={cn("flex flex-col h-full border-r border-border/50 bg-card/30", className)}>
@@ -223,10 +296,13 @@ export function PrdExtractionSidebar({
           {/* Progress Header */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">PRD 信息收集</h3>
-              <Badge variant="outline" className="text-xs bg-background/50">
-                {completedCount}/{progressItems.length}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-foreground">产品定义</h3>
+                <Badge variant="outline" className="text-xs bg-background/50 gap-1">
+                  <Asterisk className="w-2.5 h-2.5 text-destructive" />
+                  {completedCount}/{progressItems.length} 必填项
+                </Badge>
+              </div>
             </div>
             <div className="relative">
               <Progress value={progressPercent} className="h-2.5" />
@@ -240,8 +316,8 @@ export function PrdExtractionSidebar({
             </div>
             <p className="text-xs text-muted-foreground">
               {completedCount === 0 ? "开始与 AI 对话收集产品信息" : 
-               completedCount === progressItems.length ? "✓ 所有信息已收集完成" :
-               `已收集 ${completedCount} 项，继续对话完善产品定义`}
+               isAllCompleted ? "✓ 所有必填项已完成" :
+               `已收集 ${completedCount} 项，继续对话或手动填写`}
             </p>
           </div>
 
@@ -262,12 +338,32 @@ export function PrdExtractionSidebar({
                 >
                   <Card
                     className={cn(
-                      "p-3 transition-all duration-300 cursor-default group",
+                      "p-3 transition-all duration-300 group relative",
                       isCompleted
                         ? "bg-primary/10 border-primary/30 shadow-sm shadow-primary/10"
-                        : "bg-muted/30 border-border/50 hover:bg-muted/50 hover:border-border"
+                        : "bg-muted/30 border-border/50 hover:bg-muted/50 hover:border-border",
+                      isEditable && "cursor-pointer"
                     )}
+                    onClick={() => handleEditClick(item.key)}
                   >
+                    {/* Required indicator */}
+                    <div className="absolute top-2 right-2 flex items-center gap-1">
+                      <Asterisk className="w-3 h-3 text-destructive" />
+                      {isEditable && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClick(item.key);
+                          }}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </div>
+
                     <div className="flex items-start gap-3">
                       <motion.div
                         className={cn(
@@ -295,7 +391,7 @@ export function PrdExtractionSidebar({
                           <Icon className="w-4 h-4 text-muted-foreground" />
                         )}
                       </motion.div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 pr-8">
                         <div className="flex items-center gap-2">
                           <span
                             className={cn(
@@ -327,7 +423,7 @@ export function PrdExtractionSidebar({
                         )}
                         {!isCompleted && (
                           <p className="text-xs text-muted-foreground/50 mt-1 italic">
-                            等待收集...
+                            {isEditable ? "点击填写..." : "等待收集..."}
                           </p>
                         )}
                       </div>
@@ -337,6 +433,8 @@ export function PrdExtractionSidebar({
               );
             })}
           </div>
+
+          <Separator />
 
           {/* Competitor Images Reference */}
           {competitorImages.length > 0 && (
@@ -365,24 +463,89 @@ export function PrdExtractionSidebar({
             </div>
           )}
 
-          {/* Completion Status */}
-          {prdData?.dialoguePhase === "prd-ready" && (
+          {/* Completion Status & Action */}
+          {isAllCompleted && onProceedToDesign && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-xl bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30"
+              className="space-y-3"
             >
-              <div className="flex items-center gap-2 mb-2">
-                <Check className="w-5 h-5 text-primary" />
-                <span className="font-semibold text-foreground">PRD 已完成</span>
+              <div className="p-4 rounded-xl bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <Check className="w-5 h-5 text-primary" />
+                  <span className="font-semibold text-foreground">所有必填项已完成</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  您可以进入产品设计阶段，或继续与 AI 对话完善更多细节
+                </p>
+                <Button
+                  className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity"
+                  onClick={onProceedToDesign}
+                >
+                  进入产品设计阶段
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                所有核心信息已收集，可以进入 PRD 审核页面查看和编辑
-              </p>
             </motion.div>
           )}
         </div>
       </ScrollArea>
+
+      {/* Edit Dialog */}
+      <Dialog open={!!editingField} onOpenChange={(open) => !open && handleCancelEdit()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {currentEditItem && (
+                <>
+                  <currentEditItem.icon className="w-5 h-5 text-primary" />
+                  编辑{currentEditItem.label}
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-value">
+                {currentEditItem?.label}
+                <span className="text-destructive ml-1">*</span>
+              </Label>
+              {currentEditItem && 'isArray' in currentEditItem && currentEditItem.isArray ? (
+                <Textarea
+                  id="edit-value"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  placeholder={currentEditItem?.placeholder}
+                  rows={5}
+                  className="resize-none"
+                />
+              ) : (
+                <Input
+                  id="edit-value"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  placeholder={currentEditItem?.placeholder}
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                {currentEditItem && 'isArray' in currentEditItem && currentEditItem.isArray
+                  ? "每行输入一项内容"
+                  : "请输入内容"}
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={handleCancelEdit}>
+              <X className="w-4 h-4 mr-2" />
+              取消
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={!editValue.trim()}>
+              <Check className="w-4 h-4 mr-2" />
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
