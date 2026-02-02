@@ -10,9 +10,10 @@ interface StageIndicatorProps {
 }
 
 const stages = [
-  { id: 1, name: "产品定义", icon: MessageSquare, description: "ID探索与产品定义" },
-  { id: 2, name: "产品设计", icon: Palette, description: "AI图像生成与迭代" },
-  { id: 3, name: "落地页", icon: Rocket, description: "营销页面与发布" },
+  { id: 1, name: "市场调研", icon: MessageSquare, description: "市场分析与竞品研究" },
+  { id: 2, name: "产品定义", icon: MessageSquare, description: "AI产品经理与PRD" },
+  { id: 3, name: "产品设计", icon: Palette, description: "AI图像生成与迭代" },
+  { id: 4, name: "落地页", icon: Rocket, description: "营销页面与发布" },
 ];
 
 export function StageIndicator({ currentStage, className, onStageClick }: StageIndicatorProps) {

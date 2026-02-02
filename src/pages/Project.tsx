@@ -11,11 +11,12 @@ import { StageTransitionPrompt } from "@/components/StageTransitionPrompt";
 import { ChatMessage } from "@/components/ChatMessage";
 import { VisualGenerationPhase } from "@/components/VisualGenerationPhase";
 import { LandingPageBuilder } from "@/components/LandingPageBuilder";
+import { MarketResearchPhase } from "@/components/MarketResearchPhase";
 import { PrdPhase } from "@/components/PrdPhase";
 import { PrdData } from "@/components/PrdExtractionSidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, TrendingUp } from "lucide-react";
 
 interface Message {
   id: string;
@@ -82,7 +83,7 @@ export default function ProjectPage() {
   const [marketingImages, setMarketingImages] = useState<GeneratedImage[]>([]);
   const [videos, setVideos] = useState<GeneratedVideo[]>([]);
   const [landingPage, setLandingPage] = useState<LandingPageData | null>(null);
-  const [activeTab, setActiveTab] = useState("chat");
+  const [activeTab, setActiveTab] = useState("research");
   const [showTransitionPrompt, setShowTransitionPrompt] = useState(false);
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -107,10 +108,12 @@ export default function ProjectPage() {
     // Auto-switch tabs based on stage
     if (project) {
       if (project.current_stage === 1) {
-        setActiveTab("chat");
+        setActiveTab("research");
       } else if (project.current_stage === 2) {
-        setActiveTab("images");
+        setActiveTab("prd");
       } else if (project.current_stage === 3) {
+        setActiveTab("images");
+      } else if (project.current_stage === 4) {
         setActiveTab("landing");
       }
     }
@@ -332,7 +335,7 @@ export default function ProjectPage() {
     if (!project) return;
     
     const newStage = targetStage || project.current_stage + 1;
-    if (newStage > 3) return;
+    if (newStage > 4) return;
     
     const { error } = await supabase
       .from("projects")
@@ -353,8 +356,8 @@ export default function ProjectPage() {
   };
 
   const detectStageCompletion = (content: string, currentStage: number): boolean => {
-    if (currentStage === 1) {
-      if (content.includes("[STAGE_COMPLETE:1]")) {
+    if (currentStage === 2) {
+      if (content.includes("[STAGE_COMPLETE:2]")) {
         return true;
       }
       
@@ -379,14 +382,19 @@ export default function ProjectPage() {
     return false;
   };
 
+  const handleMarketResearchComplete = async () => {
+    await advanceStage(2);
+    await fetchProject();
+    setActiveTab("prd");
+  };
+
   const handlePrdPhaseComplete = async () => {
-    // Refetch project to get updated stage
     await fetchProject();
     setActiveTab("images");
   };
 
   const handleVisualPhaseConfirm = () => {
-    advanceStage(3);
+    advanceStage(4);
   };
 
   const getSelectedImageUrl = () => {
@@ -454,9 +462,10 @@ export default function ProjectPage() {
           <StageIndicator 
             currentStage={project?.current_stage || 1} 
             onStageClick={(stageId) => {
-              if (stageId === 1) setActiveTab("chat");
-              else if (stageId === 2) setActiveTab("images");
-              else if (stageId === 3) setActiveTab("landing");
+              if (stageId === 1) setActiveTab("research");
+              else if (stageId === 2) setActiveTab("prd");
+              else if (stageId === 3) setActiveTab("images");
+              else if (stageId === 4) setActiveTab("landing");
             }}
           />
         </div>
@@ -466,13 +475,21 @@ export default function ProjectPage() {
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
 
+          {/* Market Research Tab */}
+          <TabsContent value="research" className="flex-1 flex min-h-0 overflow-hidden m-0">
+            <MarketResearchPhase
+              projectId={id || ""}
+              onComplete={handleMarketResearchComplete}
+              isReadOnly={project?.current_stage !== 1}
+            />
+          </TabsContent>
+
           {/* PRD Tab - Using new PrdPhase component */}
-          <TabsContent value="chat" className="flex-1 flex min-h-0 overflow-hidden m-0">
+          <TabsContent value="prd" className="flex-1 flex min-h-0 overflow-hidden m-0">
             <PrdPhase
               projectId={id || ""}
               onComplete={handlePrdPhaseComplete}
-              competitorResearchCompleted={project?.competitor_research_completed}
-              isReadOnly={project?.current_stage !== 1}
+              isReadOnly={project?.current_stage !== 2}
             />
           </TabsContent>
 
@@ -501,28 +518,11 @@ export default function ProjectPage() {
                 projectId={id || ""}
                 projectName={project?.name || ""}
                 selectedImageUrl={getSelectedImageUrl()}
-                prdData={prdData ? {
-                  pain_points: prdData.painPoints || [],
-                  selling_points: prdData.sellingPoints || [],
-                  target_audience: prdData.targetAudience || undefined,
-                  usageScenario: prdData.usageScenario || undefined,
-                  designStyle: prdData.designStyle || undefined,
-                  coreFeatures: prdData.coreFeatures || [],
-                  marketingAssets: prdData.marketingAssets ? {
-                    sceneDescription: prdData.marketingAssets.sceneDescription || undefined,
-                    structureHighlights: prdData.marketingAssets.structureHighlights || [],
-                    lifestyleContext: prdData.marketingAssets.lifestyleContext || undefined,
-                  } : undefined,
-                  competitorInsights: prdData.competitorInsights ? {
-                    positivePoints: prdData.competitorInsights.positivePoints || [],
-                    negativePoints: prdData.competitorInsights.negativePoints || [],
-                    differentiationStrategy: prdData.competitorInsights.differentiationStrategy || undefined,
-                  } : undefined,
-                } : undefined}
+                prdData={getPrdData()}
                 marketingImages={marketingImages.map(img => ({
                   id: img.id,
                   image_url: img.image_url,
-                  image_type: img.image_type || 'marketing',
+                  image_type: img.image_type || "scene"
                 }))}
                 videoUrl={videos.find(v => v.video_url)?.video_url || undefined}
                 landingPage={landingPage}
