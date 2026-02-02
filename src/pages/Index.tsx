@@ -124,21 +124,12 @@ export default function Index() {
               <span className="text-base font-bold text-foreground leading-tight">开品宝</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Button 
-              variant="ghost" 
-              className="text-muted-foreground hover:text-foreground"
-              onClick={() => navigate("/auth")}
-            >
-              登录
-            </Button>
-            <Button 
-              className="bg-white/10 hover:bg-white/20 text-foreground border-0 rounded-full px-5"
-              onClick={() => navigate("/auth")}
-            >
-              Get Started
-            </Button>
-          </div>
+          <Button 
+            className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 text-foreground border border-white/10 rounded-full px-5"
+            onClick={() => navigate("/auth")}
+          >
+            登录 / 注册
+          </Button>
         </div>
       </header>
 
