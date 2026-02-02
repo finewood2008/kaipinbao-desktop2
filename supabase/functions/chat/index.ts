@@ -888,7 +888,7 @@ async function callLovableAI(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-3-pro-preview",
+      model: "google/gemini-2.5-flash",
       messages: [
         { role: "system", content: systemPrompt },
         ...messages.filter(m => m.role !== "system"),
