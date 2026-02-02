@@ -224,11 +224,25 @@ export function PrdExtractionSidebar({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">PRD 信息收集</h3>
-              <span className="text-xs text-muted-foreground">
+              <Badge variant="outline" className="text-xs bg-background/50">
                 {completedCount}/{progressItems.length}
-              </span>
+              </Badge>
             </div>
-            <Progress value={progressPercent} className="h-2" />
+            <div className="relative">
+              <Progress value={progressPercent} className="h-2.5" />
+              {/* Progress glow effect */}
+              <motion.div 
+                className="absolute top-0 left-0 h-2.5 rounded-full bg-gradient-to-r from-primary/50 to-accent/50 blur-sm"
+                style={{ width: `${progressPercent}%` }}
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {completedCount === 0 ? "开始与 AI 对话收集产品信息" : 
+               completedCount === progressItems.length ? "✓ 所有信息已收集完成" :
+               `已收集 ${completedCount} 项，继续对话完善产品定义`}
+            </p>
           </div>
 
           {/* Progress Items */}
@@ -244,48 +258,72 @@ export function PrdExtractionSidebar({
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
+                  whileHover={{ scale: 1.02, x: 4 }}
                 >
                   <Card
                     className={cn(
-                      "p-3 transition-all duration-200",
+                      "p-3 transition-all duration-300 cursor-default group",
                       isCompleted
-                        ? "bg-primary/10 border-primary/30"
-                        : "bg-muted/30 border-border/50"
+                        ? "bg-primary/10 border-primary/30 shadow-sm shadow-primary/10"
+                        : "bg-muted/30 border-border/50 hover:bg-muted/50 hover:border-border"
                     )}
                   >
                     <div className="flex items-start gap-3">
-                      <div
+                      <motion.div
                         className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                          isCompleted ? "bg-primary/20" : "bg-muted"
+                          "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-300",
+                          isCompleted ? "bg-primary/20" : "bg-muted group-hover:bg-muted/80"
                         )}
+                        animate={isCompleted ? {
+                          boxShadow: [
+                            "0 0 0 0 rgba(var(--primary), 0)",
+                            "0 0 0 4px rgba(var(--primary), 0.15)",
+                            "0 0 0 0 rgba(var(--primary), 0)"
+                          ]
+                        } : {}}
+                        transition={{ duration: 2, repeat: Infinity }}
                       >
                         {isCompleted ? (
-                          <Check className="w-4 h-4 text-primary" />
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: "spring", stiffness: 500 }}
+                          >
+                            <Check className="w-4 h-4 text-primary" />
+                          </motion.div>
                         ) : (
                           <Icon className="w-4 h-4 text-muted-foreground" />
                         )}
-                      </div>
+                      </motion.div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span
                             className={cn(
-                              "text-sm font-medium",
+                              "text-sm font-medium transition-colors",
                               isCompleted ? "text-foreground" : "text-muted-foreground"
                             )}
                           >
                             {item.label}
                           </span>
                           {isCompleted ? (
-                            <Circle className="w-2 h-2 fill-primary text-primary" />
+                            <motion.div
+                              animate={{ scale: [1, 1.3, 1] }}
+                              transition={{ duration: 1.5, repeat: Infinity }}
+                            >
+                              <Circle className="w-2 h-2 fill-primary text-primary" />
+                            </motion.div>
                           ) : (
                             <Circle className="w-2 h-2 text-muted-foreground/50" />
                           )}
                         </div>
                         {isCompleted && value && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          <motion.p 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            className="text-xs text-muted-foreground mt-1 line-clamp-2"
+                          >
                             {value}
-                          </p>
+                          </motion.p>
                         )}
                         {!isCompleted && (
                           <p className="text-xs text-muted-foreground/50 mt-1 italic">
