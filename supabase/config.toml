@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.initial-market-analysis]
 verify_jwt = false
+
+[functions.analyze-landing-page]
+verify_jwt = false

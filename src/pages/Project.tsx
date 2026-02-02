@@ -468,71 +468,12 @@ export default function ProjectPage() {
 
           {/* PRD Tab - Using new PrdPhase component */}
           <TabsContent value="chat" className="flex-1 flex min-h-0 overflow-hidden m-0">
-            {project?.current_stage === 1 ? (
-              <PrdPhase
-                projectId={id || ""}
-                onComplete={handlePrdPhaseComplete}
-                competitorResearchCompleted={project?.competitor_research_completed}
-              />
-            ) : (
-              /* Non-PRD stages: Original chat layout */
-              <>
-                <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    <AnimatePresence initial={false}>
-                      {messages.map((message) => (
-                        <ChatMessage
-                          key={message.id}
-                          role={message.role}
-                          content={message.content}
-                          isStreaming={isStreaming && message === messages[messages.length - 1]}
-                        />
-                      ))}
-                    </AnimatePresence>
-                    {isSending && !isStreaming && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex items-center gap-2 text-muted-foreground"
-                      >
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-sm">AI正在思考...</span>
-                      </motion.div>
-                    )}
-                  </div>
-                </ScrollArea>
-
-                {/* Input Area */}
-                <div className="border-t border-border/50 glass p-4">
-                  <div className="max-w-3xl mx-auto">
-                    <Card className="flex items-center gap-2 p-2 bg-secondary/50">
-                      <Input
-                        placeholder="输入您的回复..."
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendMessage();
-                          }
-                        }}
-                        disabled={isSending}
-                        className="border-0 bg-transparent focus-visible:ring-0"
-                      />
-                      <Button
-                        size="icon"
-                        onClick={handleSendMessage}
-                        disabled={!inputValue.trim() || isSending}
-                        className="bg-gradient-primary glow-primary"
-                      >
-                        <Loader2 className={`w-4 h-4 ${isSending ? 'animate-spin' : 'hidden'}`} />
-                        <MessageSquare className={`w-4 h-4 ${isSending ? 'hidden' : ''}`} />
-                      </Button>
-                    </Card>
-                  </div>
-                </div>
-              </>
-            )}
+            <PrdPhase
+              projectId={id || ""}
+              onComplete={handlePrdPhaseComplete}
+              competitorResearchCompleted={project?.competitor_research_completed}
+              isReadOnly={project?.current_stage !== 1}
+            />
           </TabsContent>
 
           {/* Images Tab */}

@@ -25,7 +25,7 @@ export function StageIndicator({ currentStage, className, onStageClick }: StageI
   };
 
   return (
-    <div className={cn("flex items-center justify-between py-2", className)}>
+    <div className={cn("flex items-center justify-center gap-6 py-2", className)}>
       {stages.map((stage, index) => {
         const isCompleted = currentStage > stage.id;
         const isCurrent = currentStage === stage.id;
@@ -186,7 +186,7 @@ export function StageIndicator({ currentStage, className, onStageClick }: StageI
 
             {/* Connector line */}
             {index < stages.length - 1 && (
-              <div className="flex-1 h-1.5 mx-8 bg-muted/40 rounded-full relative overflow-hidden">
+              <div className="w-24 md:w-32 h-1.5 mx-4 bg-muted/40 rounded-full relative overflow-hidden flex-shrink-0">
                 {/* Progress fill */}
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary to-accent rounded-full"
