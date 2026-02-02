@@ -160,8 +160,8 @@ export function AiProductManagerPanel({
         </AnimatePresence>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-hidden relative">
-          <ScrollArea className="h-full">
+        <div className="flex-1 min-h-0 overflow-hidden relative">
+          <ScrollArea className="h-full [&>div[data-radix-scroll-area-viewport]]:h-full">
             <div className="p-4 max-w-3xl mx-auto space-y-4">
               {/* Empty State */}
               {messages.length === 0 && !isSending && (
