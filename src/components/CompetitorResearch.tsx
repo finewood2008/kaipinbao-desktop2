@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, Loader2, ArrowRight, SkipForward, Link, BarChart3 } from "lucide-react";
+import { Search, Plus, Loader2, ArrowRight, SkipForward, Link, BarChart3, Package, Star, ExternalLink, Trash2, RotateCcw, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@/components/ui/card";
 import { CompetitorCard, CompetitorProduct } from "@/components/CompetitorCard";
 import { ReviewAnalysisSummary, ReviewAnalysis } from "@/components/ReviewAnalysisSummary";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface CompetitorResearchProps {
   projectId: string;
@@ -38,7 +40,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
   const [analysis, setAnalysis] = useState<ReviewAnalysis | null>(null);
   const [scrapeProgress, setScrapeProgress] = useState(0);
 
-  // Load existing competitor products
   useEffect(() => {
     loadProducts();
   }, [projectId]);
@@ -55,7 +56,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       return;
     }
 
-    // Map to CompetitorProduct type with proper status typing
     const mappedProducts: CompetitorProduct[] = (data || []).map(p => ({
       id: p.id,
       url: p.url,
@@ -69,7 +69,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
 
     setProducts(mappedProducts);
     
-    // If we have completed products, generate analysis
     const completedProducts = (data || []).filter(p => p.status === "completed");
     if (completedProducts.length > 0) {
       await generateAnalysis();
@@ -79,7 +78,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
   const handleAddUrl = async () => {
     if (!urlInput.trim()) return;
 
-    // Validate URL
     try {
       new URL(urlInput);
     } catch {
@@ -87,7 +85,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       return;
     }
 
-    // Check if it's an Amazon URL
     if (!isAmazonUrl(urlInput)) {
       toast.error("目前仅支持 Amazon 产品链接");
       return;
@@ -118,7 +115,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       setProducts(prev => [newProduct, ...prev]);
       setUrlInput("");
       
-      // Start scraping
       scrapeProduct(data.id, urlInput.trim());
     } catch (error) {
       console.error("Failed to add URL:", error);
@@ -129,15 +125,13 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
   };
 
   const scrapeProduct = async (productId: string, url: string) => {
-    // Update status to scraping
     setProducts(prev =>
       prev.map(p => (p.id === productId ? { ...p, status: "scraping" as const } : p))
     );
     setIsScraping(true);
-    setScrapeProgress(10); // Start progress
+    setScrapeProgress(10);
 
     try {
-      // Simulate progress during scraping
       const progressInterval = setInterval(() => {
         setScrapeProgress(prev => {
           if (prev >= 85) {
@@ -158,7 +152,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
 
       if (data.success) {
         setScrapeProgress(100);
-        // Reload products to get updated data
         await loadProducts();
         toast.success("产品信息抓取成功");
       } else {
@@ -166,7 +159,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       }
     } catch (error) {
       console.error("Scrape failed:", error);
-      // Update status to failed
       await supabase
         .from("competitor_products")
         .update({ status: "failed" })
@@ -220,7 +212,6 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
   };
 
   const handleComplete = async () => {
-    // Mark competitor research as completed
     await supabase
       .from("projects")
       .update({ competitor_research_completed: true })
@@ -235,127 +226,254 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="max-w-2xl mx-auto space-y-6 p-6"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="h-full overflow-y-auto"
     >
-      {/* Header */}
-      <div className="text-center space-y-2">
-        <motion.div
-          initial={{ scale: 0.9 }}
-          animate={{ scale: 1 }}
-          className="w-16 h-16 mx-auto bg-primary/20 rounded-full flex items-center justify-center"
+      <div className="max-w-4xl mx-auto p-6 pb-24 space-y-8">
+        {/* Hero Header */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center space-y-4"
         >
-          <Search className="w-8 h-8 text-primary" />
-        </motion.div>
-        <h2 className="text-xl font-semibold text-foreground">竞品分析 <span className="text-muted-foreground text-sm">(可选)</span></h2>
-        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          添加 Amazon 竞品链接，获取真实产品信息和用户评论数据
-        </p>
-      </div>
-
-      {/* URL Input */}
-      <div className="flex gap-2">
-        <div className="flex-1 relative">
-          <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            placeholder="粘贴 Amazon 产品链接 (例如: amazon.com/dp/...)"
-            className="pl-9 bg-background/50"
-            onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
-          />
-        </div>
-        <Button onClick={handleAddUrl} disabled={isAdding || !urlInput.trim()}>
-          {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          <span className="ml-1">添加</span>
-        </Button>
-      </div>
-
-      {/* Progress indicator for scraping */}
-      <AnimatePresence>
-        {(isScraping || isAnalyzing) && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-muted/30 rounded-lg p-4 border border-border/50"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+            className="w-20 h-20 mx-auto bg-gradient-to-br from-accent/20 to-primary/20 rounded-2xl flex items-center justify-center border border-accent/20 shadow-lg shadow-accent/10"
           >
-            <div className="flex items-center gap-3 mb-3">
-              {isScraping ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-sm font-medium">正在抓取产品信息与评论...</span>
-                </>
-              ) : (
-                <>
-                  <BarChart3 className="w-4 h-4 animate-pulse text-primary" />
-                  <span className="text-sm font-medium">正在分析评论数据...</span>
-                </>
-              )}
-            </div>
-            <Progress 
-              value={isScraping ? scrapeProgress : 50} 
-              className="h-2"
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              {isScraping 
-                ? "正在从 Amazon 抓取产品信息和用户评论" 
-                : "AI 正在分析用户评论，提取痛点与需求洞察"}
-            </p>
+            <Search className="w-10 h-10 text-accent" />
           </motion.div>
-        )}
-      </AnimatePresence>
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold">
+              <span className="text-gradient">竞品分析</span>
+              <span className="text-muted-foreground text-lg font-normal ml-2">(可选)</span>
+            </h2>
+            <p className="text-muted-foreground mt-2 max-w-lg mx-auto">
+              添加 Amazon 竞品链接，获取真实产品信息和用户评论数据，助力产品差异化定位
+            </p>
+          </div>
+        </motion.div>
 
-      {/* Product list */}
-      <AnimatePresence mode="popLayout">
-        {products.length > 0 && (
+        {/* URL Input Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="border-dashed border-2 border-accent/30 bg-accent/5 hover:border-accent/50 transition-colors">
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+                    <Link className="w-4 h-4 text-accent" />
+                  </div>
+                  <Input
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder="粘贴 Amazon 产品链接 (例如: amazon.com/dp/...)"
+                    className="pl-14 h-12 bg-background/50 border-border/50 focus:border-accent"
+                    onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
+                  />
+                </div>
+                <Button 
+                  onClick={handleAddUrl} 
+                  disabled={isAdding || !urlInput.trim()}
+                  className="h-12 px-6 bg-gradient-to-r from-accent to-primary hover:opacity-90"
+                >
+                  {isAdding ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  <span className="ml-2">添加竞品</span>
+                </Button>
+              </div>
+              
+              {/* Supported platforms hint */}
+              <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-border/30">
+                <span className="text-xs text-muted-foreground">支持的平台：</span>
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-1 rounded-full bg-orange-500/10 text-orange-500 text-xs font-medium">
+                    Amazon
+                  </div>
+                  <span className="text-xs text-muted-foreground">更多平台即将支持...</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Progress indicator */}
+        <AnimatePresence>
+          {(isScraping || isAnalyzing) && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: -20, height: 0 }}
+            >
+              <Card className="border-accent/30 bg-gradient-to-r from-accent/5 to-primary/5 overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center">
+                      {isScraping ? (
+                        <Package className="w-6 h-6 text-primary-foreground animate-pulse" />
+                      ) : (
+                        <BarChart3 className="w-6 h-6 text-primary-foreground animate-pulse" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold">
+                        {isScraping ? "正在抓取产品信息..." : "正在分析评论数据..."}
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        {isScraping 
+                          ? "正在从 Amazon 获取产品详情和用户评论" 
+                          : "AI 正在提取痛点与需求洞察"}
+                      </p>
+                    </div>
+                    <div className="text-2xl font-bold text-accent">
+                      {Math.round(isScraping ? scrapeProgress : 50)}%
+                    </div>
+                  </div>
+                  <Progress value={isScraping ? scrapeProgress : 50} className="h-2" />
+                  
+                  {/* Steps */}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {[
+                      { label: "产品信息", done: scrapeProgress > 30 },
+                      { label: "价格数据", done: scrapeProgress > 50 },
+                      { label: "用户评论", done: scrapeProgress > 70 },
+                      { label: "数据整理", done: scrapeProgress > 90 },
+                    ].map((step, i) => (
+                      <motion.div
+                        key={step.label}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: i * 0.1 }}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs",
+                          step.done 
+                            ? "bg-accent/20 text-accent" 
+                            : "bg-muted/50 text-muted-foreground"
+                        )}
+                      >
+                        {step.done ? (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        ) : (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        )}
+                        {step.label}
+                      </motion.div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Empty State */}
+        {products.length === 0 && !isScraping && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="space-y-3"
+            transition={{ delay: 0.2 }}
+            className="text-center py-12"
           >
-            <h4 className="text-sm font-medium text-muted-foreground">
-              已添加的竞品 ({completedCount}/{products.length})
-            </h4>
-            {products.map((product) => (
-              <CompetitorCard
-                key={product.id}
-                product={product}
-                onDelete={handleDelete}
-                onRetry={handleRetry}
-              />
-            ))}
+            <div className="w-24 h-24 mx-auto mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
+              <Package className="w-12 h-12 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-lg font-medium text-muted-foreground mb-2">暂无竞品数据</h3>
+            <p className="text-sm text-muted-foreground/70">添加 Amazon 竞品链接开始分析</p>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* Analysis summary */}
-      {analysis && <ReviewAnalysisSummary analysis={analysis} />}
-
-      {/* Actions */}
-      <div className="flex justify-between pt-4 border-t border-border/30">
-        <Button variant="ghost" onClick={onSkip} className="text-muted-foreground">
-          <SkipForward className="w-4 h-4 mr-1" />
-          跳过此步骤
-        </Button>
-        <Button
-          onClick={handleComplete}
-          disabled={scrapingCount > 0}
-          className="bg-primary hover:bg-primary/90"
-        >
-          {scrapingCount > 0 ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-              正在抓取 ({scrapingCount})
-            </>
-          ) : (
-            <>
-              进入AI产品经理
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </>
+        {/* Product list */}
+        <AnimatePresence mode="popLayout">
+          {products.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <Package className="w-4 h-4 text-accent" />
+                  已添加的竞品
+                </h4>
+                <span className={cn(
+                  "text-sm px-3 py-1 rounded-full",
+                  completedCount === products.length 
+                    ? "bg-green-500/10 text-green-500" 
+                    : "bg-muted text-muted-foreground"
+                )}>
+                  {completedCount}/{products.length} 完成
+                </span>
+              </div>
+              
+              <div className="grid gap-3">
+                {products.map((product, index) => (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <CompetitorCard
+                      product={product}
+                      onDelete={handleDelete}
+                      onRetry={handleRetry}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
           )}
-        </Button>
+        </AnimatePresence>
+
+        {/* Analysis summary */}
+        {analysis && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <ReviewAnalysisSummary analysis={analysis} className="border-primary/20" />
+          </motion.div>
+        )}
+
+        {/* Actions */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="flex justify-between items-center pt-6 border-t border-border/30"
+        >
+          <Button variant="ghost" onClick={onSkip} className="text-muted-foreground hover:text-foreground">
+            <SkipForward className="w-4 h-4 mr-2" />
+            跳过此步骤
+          </Button>
+          <Button
+            onClick={handleComplete}
+            disabled={scrapingCount > 0}
+            className="bg-gradient-to-r from-accent to-primary hover:opacity-90 shadow-lg shadow-accent/25"
+            size="lg"
+          >
+            {scrapingCount > 0 ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                正在抓取 ({scrapingCount})
+              </>
+            ) : (
+              <>
+                进入产品定义
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </>
+            )}
+          </Button>
+        </motion.div>
       </div>
     </motion.div>
   );
