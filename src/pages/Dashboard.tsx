@@ -41,7 +41,7 @@ interface Project {
   email_count: number;
 }
 
-type StageFilter = "all" | 1 | 2 | 3;
+type StageFilter = "all" | 1 | 2 | 3 | 4;
 type StatusFilter = "all" | "active" | "completed" | "archived";
 
 export default function Dashboard() {
@@ -190,9 +190,10 @@ export default function Dashboard() {
 
   const stageFilters = [
     { value: "all" as const, label: "全部阶段" },
-    { value: 1 as const, label: "PRD细化" },
-    { value: 2 as const, label: "视觉生成" },
-    { value: 3 as const, label: "落地页" },
+    { value: 1 as const, label: "市场调研" },
+    { value: 2 as const, label: "产品定义" },
+    { value: 3 as const, label: "视觉生成" },
+    { value: 4 as const, label: "落地页" },
   ];
 
   const statusFilters = [
