@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import logoImage from "@/assets/logo.png";
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
@@ -64,13 +65,10 @@ export default function Auth() {
             initial={{ scale: 0.5 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 200 }}
-            className="inline-flex items-center gap-2 mb-4"
+            className="inline-flex items-center mb-4"
           >
-            <div className="w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center glow-primary">
-              <Sparkles className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <img src={logoImage} alt="KAI Logo" className="h-12" />
           </motion.div>
-          <h1 className="text-3xl font-bold text-gradient">开品宝</h1>
           <p className="text-muted-foreground mt-2">AI驱动产品研发专家</p>
         </div>
 

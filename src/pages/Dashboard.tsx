@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LogOut, Plus, Search, Sparkles, Loader2 } from "lucide-react";
+import logoImage from "@/assets/logo.png";
 
 interface Project {
   id: string;
@@ -120,13 +121,8 @@ export default function Dashboard() {
       <header className="border-b border-border/50 glass sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center glow-primary">
-              <Sparkles className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gradient">开品宝</h1>
-              <p className="text-xs text-muted-foreground">产品研发工作台</p>
-            </div>
+            <img src={logoImage} alt="KAI Logo" className="h-10" />
+            <p className="text-xs text-muted-foreground">产品研发工作台</p>
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground hidden md:block">
