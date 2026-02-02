@@ -43,26 +43,64 @@ export default function Index() {
       icon: BarChart3,
       title: "市场调研",
       description: "AI智能分析市场趋势，发现潜在商机",
+      image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop&q=80",
     },
     {
       icon: Search,
       title: "竞品分析",
       description: "自动抓取竞品数据，深度对比分析",
+      image: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop&q=80",
     },
     {
       icon: Palette,
       title: "产品设计",
       description: "AI辅助产品定义，生成专业PRD文档",
+      image: "https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=400&h=300&fit=crop&q=80",
     },
     {
       icon: Image,
       title: "ID渲染生成",
       description: "基于PRD自动生成产品渲染图",
+      image: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=400&h=300&fit=crop&q=80",
     },
     {
       icon: FileText,
       title: "落地页生成",
       description: "一键生成营销落地页，快速验证市场",
+      image: "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?w=400&h=300&fit=crop&q=80",
+    },
+  ];
+
+  const showcaseProducts = [
+    {
+      title: "智能无线耳机",
+      category: "消费电子",
+      image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&h=400&fit=crop&q=80",
+    },
+    {
+      title: "便携式咖啡机",
+      category: "家用电器",
+      image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&h=400&fit=crop&q=80",
+    },
+    {
+      title: "智能手表",
+      category: "穿戴设备",
+      image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&h=400&fit=crop&q=80",
+    },
+    {
+      title: "运动水杯",
+      category: "户外运动",
+      image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=600&h=400&fit=crop&q=80",
+    },
+    {
+      title: "LED台灯",
+      category: "家居照明",
+      image: "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=600&h=400&fit=crop&q=80",
+    },
+    {
+      title: "蓝牙音箱",
+      category: "音频设备",
+      image: "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=600&h=400&fit=crop&q=80",
     },
   ];
 
@@ -103,7 +141,7 @@ export default function Index() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center justify-center pt-20 pb-16">
+      <section className="relative min-h-[85vh] flex items-center justify-center pt-20 pb-10">
         {/* Background gradient effects */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-to-b from-primary/15 via-primary/5 to-transparent rounded-full blur-3xl" />
@@ -173,7 +211,7 @@ export default function Index() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3 }}
-            className="mb-12"
+            className="mb-10"
           >
             <Button
               className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm px-6 py-5 h-auto rounded-lg shadow-[0_0_30px_rgba(251,146,60,0.25)] hover:shadow-[0_0_40px_rgba(251,146,60,0.35)] transition-all duration-300"
@@ -216,7 +254,7 @@ export default function Index() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 relative">
+      <section className="py-12 relative">
         {/* Background subtle glow */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-gradient-to-r from-cyan-500/5 via-primary/10 to-orange-500/5 rounded-full blur-3xl" />
@@ -227,7 +265,7 @@ export default function Index() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="text-center mb-12"
+            className="text-center mb-8"
           >
             <div className="inline-flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-cyan-400" />
@@ -246,22 +284,35 @@ export default function Index() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08 }}
-                className="group relative p-5 rounded-xl bg-gradient-to-b from-white/[0.03] to-white/[0.01] border border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden"
+                className="group relative rounded-xl bg-gradient-to-b from-white/[0.03] to-white/[0.01] border border-white/[0.06] hover:border-cyan-500/30 transition-all duration-500 overflow-hidden"
               >
-                {/* Animated gradient background on hover */}
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-cyan-500/10 via-primary/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                {/* Feature Image */}
+                <div className="relative h-32 overflow-hidden">
+                  <img 
+                    src={feature.image} 
+                    alt={feature.title}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1a] via-[#0a0f1a]/50 to-transparent" />
+                  <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                    <feature.icon className="w-4 h-4 text-cyan-400" />
+                  </div>
+                </div>
                 
+                {/* Content */}
+                <div className="p-4 relative">
+                  {/* Animated gradient background on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-primary/5 to-orange-500/5 opacity-0 group-hover:opacity-100 transition-all duration-500" />
+                  
+                  <div className="relative z-10">
+                    <h4 className="text-sm font-semibold mb-1 group-hover:text-cyan-400 transition-colors">{feature.title}</h4>
+                    <p className="text-xs text-muted-foreground/60 leading-relaxed">{feature.description}</p>
+                  </div>
+                </div>
+
                 {/* Top light bar */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
-                <div className="relative z-10">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 via-cyan-500/15 to-orange-500/10 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-all duration-300">
-                    <feature.icon className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
-                  </div>
-                  <h4 className="text-base font-semibold mb-1.5 group-hover:text-cyan-400 transition-colors">{feature.title}</h4>
-                  <p className="text-xs text-muted-foreground/60 leading-relaxed">{feature.description}</p>
-                </div>
-
                 {/* Corner glow */}
                 <div className="absolute -bottom-10 -right-10 w-20 h-20 bg-cyan-500/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               </motion.div>
@@ -270,8 +321,62 @@ export default function Index() {
         </div>
       </section>
 
+      {/* Product Showcase Section */}
+      <section className="py-12 relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-orange-500/5 to-transparent" />
+        <div className="container mx-auto px-6 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-8"
+          >
+            <div className="inline-flex items-center gap-2 mb-3">
+              <Sparkles className="w-4 h-4 text-orange-400" />
+              <span className="text-orange-400 text-xs uppercase tracking-widest">Showcase</span>
+            </div>
+            <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-2">
+              产品案例展示
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              开品宝已帮助众多企业完成产品设计，以下是部分案例
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {showcaseProducts.map((product, i) => (
+              <motion.div
+                key={product.title}
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.05 }}
+                className="group relative rounded-xl overflow-hidden aspect-[4/5] cursor-pointer"
+              >
+                <img 
+                  src={product.image} 
+                  alt={product.title}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                />
+                {/* Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-90 transition-opacity duration-300" />
+                
+                {/* Content */}
+                <div className="absolute bottom-0 left-0 right-0 p-3 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                  <span className="text-[10px] text-cyan-400 uppercase tracking-wider">{product.category}</span>
+                  <h4 className="text-sm font-semibold text-white">{product.title}</h4>
+                </div>
+
+                {/* Border glow on hover */}
+                <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-orange-500/50 transition-colors duration-300" />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Target Audience Section */}
-      <section className="py-20 relative">
+      <section className="py-12 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/5 to-transparent" />
         <div className="container mx-auto px-6 relative z-10">
           <motion.div
