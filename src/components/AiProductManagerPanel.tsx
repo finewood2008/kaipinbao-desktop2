@@ -41,6 +41,8 @@ interface AiProductManagerPanelProps {
   showPrdReadyPrompt: boolean;
   onDismissPrdPrompt: () => void;
   isReadOnly?: boolean;
+  onFieldEdit?: (field: string, value: unknown) => void;
+  onProceedToDesign?: () => void;
 }
 
 export function AiProductManagerPanel({
@@ -58,6 +60,8 @@ export function AiProductManagerPanel({
   showPrdReadyPrompt,
   onDismissPrdPrompt,
   isReadOnly = false,
+  onFieldEdit,
+  onProceedToDesign,
 }: AiProductManagerPanelProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -133,6 +137,9 @@ export function AiProductManagerPanel({
         prdData={prdData}
         competitorProducts={competitorProducts}
         className="hidden md:flex"
+        isEditable={!isReadOnly}
+        onFieldEdit={onFieldEdit}
+        onProceedToDesign={onProceedToDesign}
       />
 
       {/* Right - Chat Area */}

@@ -86,6 +86,7 @@ export default function ProjectPage() {
   const [activeTab, setActiveTab] = useState("research");
   const [showTransitionPrompt, setShowTransitionPrompt] = useState(false);
   const [prdData, setPrdData] = useState<PrdData | null>(null);
+  const [competitorProducts, setCompetitorProducts] = useState<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export default function ProjectPage() {
       fetchImages();
       fetchVideos();
       fetchLandingPage();
+      fetchCompetitorProductsData();
     }
   }, [id]);
 
@@ -389,8 +391,30 @@ export default function ProjectPage() {
   };
 
   const handlePrdPhaseComplete = async () => {
+    // Refresh project data to get latest prd_data
     await fetchProject();
+    // Fetch competitor products for image references
+    await fetchCompetitorProductsData();
     setActiveTab("images");
+  };
+
+  const fetchCompetitorProductsData = async () => {
+    const { data } = await supabase
+      .from("competitor_products")
+      .select("*")
+      .eq("project_id", id)
+      .eq("status", "completed");
+
+    if (data) {
+      setCompetitorProducts(data.map((p: any) => ({
+        id: p.id,
+        product_title: p.product_title || undefined,
+        product_images: (p.product_images as string[]) || undefined,
+        main_image: p.main_image || undefined,
+        price: p.price || undefined,
+        rating: p.rating ? Number(p.rating) : undefined,
+      })));
+    }
   };
 
   const handleVisualPhaseConfirm = () => {
@@ -405,9 +429,11 @@ export default function ProjectPage() {
   const getPrdData = () => {
     const data = project?.prd_data as any;
     return {
-      usageScenarios: data?.usageScenarios || [],
+      usageScenarios: data?.usageScenarios || data?.marketingAssets?.usageScenarios || [],
       targetAudience: data?.targetAudience || "",
       coreFeatures: data?.coreFeatures || [],
+      designStyle: data?.designStyle || "",
+      selectedDirection: data?.selectedDirection || "",
     };
   };
 
@@ -507,6 +533,7 @@ export default function ProjectPage() {
                 onConfirmAndProceed={handleVisualPhaseConfirm}
                 prdSummary={project?.name}
                 prdData={getPrdData()}
+                competitorProducts={competitorProducts}
               />
             </div>
           </TabsContent>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Check, Sparkles, MessageSquare } from "lucide-react";
+import { Check, Sparkles, MessageSquare, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -65,12 +65,13 @@ export function PrdCompletionCard({
           transition={{ delay: 0.2 }}
           className="text-center space-y-3"
         >
-          <h2 className="text-xl font-bold text-foreground">
-            🎉 PRD 文档已生成完成！
+          <h2 className="text-xl font-bold text-foreground flex items-center justify-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            🎉 产品定义已完成！
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            我们已基于您的选择和竞品分析生成了完整的产品需求文档。
-            您可以在审核页面查看详情并进行修改。
+            所有核心产品信息已收集完成。您可以进入产品设计阶段，
+            让 AI 根据您的定义生成产品外观和营销素材。
           </p>
         </motion.div>
 
@@ -87,14 +88,14 @@ export function PrdCompletionCard({
               onClick={handleContinueChat}
             >
               <MessageSquare className="w-4 h-4" />
-              继续对话
+              继续完善
             </Button>
             <Button
               className="flex-1 gap-2 bg-gradient-primary glow-primary"
               onClick={onViewPrd}
             >
-              <Sparkles className="w-4 h-4" />
-              查看 PRD 文档
+              <ArrowRight className="w-4 h-4" />
+              进入产品设计
             </Button>
           </div>
 
@@ -102,7 +103,7 @@ export function PrdCompletionCard({
             <div className="space-y-2">
               <Progress value={progress} className="h-1" />
               <p className="text-xs text-center text-muted-foreground">
-                {countdown} 秒后自动进入审核页面...
+                {countdown} 秒后自动进入产品设计阶段...
               </p>
             </div>
           )}

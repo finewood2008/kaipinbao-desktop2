@@ -2,13 +2,11 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, ChevronRight, ArrowLeft, Sparkles, MessageSquare, FileText } from "lucide-react";
+import { Check, ChevronRight, ArrowRight, Sparkles } from "lucide-react";
 import { AiProductManagerPanel } from "@/components/AiProductManagerPanel";
-import { PrdDocumentPanel } from "@/components/PrdDocumentPanel";
 import { PrdData } from "@/components/PrdExtractionSidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 interface Message {
   id: string;
@@ -32,26 +30,39 @@ interface PrdPhaseProps {
   isReadOnly?: boolean;
 }
 
-const subPhases = [
-  { id: 1 as const, label: "AI产品经理", icon: MessageSquare },
-  { id: 2 as const, label: "产品PRD文档", icon: FileText },
-];
+// Required fields for product definition
+const REQUIRED_FIELDS = [
+  'selectedDirection',
+  'usageScenario',
+  'targetAudience',
+  'designStyle',
+  'coreFeatures',
+  'pricingRange'
+] as const;
+
+function checkAllRequiredFilled(prdData: PrdData | null): boolean {
+  if (!prdData) return false;
+  
+  return REQUIRED_FIELDS.every(field => {
+    if (field === 'coreFeatures') {
+      return prdData.coreFeatures && prdData.coreFeatures.length > 0;
+    }
+    return !!prdData[field as keyof PrdData];
+  });
+}
 
 export function PrdPhase({
   projectId,
   onComplete,
   isReadOnly = false,
 }: PrdPhaseProps) {
-  const [currentSubPhase, setCurrentSubPhase] = useState<1 | 2>(1);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [competitorProducts, setCompetitorProducts] = useState<CompetitorProduct[]>([]);
-  const [showTransition, setShowTransition] = useState(false);
-  const [showPrdReadyPrompt, setShowPrdReadyPrompt] = useState(false);
-  const [phase1Completed, setPhase1Completed] = useState(false);
+  const [showDesignReadyPrompt, setShowDesignReadyPrompt] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -62,13 +73,13 @@ export function PrdPhase({
 
   // Start AI conversation on mount if no messages exist
   useEffect(() => {
-    if (messages.length === 0 && currentSubPhase === 1 && !isReadOnly) {
+    if (messages.length === 0 && !isReadOnly) {
       const timer = setTimeout(() => {
         startAiConversation();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [messages.length, currentSubPhase, isReadOnly]);
+  }, [messages.length, isReadOnly]);
 
   const loadProjectData = async () => {
     const { data } = await supabase
@@ -200,33 +211,7 @@ export function PrdPhase({
         });
 
         // Extract and save PRD data from initial AI response
-        const prdDataMatch = assistantContent.match(/```prd-data\s*([\s\S]*?)\s*```/);
-        if (prdDataMatch) {
-          try {
-            const extractedPrdData = JSON.parse(prdDataMatch[1]);
-            
-            const { data: existingProject } = await supabase
-              .from("projects")
-              .select("prd_data")
-              .eq("id", projectId)
-              .single();
-            
-            const existingPrdData = (existingProject?.prd_data as Record<string, unknown>) || {};
-            const mergedPrdData = {
-              ...existingPrdData,
-              ...extractedPrdData,
-            };
-            
-            await supabase
-              .from("projects")
-              .update({ prd_data: mergedPrdData })
-              .eq("id", projectId);
-            
-            setPrdData(mergedPrdData as PrdData);
-          } catch (parseError) {
-            console.error("Failed to parse initial PRD data:", parseError);
-          }
-        }
+        await processAiResponse(assistantContent);
       }
     } catch (error) {
       console.error(error);
@@ -234,6 +219,69 @@ export function PrdPhase({
     } finally {
       setIsSending(false);
       setIsStreaming(false);
+    }
+  };
+
+  // Process AI response - extract PRD data and check for signals
+  const processAiResponse = async (content: string) => {
+    const prdDataMatch = content.match(/```prd-data\s*([\s\S]*?)\s*```/);
+    if (prdDataMatch) {
+      try {
+        const extractedPrdData = JSON.parse(prdDataMatch[1]);
+        
+        const { data: existingProject } = await supabase
+          .from("projects")
+          .select("prd_data")
+          .eq("id", projectId)
+          .single();
+        
+        const existingPrdData = (existingProject?.prd_data as Record<string, unknown>) || {};
+        const mergedPrdData = {
+          ...existingPrdData,
+          ...extractedPrdData,
+        };
+        
+        await supabase
+          .from("projects")
+          .update({ prd_data: mergedPrdData })
+          .eq("id", projectId);
+        
+        setPrdData(mergedPrdData as PrdData);
+        
+        // Check if all required fields are filled
+        if (checkAllRequiredFilled(mergedPrdData as PrdData)) {
+          setTimeout(() => {
+            setShowDesignReadyPrompt(true);
+          }, 1000);
+        }
+      } catch (parseError) {
+        console.error("Failed to parse PRD data:", parseError);
+      }
+    } else {
+      const { data: updatedProject } = await supabase
+        .from("projects")
+        .select("prd_data")
+        .eq("id", projectId)
+        .single();
+
+      if (updatedProject?.prd_data) {
+        const newPrdData = updatedProject.prd_data as PrdData;
+        setPrdData(newPrdData);
+        
+        // Check for DESIGN_READY signal or if all required fields are filled
+        if (content.includes("[DESIGN_READY]") || checkAllRequiredFilled(newPrdData)) {
+          setTimeout(() => {
+            setShowDesignReadyPrompt(true);
+          }, 1000);
+        }
+      }
+    }
+
+    // Also check for DESIGN_READY signal directly
+    if (content.includes("[DESIGN_READY]")) {
+      setTimeout(() => {
+        setShowDesignReadyPrompt(true);
+      }, 1000);
     }
   };
 
@@ -341,52 +389,7 @@ export function PrdPhase({
           stage: 1,
         });
 
-        // Extract and save PRD data from AI response
-        const prdDataMatch = assistantContent.match(/```prd-data\s*([\s\S]*?)\s*```/);
-        if (prdDataMatch) {
-          try {
-            const extractedPrdData = JSON.parse(prdDataMatch[1]);
-            
-            const { data: existingProject } = await supabase
-              .from("projects")
-              .select("prd_data")
-              .eq("id", projectId)
-              .single();
-            
-            const existingPrdData = (existingProject?.prd_data as Record<string, unknown>) || {};
-            const mergedPrdData = {
-              ...existingPrdData,
-              ...extractedPrdData,
-            };
-            
-            await supabase
-              .from("projects")
-              .update({ prd_data: mergedPrdData })
-              .eq("id", projectId);
-            
-            setPrdData(mergedPrdData as PrdData);
-          } catch (parseError) {
-            console.error("Failed to parse PRD data:", parseError);
-          }
-        } else {
-          const { data: updatedProject } = await supabase
-            .from("projects")
-            .select("prd_data")
-            .eq("id", projectId)
-            .single();
-
-          if (updatedProject?.prd_data) {
-            setPrdData(updatedProject.prd_data as PrdData);
-          }
-        }
-
-        // Detect PRD_READY signal
-        if (assistantContent.includes("[PRD_READY]")) {
-          setPhase1Completed(true);
-          setTimeout(() => {
-            setShowPrdReadyPrompt(true);
-          }, 1000);
-        }
+        await processAiResponse(assistantContent);
       }
     } catch (error) {
       console.error(error);
@@ -499,42 +502,7 @@ export function PrdPhase({
           stage: 1,
         });
 
-        // Extract PRD data
-        const prdDataMatch = assistantContent.match(/```prd-data\s*([\s\S]*?)\s*```/);
-        if (prdDataMatch) {
-          try {
-            const extractedPrdData = JSON.parse(prdDataMatch[1]);
-            
-            const { data: existingProject } = await supabase
-              .from("projects")
-              .select("prd_data")
-              .eq("id", projectId)
-              .single();
-            
-            const existingPrdData = (existingProject?.prd_data as Record<string, unknown>) || {};
-            const mergedPrdData = {
-              ...existingPrdData,
-              ...extractedPrdData,
-            };
-            
-            await supabase
-              .from("projects")
-              .update({ prd_data: mergedPrdData })
-              .eq("id", projectId);
-            
-            setPrdData(mergedPrdData as PrdData);
-          } catch (parseError) {
-            console.error("Failed to parse PRD data:", parseError);
-          }
-        }
-
-        // Detect PRD_READY signal
-        if (assistantContent.includes("[PRD_READY]")) {
-          setPhase1Completed(true);
-          setTimeout(() => {
-            setShowPrdReadyPrompt(true);
-          }, 1000);
-        }
+        await processAiResponse(assistantContent);
       }
     } catch (error) {
       console.error(error);
@@ -545,30 +513,34 @@ export function PrdPhase({
     }
   };
 
-  const handleTransitionConfirm = () => {
-    setShowTransition(false);
-    setCurrentSubPhase(2);
-  };
-
-  const handlePrdComplete = () => {
-    setShowPrdReadyPrompt(false);
-    setPhase1Completed(true);
-    setShowTransition(true);
-  };
-
-  const handleDismissPrdPrompt = () => {
-    setShowPrdReadyPrompt(false);
-  };
-
-  const handleSavePrdData = async (data: PrdData) => {
-    setPrdData(data);
+  // Handle field edit from sidebar
+  const handleFieldEdit = async (field: string, value: unknown) => {
+    const updatedPrdData = {
+      ...prdData,
+      [field]: value,
+    } as PrdData;
+    
+    setPrdData(updatedPrdData);
+    
     await supabase
       .from("projects")
-      .update({ prd_data: JSON.parse(JSON.stringify(data)) })
+      .update({ prd_data: JSON.parse(JSON.stringify(updatedPrdData)) })
       .eq("id", projectId);
+
+    toast.success("已保存修改");
+    
+    // Check if all required fields are now filled
+    if (checkAllRequiredFilled(updatedPrdData)) {
+      setTimeout(() => {
+        setShowDesignReadyPrompt(true);
+      }, 500);
+    }
   };
 
-  const handleConfirmPrd = async () => {
+  // Handle proceed to design phase
+  const handleProceedToDesign = async () => {
+    setShowDesignReadyPrompt(false);
+    
     await supabase
       .from("projects")
       .update({ 
@@ -577,31 +549,12 @@ export function PrdPhase({
       })
       .eq("id", projectId);
 
-    toast.success("🎉 PRD 已确认，进入视觉生成阶段！");
+    toast.success("🎉 产品定义完成，进入产品设计阶段！");
     onComplete();
   };
 
-  const handleSubPhaseClick = (phase: 1 | 2) => {
-    if (phase === 1) {
-      setCurrentSubPhase(1);
-    } else if (phase === 2 && phase1Completed) {
-      setCurrentSubPhase(2);
-    }
-  };
-
-  const handleBackToPhase1 = () => {
-    setCurrentSubPhase(1);
-  };
-
-  const isCompleted = (phase: number) => {
-    if (phase === 1) return phase1Completed;
-    return false;
-  };
-
-  const canNavigate = (phase: number) => {
-    if (phase === 1) return true;
-    if (phase === 2) return phase1Completed;
-    return false;
+  const handleDismissDesignPrompt = () => {
+    setShowDesignReadyPrompt(false);
   };
 
   return (
@@ -620,62 +573,9 @@ export function PrdPhase({
         </motion.div>
       )}
 
-      {/* Sub-phase Indicator */}
-      <div className="flex items-center justify-center gap-1 p-3 border-b border-border/50 mx-4 mt-4">
-        {subPhases.map((phase, index) => {
-          const Icon = phase.icon;
-          const completed = isCompleted(phase.id);
-          const isCurrent = currentSubPhase === phase.id;
-          const canClick = canNavigate(phase.id) && !isCurrent;
-
-          return (
-            <div key={phase.id} className="flex items-center">
-              <motion.button
-                onClick={() => canClick && handleSubPhaseClick(phase.id)}
-                disabled={!canClick}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-300 text-xs",
-                  isCurrent
-                    ? "bg-gradient-to-r from-primary to-accent text-primary-foreground"
-                    : completed
-                    ? "bg-primary/20 text-primary cursor-pointer hover:bg-primary/30"
-                    : "bg-muted text-muted-foreground cursor-not-allowed"
-                )}
-                whileHover={canClick ? { scale: 1.02 } : {}}
-                whileTap={canClick ? { scale: 0.98 } : {}}
-              >
-                {completed && !isCurrent ? (
-                  <Check className="w-3.5 h-3.5" />
-                ) : (
-                  <Icon className="w-3.5 h-3.5" />
-                )}
-                <span className="font-medium">{phase.label}</span>
-              </motion.button>
-
-              {index < subPhases.length - 1 && (
-                <div className="mx-2 flex items-center">
-                  <motion.div
-                    className={cn(
-                      "h-0.5 w-6 rounded-full",
-                      isCompleted(phase.id) ? "bg-primary" : "bg-border"
-                    )}
-                    initial={false}
-                    animate={{
-                      backgroundColor: isCompleted(phase.id)
-                        ? "hsl(var(--primary))"
-                        : "hsl(var(--border))",
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Phase Transition Overlay */}
+      {/* Design Ready Transition Overlay */}
       <AnimatePresence>
-        {showTransition && (
+        {showDesignReadyPrompt && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -735,27 +635,30 @@ export function PrdPhase({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
                   >
-                    <h3 className="text-xl font-bold mb-2">✅ PRD 信息收集完成！</h3>
+                    <h3 className="text-xl font-bold mb-2 flex items-center justify-center gap-2">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      🎉 产品定义已完成！
+                    </h3>
                     <p className="text-muted-foreground mb-6">
-                      您可以在文档页面查看详情并进行修改
+                      所有核心字段已填写完成。您可以进入产品设计阶段，
+                      或继续与 AI 对话完善更多细节。
                     </p>
                   </motion.div>
 
                   <div className="flex gap-3">
                     <Button
                       variant="outline"
-                      onClick={() => setShowTransition(false)}
+                      onClick={handleDismissDesignPrompt}
                       className="flex-1"
                     >
-                      <ArrowLeft className="w-4 h-4 mr-2" />
-                      返回修改
+                      继续完善
                     </Button>
                     <Button
-                      onClick={handleTransitionConfirm}
+                      onClick={handleProceedToDesign}
                       className="flex-1 bg-gradient-to-r from-primary to-accent animate-glow-pulse"
                     >
-                      查看 PRD 文档
-                      <ChevronRight className="w-4 h-4 ml-2" />
+                      进入产品设计
+                      <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
                 </CardContent>
@@ -765,57 +668,26 @@ export function PrdPhase({
         )}
       </AnimatePresence>
 
-      {/* Phase Content */}
+      {/* Main Content - AI Product Manager Panel with Sidebar */}
       <div className="flex-1 min-h-0 overflow-hidden mt-4">
-        <AnimatePresence mode="wait">
-          {currentSubPhase === 1 && (
-            <motion.div
-              key="subphase1"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-              className="h-full min-h-0"
-            >
-              <AiProductManagerPanel
-                projectId={projectId}
-                messages={messages}
-                isStreaming={isStreaming}
-                isSending={isSending}
-                inputValue={inputValue}
-                prdData={prdData}
-                competitorProducts={competitorProducts}
-                onInputChange={setInputValue}
-                onSend={handleSendMessage}
-                onSendDirect={handleSendDirect}
-                onPrdComplete={handlePrdComplete}
-                showPrdReadyPrompt={showPrdReadyPrompt}
-                onDismissPrdPrompt={handleDismissPrdPrompt}
-                isReadOnly={isReadOnly}
-              />
-            </motion.div>
-          )}
-
-          {currentSubPhase === 2 && (
-            <motion.div
-              key="subphase2"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-              className="h-full min-h-0"
-            >
-              <PrdDocumentPanel
-                prdData={prdData}
-                competitorProducts={competitorProducts}
-                projectId={projectId}
-                onSave={handleSavePrdData}
-                onConfirm={handleConfirmPrd}
-                onBack={handleBackToPhase1}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <AiProductManagerPanel
+          projectId={projectId}
+          messages={messages}
+          isStreaming={isStreaming}
+          isSending={isSending}
+          inputValue={inputValue}
+          prdData={prdData}
+          competitorProducts={competitorProducts}
+          onInputChange={setInputValue}
+          onSend={handleSendMessage}
+          onSendDirect={handleSendDirect}
+          onPrdComplete={handleProceedToDesign}
+          showPrdReadyPrompt={false}
+          onDismissPrdPrompt={handleDismissDesignPrompt}
+          isReadOnly={isReadOnly}
+          onFieldEdit={handleFieldEdit}
+          onProceedToDesign={handleProceedToDesign}
+        />
       </div>
     </div>
   );

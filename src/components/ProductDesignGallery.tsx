@@ -30,12 +30,29 @@ interface GeneratedImage {
   parent_image_id?: string | null;
 }
 
+interface CompetitorProduct {
+  id: string;
+  product_title?: string;
+  product_images?: string[];
+  main_image?: string;
+  price?: string;
+  rating?: number;
+}
+
 interface ProductDesignGalleryProps {
   projectId: string;
   images: GeneratedImage[];
   onImagesChange: (images: GeneratedImage[]) => void;
   onSelectImage: (image: GeneratedImage) => void;
   prdSummary?: string;
+  prdData?: {
+    usageScenarios?: string[];
+    targetAudience?: string;
+    coreFeatures?: string[];
+    designStyle?: string;
+    selectedDirection?: string;
+  };
+  competitorProducts?: CompetitorProduct[];
 }
 
 export function ProductDesignGallery({
@@ -44,6 +61,8 @@ export function ProductDesignGallery({
   onImagesChange,
   onSelectImage,
   prdSummary,
+  prdData,
+  competitorProducts = [],
 }: ProductDesignGalleryProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");

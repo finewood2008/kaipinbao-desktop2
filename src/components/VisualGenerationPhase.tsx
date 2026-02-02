@@ -37,6 +37,15 @@ interface GeneratedVideo {
   status: string;
 }
 
+interface CompetitorProduct {
+  id: string;
+  product_title?: string;
+  product_images?: string[];
+  main_image?: string;
+  price?: string;
+  rating?: number;
+}
+
 interface VisualGenerationPhaseProps {
   projectId: string;
   productImages: GeneratedImage[];
@@ -51,7 +60,10 @@ interface VisualGenerationPhaseProps {
     usageScenarios?: string[];
     targetAudience?: string;
     coreFeatures?: string[];
+    designStyle?: string;
+    selectedDirection?: string;
   };
+  competitorProducts?: CompetitorProduct[];
 }
 
 export function VisualGenerationPhase({
@@ -65,6 +77,7 @@ export function VisualGenerationPhase({
   onConfirmAndProceed,
   prdSummary,
   prdData,
+  competitorProducts = [],
 }: VisualGenerationPhaseProps) {
   const [currentPhase, setCurrentPhase] = useState<1 | 2>(1);
   const [selectedProductImage, setSelectedProductImage] = useState<GeneratedImage | null>(null);
@@ -280,6 +293,8 @@ export function VisualGenerationPhase({
               onImagesChange={onProductImagesChange}
               onSelectImage={handleProductSelection}
               prdSummary={prdSummary}
+              prdData={prdData}
+              competitorProducts={competitorProducts}
             />
           </motion.div>
         ) : (
