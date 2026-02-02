@@ -65,11 +65,12 @@ export default function Auth() {
             initial={{ scale: 0.5 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 200 }}
-            className="inline-flex items-center mb-4"
+            className="inline-flex items-center gap-3 mb-4"
           >
-            <img src={logoImage} alt="KAI Logo" className="h-12" />
+            <img src={logoImage} alt="开品宝" className="h-12" />
+            <span className="text-2xl font-bold text-foreground">开品宝</span>
           </motion.div>
-          <p className="text-muted-foreground mt-2">AI驱动产品研发专家</p>
+          <p className="text-muted-foreground mt-2">您的第二开发部</p>
         </div>
 
         <Card className="glass">
