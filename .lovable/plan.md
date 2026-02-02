@@ -1,169 +1,103 @@
 
-# AI 产品经理 - 切换到 Google Gemini API 直接调用
+# AI 产品经理面板优化方案
 
-## 问题分析
-
-通过检查网络请求和代码，发现：
-
-1. **当前架构**：使用 Lovable AI Gateway (`https://ai.gateway.lovable.dev/v1/chat/completions`) + `google/gemini-3-pro-preview` 模型
-2. **响应格式问题**：Gateway 返回的 SSE 流包含 `: OPENROUTER PROCESSING` 注释行，以及 `reasoning` 字段（推理过程），但实际内容 `content` 为空或延迟到达
-3. **用户需求**：切换到直接调用 Google Generative AI API，使用 `GOOGLE_API_KEY` 和 `gemini-2.5-flash` 模型
-
-## 解决方案
-
-将 chat edge function 从 Lovable AI Gateway 切换到直接调用 Google Generative AI API。
+## 需求分析
+根据截图和描述，需要优化以下三个方面：
+1. **AI思考进度条** - 让用户知道AI正在工作的状态
+2. **对话滚动框** - 聊天区域可滚动，左侧信息收集列表保持固定
+3. **UI与排版优化** - 提升对话内容的可读性和视觉效果
 
 ---
 
-## 技术实现
+## 实施计划
 
-### 修改文件：`supabase/functions/chat/index.ts`
+### 1. AI 思考进度条增强
+**当前状态**: 已有基础进度条实现（第211-282行 AiProductManagerPanel.tsx）
 
-#### 1. API 端点变更
+**优化内容**:
+- 增加更明显的进度条高度（从 h-1.5 改为 h-2）
+- 添加步骤式进度指示器（显示当前执行阶段）
+- 优化动画效果，使进度更加流畅
+- 添加预计等待时间提示
 
+### 2. 滚动框架优化
+**当前状态**: 已有 ScrollArea 实现，但可能存在高度计算问题
+
+**优化内容**:
+- 确保主容器使用 `flex-1 min-h-0 overflow-hidden`
+- 左侧边栏保持 `flex-shrink-0` 固定宽度
+- 右侧聊天区域独立滚动
+- 修复 Radix ScrollArea viewport 高度继承问题
+
+### 3. UI 与排版优化
+
+**对话气泡样式**:
+- 增加消息间距和内边距
+- 优化渐变背景效果
+- 添加微妙的阴影和边框
+
+**文字排版**:
+- 段落行高从 leading-7 调整为更舒适的间距
+- 标题增加左侧装饰条
+- 列表项使用彩色圆点标记
+- 引用块添加背景色
+- 强调文字使用主题色
+
+**左侧边栏优化**:
+- 添加卡片悬停效果
+- 进度条视觉增强
+- 信息收集状态更清晰
+
+---
+
+## 技术实现细节
+
+### 文件修改清单
+
+| 文件 | 修改内容 |
+|------|----------|
+| `src/components/AiProductManagerPanel.tsx` | 思考进度条增强、布局优化 |
+| `src/components/ChatMessage.tsx` | 排版样式优化、段落间距调整 |
+| `src/components/PrdExtractionSidebar.tsx` | 侧边栏视觉增强 |
+
+### AiProductManagerPanel.tsx 修改
 ```text
-修改前: https://ai.gateway.lovable.dev/v1/chat/completions
-修改后: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse
+1. 思考进度条区域 (第211-282行):
+   - 增加进度条高度和视觉层次
+   - 添加步骤完成状态标识
+   - 优化动画时序
+
+2. 滚动容器 (第162-287行):
+   - 确保 flex 布局正确嵌套
+   - ScrollArea 高度继承修复
 ```
 
-#### 2. 使用的密钥
-
+### ChatMessage.tsx 修改
 ```text
-修改前: LOVABLE_API_KEY
-修改后: GOOGLE_API_KEY (用户已配置)
+1. 消息容器样式:
+   - 增加 p-6 内边距
+   - 添加 hover:shadow-lg 效果
+   - 优化渐变背景
+
+2. 文字排版:
+   - 段落: mb-4 leading-relaxed
+   - 标题: 添加左侧渐变装饰条
+   - 列表: 优化符号颜色和间距
+   - 引用: 添加背景底色
 ```
 
-#### 3. 请求格式变更
-
-**修改前 (OpenAI 格式)**:
-```json
-{
-  "model": "google/gemini-3-pro-preview",
-  "messages": [
-    { "role": "system", "content": "..." },
-    { "role": "user", "content": "..." }
-  ],
-  "stream": true
-}
+### PrdExtractionSidebar.tsx 修改
+```text
+1. 整体容器添加 ScrollArea 确保可滚动
+2. 进度卡片添加悬停动效
+3. 完成状态添加脉冲动画
 ```
-
-**修改后 (Google Gemini 格式)**:
-```json
-{
-  "system_instruction": {
-    "parts": [{ "text": "系统提示词" }]
-  },
-  "contents": [
-    { "role": "user", "parts": [{ "text": "用户消息" }] },
-    { "role": "model", "parts": [{ "text": "助手回复" }] }
-  ],
-  "generationConfig": {
-    "temperature": 0.85,
-    "maxOutputTokens": 16384
-  }
-}
-```
-
-#### 4. SSE 响应解析变更
-
-**修改前 (OpenAI 格式)**:
-```json
-{
-  "choices": [{ "delta": { "content": "文本内容" } }]
-}
-```
-
-**修改后 (Google Gemini 格式)**:
-```json
-{
-  "candidates": [
-    {
-      "content": {
-        "parts": [{ "text": "文本内容" }]
-      }
-    }
-  ]
-}
-```
-
-#### 5. 转换 SSE 流
-
-需要将 Google Gemini 的 SSE 格式转换为 OpenAI 格式，以保持前端代码兼容性：
-
-```typescript
-// Google Gemini 响应
-data: {"candidates":[{"content":{"parts":[{"text":"你好"}]}}]}
-
-// 转换为 OpenAI 格式
-data: {"choices":[{"delta":{"content":"你好"}}]}
-```
-
----
-
-## 完整代码改动摘要
-
-### `supabase/functions/chat/index.ts` 主要改动
-
-1. **替换 API 密钥获取**:
-   - `LOVABLE_API_KEY` → `GOOGLE_API_KEY`
-   
-2. **替换 API 端点**:
-   - Lovable Gateway → Google Generative AI API
-   
-3. **消息格式转换函数**:
-   - OpenAI messages 格式 → Gemini contents 格式
-   - 处理 `role: "system"` → `system_instruction`
-   - 处理 `role: "assistant"` → `role: "model"`
-   
-4. **SSE 流转换**:
-   - 解析 Gemini SSE 响应
-   - 转换为 OpenAI 格式的 SSE 输出
-   - 保持前端代码完全兼容
-
----
-
-## 改动范围
-
-| 文件 | 修改类型 | 内容 |
-|------|---------|------|
-| `supabase/functions/chat/index.ts` | 修改 | 切换到 Google Gemini API 直接调用 |
 
 ---
 
 ## 预期效果
 
-| 改动 | 效果 |
-|------|------|
-| 使用 Google API 直接调用 | 更稳定的 API 响应，无 Gateway 中间层 |
-| 切换到 gemini-2.5-flash | 更快的响应速度，成本更低 |
-| 使用用户提供的 GOOGLE_API_KEY | 完全控制 API 配额和计费 |
-| 保持前端兼容 | 无需修改前端代码，SSE 格式保持一致 |
-
----
-
-## 技术细节
-
-### Google Gemini API 格式
-
-**请求头**:
-```text
-Content-Type: application/json
-x-goog-api-key: ${GOOGLE_API_KEY}
-```
-
-**角色映射**:
-- OpenAI `user` → Gemini `user`
-- OpenAI `assistant` → Gemini `model`
-- OpenAI `system` → Gemini `system_instruction`
-
-### SSE 流格式
-
-Google Gemini 返回的 SSE 格式：
-```text
-data: {"candidates":[{"content":{"parts":[{"text":"内容片段"}],"role":"model"},"finishReason":null}],"modelVersion":"gemini-2.5-flash"}
-```
-
-转换后的 OpenAI 兼容格式：
-```text
-data: {"choices":[{"index":0,"delta":{"content":"内容片段"}}]}
-```
+- 用户发送消息后，能清晰看到3步骤进度指示
+- 长对话内容可以流畅滚动，左侧PRD收集进度始终可见
+- 对话内容层次分明，重点内容突出显示
+- 整体视觉更现代、专业
