@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Check, MessageSquare, Palette, Rocket } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,8 @@ const stages = [
 ];
 
 export function StageIndicator({ currentStage, className, onStageClick }: StageIndicatorProps) {
+  const [hoveredStage, setHoveredStage] = useState<number | null>(null);
+
   const handleStageClick = (stageId: number) => {
     if (stageId <= currentStage && onStageClick) {
       onStageClick(stageId);
@@ -22,11 +25,12 @@ export function StageIndicator({ currentStage, className, onStageClick }: StageI
   };
 
   return (
-    <div className={cn("flex items-center justify-between", className)}>
+    <div className={cn("flex items-center justify-between py-2", className)}>
       {stages.map((stage, index) => {
         const isCompleted = currentStage > stage.id;
         const isCurrent = currentStage === stage.id;
         const isClickable = stage.id <= currentStage;
+        const isHovered = hoveredStage === stage.id;
         const Icon = stage.icon;
 
         return (
@@ -34,85 +38,195 @@ export function StageIndicator({ currentStage, className, onStageClick }: StageI
             {/* Stage circle */}
             <div 
               className={cn(
-                "flex flex-col items-center",
-                isClickable && "cursor-pointer group"
+                "flex flex-col items-center relative",
+                isClickable && "cursor-pointer"
               )}
               onClick={() => handleStageClick(stage.id)}
+              onMouseEnter={() => isClickable && setHoveredStage(stage.id)}
+              onMouseLeave={() => setHoveredStage(null)}
             >
+              {/* Hover glow effect */}
+              {isClickable && (
+                <motion.div
+                  className="absolute -inset-3 rounded-3xl bg-primary/10 blur-xl"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ 
+                    opacity: isHovered ? 0.8 : 0, 
+                    scale: isHovered ? 1.2 : 0.8 
+                  }}
+                  transition={{ duration: 0.3 }}
+                />
+              )}
+
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={isClickable ? { scale: 1.15, y: -2 } : undefined}
-                whileTap={isClickable ? { scale: 0.95 } : undefined}
+                animate={{ 
+                  scale: isHovered ? 1.12 : 1, 
+                  opacity: 1,
+                  y: isHovered ? -4 : 0 
+                }}
+                transition={{ 
+                  delay: index * 0.1,
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 25
+                }}
+                whileTap={isClickable ? { scale: 0.92 } : undefined}
                 className={cn(
-                  "relative flex items-center justify-center w-14 h-14 rounded-2xl border-2 transition-all duration-300",
-                  isCompleted && "bg-gradient-to-br from-primary to-accent border-primary/50 shadow-lg shadow-primary/25",
-                  isCurrent && "border-primary bg-primary/20 shadow-lg shadow-primary/30",
-                  !isCompleted && !isCurrent && "border-muted-foreground/30 bg-muted/30",
-                  isClickable && !isCurrent && "hover:border-primary/60 hover:bg-primary/10 hover:shadow-md hover:shadow-primary/20"
+                  "relative flex items-center justify-center w-16 h-16 rounded-2xl border-2 transition-all duration-300 z-10",
+                  // Completed state
+                  isCompleted && "bg-gradient-to-br from-primary via-primary to-accent border-transparent shadow-xl shadow-primary/30",
+                  // Current state
+                  isCurrent && !isHovered && "border-primary bg-primary/15 shadow-lg shadow-primary/25",
+                  isCurrent && isHovered && "border-primary bg-primary/25 shadow-xl shadow-primary/40",
+                  // Inactive state
+                  !isCompleted && !isCurrent && "border-muted-foreground/20 bg-muted/20",
+                  // Hover states for clickable
+                  isClickable && isHovered && !isCurrent && !isCompleted && "border-primary/70 bg-primary/15 shadow-lg shadow-primary/25",
+                  isCompleted && isHovered && "shadow-2xl shadow-primary/50"
                 )}
               >
+                {/* Icon */}
                 {isCompleted ? (
-                  <Check className="w-6 h-6 text-primary-foreground" />
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 500 }}
+                  >
+                    <Check className="w-7 h-7 text-primary-foreground" strokeWidth={2.5} />
+                  </motion.div>
                 ) : (
                   <Icon
                     className={cn(
-                      "w-6 h-6 transition-colors duration-300",
+                      "w-7 h-7 transition-all duration-300",
                       isCurrent ? "text-primary" : "text-muted-foreground",
-                      isClickable && "group-hover:text-primary"
+                      isClickable && isHovered && "text-primary scale-110"
                     )}
                   />
                 )}
+
+                {/* Current stage animations */}
                 {isCurrent && (
                   <>
+                    {/* Outer pulse ring */}
                     <motion.div
                       className="absolute inset-0 rounded-2xl border-2 border-primary"
-                      animate={{ scale: [1, 1.15, 1], opacity: [0.8, 0, 0.8] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      animate={{ 
+                        scale: [1, 1.25, 1], 
+                        opacity: [0.6, 0, 0.6] 
+                      }}
+                      transition={{ 
+                        duration: 2.5, 
+                        repeat: Infinity, 
+                        ease: "easeInOut" 
+                      }}
                     />
+                    {/* Inner glow */}
                     <motion.div
-                      className="absolute inset-0 rounded-2xl bg-primary/20"
-                      animate={{ opacity: [0.3, 0.6, 0.3] }}
-                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/30 to-accent/20"
+                      animate={{ opacity: [0.4, 0.7, 0.4] }}
+                      transition={{ 
+                        duration: 2, 
+                        repeat: Infinity, 
+                        ease: "easeInOut" 
+                      }}
                     />
                   </>
                 )}
+
+                {/* Hover shine effect */}
+                {isClickable && isHovered && (
+                  <motion.div
+                    className="absolute inset-0 rounded-2xl overflow-hidden"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12"
+                      initial={{ x: "-100%" }}
+                      animate={{ x: "200%" }}
+                      transition={{ 
+                        duration: 0.6, 
+                        ease: "easeOut" 
+                      }}
+                    />
+                  </motion.div>
+                )}
               </motion.div>
-              <div className="mt-3 text-center">
-                <motion.p
+
+              {/* Label */}
+              <motion.div 
+                className="mt-3 text-center"
+                animate={{ 
+                  y: isHovered ? -2 : 0,
+                  scale: isHovered ? 1.05 : 1
+                }}
+                transition={{ duration: 0.2 }}
+              >
+                <p
                   className={cn(
                     "text-sm font-semibold transition-all duration-300",
-                    isCurrent ? "text-primary scale-105" : isCompleted ? "text-foreground" : "text-muted-foreground",
-                    isClickable && "group-hover:text-primary group-hover:scale-105"
+                    isCurrent && "text-primary",
+                    isCompleted && "text-foreground",
+                    !isCompleted && !isCurrent && "text-muted-foreground",
+                    isClickable && isHovered && "text-primary"
                   )}
                 >
                   {stage.name}
-                </motion.p>
+                </p>
                 <p className={cn(
-                  "text-xs mt-0.5 hidden md:block transition-colors duration-300",
-                  isCurrent ? "text-primary/70" : "text-muted-foreground",
-                  isClickable && "group-hover:text-primary/70"
+                  "text-xs mt-1 hidden md:block transition-all duration-300",
+                  isCurrent ? "text-primary/70" : "text-muted-foreground/70",
+                  isClickable && isHovered && "text-primary/80"
                 )}>
                   {stage.description}
                 </p>
-              </div>
+              </motion.div>
             </div>
 
             {/* Connector line */}
             {index < stages.length - 1 && (
-              <div className="flex-1 h-1 mx-6 bg-muted/50 rounded-full relative overflow-hidden">
+              <div className="flex-1 h-1.5 mx-8 bg-muted/40 rounded-full relative overflow-hidden">
+                {/* Progress fill */}
                 <motion.div
-                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-accent rounded-full"
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-primary to-accent rounded-full"
                   initial={{ width: "0%" }}
                   animate={{ width: isCompleted ? "100%" : isCurrent ? "50%" : "0%" }}
-                  transition={{ duration: 0.6, delay: index * 0.2, ease: "easeOut" }}
+                  transition={{ duration: 0.8, delay: index * 0.2, ease: "easeOut" }}
                 />
+                
+                {/* Animated shimmer for current */}
                 {isCurrent && (
                   <motion.div
-                    className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-primary/50 to-transparent rounded-full"
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className="absolute inset-y-0 w-full"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <motion.div
+                      className="absolute inset-y-0 w-8 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+                      animate={{ x: ["-100%", "200%"] }}
+                      transition={{ 
+                        duration: 2, 
+                        repeat: Infinity, 
+                        ease: "linear",
+                        repeatDelay: 1
+                      }}
+                    />
+                  </motion.div>
+                )}
+                
+                {/* Pulse effect for current stage */}
+                {isCurrent && (
+                  <motion.div
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-primary"
+                    animate={{ 
+                      scale: [1, 1.5, 1],
+                      opacity: [0.8, 0.4, 0.8]
+                    }}
+                    transition={{ 
+                      duration: 1.5, 
+                      repeat: Infinity 
+                    }}
                   />
                 )}
               </div>
