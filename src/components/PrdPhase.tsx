@@ -33,6 +33,7 @@ interface PrdPhaseProps {
   onComplete: () => void;
   initialPhase?: 1 | 2 | 3 | 4;
   competitorResearchCompleted?: boolean;
+  isReadOnly?: boolean;
 }
 
 export function PrdPhase({
@@ -40,6 +41,7 @@ export function PrdPhase({
   onComplete,
   initialPhase = 1,
   competitorResearchCompleted = false,
+  isReadOnly = false,
 }: PrdPhaseProps) {
   const [currentPhase, setCurrentPhase] = useState<1 | 2 | 3 | 4>(initialPhase);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -662,6 +664,20 @@ export function PrdPhase({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* Read-only Mode Banner */}
+      {isReadOnly && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-4 mt-4 p-3 bg-muted/50 border border-border/50 rounded-lg flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="w-2 h-2 rounded-full bg-yellow-500" />
+            <span>只读模式 - 产品定义阶段已完成，您正在查看历史记录</span>
+          </div>
+        </motion.div>
+      )}
+
       {/* Phase Indicator */}
       <Card className="glass border-border/50 overflow-hidden mx-4 mt-4">
         <CardContent className="p-2">
@@ -847,6 +863,7 @@ export function PrdPhase({
                 onPrdComplete={handlePrdComplete}
                 showPrdReadyPrompt={showPrdReadyPrompt}
                 onDismissPrdPrompt={handleDismissPrdPrompt}
+                isReadOnly={isReadOnly}
               />
             </motion.div>
           )}

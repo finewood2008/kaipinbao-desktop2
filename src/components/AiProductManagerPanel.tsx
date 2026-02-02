@@ -40,6 +40,7 @@ interface AiProductManagerPanelProps {
   onPrdComplete: () => void;
   showPrdReadyPrompt: boolean;
   onDismissPrdPrompt: () => void;
+  isReadOnly?: boolean;
 }
 
 export function AiProductManagerPanel({
@@ -56,6 +57,7 @@ export function AiProductManagerPanel({
   onPrdComplete,
   showPrdReadyPrompt,
   onDismissPrdPrompt,
+  isReadOnly = false,
 }: AiProductManagerPanelProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -248,31 +250,41 @@ export function AiProductManagerPanel({
         </div>
 
         {/* Input Area - Fixed height */}
-        <div className="flex-shrink-0 border-t border-border/50 bg-background/50 backdrop-blur-sm p-4">
-          <div className="max-w-3xl mx-auto">
-            <Card className="flex items-center gap-2 p-2 bg-card/50 border-border/50">
-              <Input
-                placeholder="输入您的想法，或点击上方选项快速选择..."
-                value={inputValue}
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isSending}
-                className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-              <Button
-                size="icon"
-                onClick={onSend}
-                disabled={!inputValue.trim() || isSending}
-                className="bg-gradient-primary glow-primary flex-shrink-0"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </Card>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              按 Enter 发送 · AI 产品经理将根据竞品数据给出专业建议
-            </p>
+        {!isReadOnly ? (
+          <div className="flex-shrink-0 border-t border-border/50 bg-background/50 backdrop-blur-sm p-4">
+            <div className="max-w-3xl mx-auto">
+              <Card className="flex items-center gap-2 p-2 bg-card/50 border-border/50">
+                <Input
+                  placeholder="输入您的想法，或点击上方选项快速选择..."
+                  value={inputValue}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isSending}
+                  className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <Button
+                  size="icon"
+                  onClick={onSend}
+                  disabled={!inputValue.trim() || isSending}
+                  className="bg-gradient-primary glow-primary flex-shrink-0"
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </Card>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                按 Enter 发送 · AI 产品经理将根据竞品数据给出专业建议
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex-shrink-0 border-t border-border/50 bg-muted/30 p-4">
+            <div className="max-w-3xl mx-auto text-center">
+              <p className="text-sm text-muted-foreground">
+                📖 只读模式 - 产品定义阶段已完成
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

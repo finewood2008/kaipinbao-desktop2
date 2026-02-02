@@ -28,12 +28,15 @@ import {
   Wand2,
   ImageIcon,
   FileText,
-  Palette
+  Palette,
+  BarChart3,
+  Edit,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LandingPagePreview } from "./LandingPagePreview";
 import { TemplateSelect, type TemplateStyle } from "./LandingPageTemplates";
+import { LandingPageAnalytics } from "./LandingPageAnalytics";
 import { cn } from "@/lib/utils";
 
 interface LandingPageData {
@@ -136,6 +139,10 @@ export function LandingPageBuilder({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [generatedMarketingImages, setGeneratedMarketingImages] = useState<Record<string, string | string[]>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateStyle>("modern");
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
+  // Auto-show analytics if page is already published
+  const shouldShowAnalytics = showAnalytics || (landingPage?.is_published && !isRegenerating);
 
   const handleAIGenerateLandingPage = async () => {
     setIsGenerating(true);
@@ -249,6 +256,7 @@ export function LandingPageBuilder({
       if (error) throw error;
 
       onLandingPageChange({ ...landingPage, is_published: true });
+      setShowAnalytics(true); // Switch to analytics view after publishing
       toast.success("🚀 落地页发布成功！");
     } catch (error) {
       toast.error("发布失败");
@@ -285,6 +293,19 @@ export function LandingPageBuilder({
       setIsRegenerating(false);
     }
   };
+
+  // If analytics view is active, show analytics
+  if (landingPage && shouldShowAnalytics) {
+    return (
+      <LandingPageAnalytics
+        landingPageId={landingPage.id}
+        landingPageSlug={landingPage.slug}
+        landingPageTitle={landingPage.title}
+        viewCount={landingPage.view_count}
+        onBackToEdit={() => setShowAnalytics(false)}
+      />
+    );
+  }
 
   // No landing page yet - show generation UI
   if (!landingPage) {
@@ -473,12 +494,22 @@ export function LandingPageBuilder({
             
             <div className="flex items-center gap-3">
               {landingPage.is_published && (
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Eye className="w-4 h-4" />
-                    {landingPage.view_count} 次访问
-                  </span>
-                </div>
+                <>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Eye className="w-4 h-4" />
+                      {landingPage.view_count} 次访问
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAnalytics(true)}
+                  >
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    查看数据
+                  </Button>
+                </>
               )}
               
               <AlertDialog>
