@@ -11,9 +11,11 @@ import {
   ExternalLink, 
   Copy, 
   Eye,
+  Mail,
   FileText,
   Globe,
-  Check
+  Check,
+  TrendingUp
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -42,7 +44,8 @@ interface ProjectCardProps {
 }
 
 const stageInfo = [
-  { label: "PRD细化", icon: MessageSquare, color: "bg-stage-1" },
+  { label: "市场调研", icon: MessageSquare, color: "bg-stage-1" },
+  { label: "产品定义", icon: MessageSquare, color: "bg-stage-1" },
   { label: "视觉生成", icon: Palette, color: "bg-stage-2" },
   { label: "落地页", icon: Rocket, color: "bg-stage-3" },
 ];
@@ -215,13 +218,21 @@ export function ProjectCard({
               </div>
               
               {landingPage && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Eye className="w-3 h-3" />
                   <span>{landingPage.viewCount}</span>
                   {landingPage.emailCount > 0 && (
                     <>
-                      <span className="mx-1">·</span>
-                      <span>{landingPage.emailCount} 订阅</span>
+                      <span className="mx-0.5">·</span>
+                      <Mail className="w-3 h-3" />
+                      <span>{landingPage.emailCount}</span>
+                    </>
+                  )}
+                  {landingPage.viewCount > 0 && landingPage.emailCount > 0 && (
+                    <>
+                      <span className="mx-0.5">·</span>
+                      <TrendingUp className="w-3 h-3" />
+                      <span>{((landingPage.emailCount / landingPage.viewCount) * 100).toFixed(1)}%</span>
                     </>
                   )}
                 </div>
