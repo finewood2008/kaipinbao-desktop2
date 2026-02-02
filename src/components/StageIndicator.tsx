@@ -16,7 +16,6 @@ const stages = [
 
 export function StageIndicator({ currentStage, className, onStageClick }: StageIndicatorProps) {
   const handleStageClick = (stageId: number) => {
-    // Only allow clicking on completed stages or current stage
     if (stageId <= currentStage && onStageClick) {
       onStageClick(stageId);
     }
@@ -44,45 +43,57 @@ export function StageIndicator({ currentStage, className, onStageClick }: StageI
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: index * 0.1 }}
-                whileHover={isClickable ? { scale: 1.1 } : undefined}
+                whileHover={isClickable ? { scale: 1.15, y: -2 } : undefined}
                 whileTap={isClickable ? { scale: 0.95 } : undefined}
                 className={cn(
-                  "relative flex items-center justify-center w-12 h-12 rounded-full border-2 transition-all duration-300",
-                  isCompleted && "bg-stage-3 border-stage-3",
-                  isCurrent && "border-primary bg-primary/20 glow-primary",
-                  !isCompleted && !isCurrent && "border-muted bg-muted/20",
-                  isClickable && "hover:border-primary/80"
+                  "relative flex items-center justify-center w-14 h-14 rounded-2xl border-2 transition-all duration-300",
+                  isCompleted && "bg-gradient-to-br from-primary to-accent border-primary/50 shadow-lg shadow-primary/25",
+                  isCurrent && "border-primary bg-primary/20 shadow-lg shadow-primary/30",
+                  !isCompleted && !isCurrent && "border-muted-foreground/30 bg-muted/30",
+                  isClickable && !isCurrent && "hover:border-primary/60 hover:bg-primary/10 hover:shadow-md hover:shadow-primary/20"
                 )}
               >
                 {isCompleted ? (
-                  <Check className="w-5 h-5 text-primary-foreground" />
+                  <Check className="w-6 h-6 text-primary-foreground" />
                 ) : (
                   <Icon
                     className={cn(
-                      "w-5 h-5",
-                      isCurrent ? "text-primary" : "text-muted-foreground"
+                      "w-6 h-6 transition-colors duration-300",
+                      isCurrent ? "text-primary" : "text-muted-foreground",
+                      isClickable && "group-hover:text-primary"
                     )}
                   />
                 )}
                 {isCurrent && (
-                  <motion.div
-                    className="absolute inset-0 rounded-full border-2 border-primary"
-                    animate={{ scale: [1, 1.2, 1], opacity: [1, 0, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  />
+                  <>
+                    <motion.div
+                      className="absolute inset-0 rounded-2xl border-2 border-primary"
+                      animate={{ scale: [1, 1.15, 1], opacity: [0.8, 0, 0.8] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 rounded-2xl bg-primary/20"
+                      animate={{ opacity: [0.3, 0.6, 0.3] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                  </>
                 )}
               </motion.div>
-              <div className="mt-2 text-center">
-                <p
+              <div className="mt-3 text-center">
+                <motion.p
                   className={cn(
-                    "text-sm font-medium transition-colors",
-                    isCurrent ? "text-primary" : isCompleted ? "text-foreground" : "text-muted-foreground",
-                    isClickable && "group-hover:text-primary"
+                    "text-sm font-semibold transition-all duration-300",
+                    isCurrent ? "text-primary scale-105" : isCompleted ? "text-foreground" : "text-muted-foreground",
+                    isClickable && "group-hover:text-primary group-hover:scale-105"
                   )}
                 >
                   {stage.name}
-                </p>
-                <p className="text-xs text-muted-foreground hidden md:block">
+                </motion.p>
+                <p className={cn(
+                  "text-xs mt-0.5 hidden md:block transition-colors duration-300",
+                  isCurrent ? "text-primary/70" : "text-muted-foreground",
+                  isClickable && "group-hover:text-primary/70"
+                )}>
                   {stage.description}
                 </p>
               </div>
@@ -90,13 +101,20 @@ export function StageIndicator({ currentStage, className, onStageClick }: StageI
 
             {/* Connector line */}
             {index < stages.length - 1 && (
-              <div className="flex-1 h-0.5 mx-4 bg-muted relative overflow-hidden">
+              <div className="flex-1 h-1 mx-6 bg-muted/50 rounded-full relative overflow-hidden">
                 <motion.div
-                  className="absolute inset-y-0 left-0 bg-gradient-primary"
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-accent rounded-full"
                   initial={{ width: "0%" }}
                   animate={{ width: isCompleted ? "100%" : isCurrent ? "50%" : "0%" }}
-                  transition={{ duration: 0.5, delay: index * 0.2 }}
+                  transition={{ duration: 0.6, delay: index * 0.2, ease: "easeOut" }}
                 />
+                {isCurrent && (
+                  <motion.div
+                    className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-primary/50 to-transparent rounded-full"
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                )}
               </div>
             )}
           </div>

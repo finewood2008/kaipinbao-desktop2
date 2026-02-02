@@ -161,8 +161,8 @@ export function AiProductManagerPanel({
 
         {/* Chat Messages */}
         <div className="flex-1 min-h-0 overflow-hidden relative">
-          <ScrollArea className="h-full [&>div[data-radix-scroll-area-viewport]]:h-full">
-            <div className="p-4 max-w-3xl mx-auto space-y-4">
+          <ScrollArea className="h-full [&>div[data-radix-scroll-area-viewport]]:h-full [&>div[data-radix-scroll-area-viewport]]:!block">
+            <div className="p-5 max-w-3xl mx-auto space-y-5">
               {/* Empty State */}
               {messages.length === 0 && !isSending && (
                 <motion.div
@@ -208,15 +208,76 @@ export function AiProductManagerPanel({
                 })}
               </AnimatePresence>
 
-              {/* Thinking Indicator */}
+              {/* AI Thinking Indicator with Progress */}
               {isSending && !isStreaming && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-2 text-muted-foreground p-4"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col gap-3 p-5 rounded-2xl bg-gradient-to-br from-secondary/60 to-secondary/30 border border-border/30"
                 >
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">产品经理正在分析...</span>
+                  <div className="flex items-center gap-3">
+                    <motion.div 
+                      className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center"
+                      animate={{ scale: [1, 1.05, 1] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    >
+                      <Sparkles className="w-5 h-5 text-primary-foreground" />
+                    </motion.div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-foreground">AI 产品经理正在分析</p>
+                      <p className="text-xs text-muted-foreground">正在结合竞品数据生成专业建议...</p>
+                    </div>
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="relative h-1.5 bg-muted/50 rounded-full overflow-hidden">
+                    <motion.div
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-accent to-primary rounded-full"
+                      initial={{ width: "0%", x: "-100%" }}
+                      animate={{ 
+                        width: ["0%", "30%", "60%", "80%", "90%"],
+                        x: ["0%", "0%", "0%", "0%", "0%"]
+                      }}
+                      transition={{ 
+                        duration: 8,
+                        times: [0, 0.2, 0.5, 0.8, 1],
+                        ease: "easeOut"
+                      }}
+                    />
+                    <motion.div
+                      className="absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                      animate={{ x: ["-100%", "400%"] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+                    />
+                  </div>
+                  
+                  {/* Thinking Steps */}
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <motion.div 
+                      className="flex items-center gap-1.5"
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      <span>分析市场数据</span>
+                    </motion.div>
+                    <motion.div 
+                      className="flex items-center gap-1.5"
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+                      <span>整合竞品洞察</span>
+                    </motion.div>
+                    <motion.div 
+                      className="flex items-center gap-1.5"
+                      animate={{ opacity: [0.5, 1, 0.5] }}
+                      transition={{ duration: 1.5, repeat: Infinity, delay: 1 }}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      <span>生成建议方案</span>
+                    </motion.div>
+                  </div>
                 </motion.div>
               )}
 
