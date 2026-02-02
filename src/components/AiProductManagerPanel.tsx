@@ -159,9 +159,9 @@ export function AiProductManagerPanel({
           )}
         </AnimatePresence>
 
-        {/* Chat Messages */}
-        <div className="flex-1 min-h-0 overflow-hidden relative">
-          <ScrollArea className="h-full [&>div[data-radix-scroll-area-viewport]]:h-full [&>div[data-radix-scroll-area-viewport]]:!block">
+        {/* Chat Messages - Scrollable Container */}
+        <div className="flex-1 min-h-0 relative">
+          <ScrollArea className="h-full">
             <div className="p-5 max-w-3xl mx-auto space-y-5">
               {/* Empty State */}
               {messages.length === 0 && !isSending && (
@@ -208,98 +208,145 @@ export function AiProductManagerPanel({
                 })}
               </AnimatePresence>
 
-              {/* Enhanced AI Thinking Indicator with Step Progress */}
+              {/* Enhanced AI Thinking Progress Indicator */}
               {isSending && !isStreaming && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col gap-4 p-6 rounded-2xl bg-gradient-to-br from-secondary/70 to-secondary/40 border border-primary/20 shadow-lg shadow-primary/5"
+                  initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className="flex flex-col gap-4 p-6 rounded-2xl bg-gradient-to-br from-card via-secondary/50 to-card border border-primary/30 shadow-xl"
                 >
-                  {/* Header */}
-                  <div className="flex items-center gap-3">
+                  {/* Glowing Header */}
+                  <div className="flex items-center gap-4">
                     <motion.div 
-                      className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-md"
+                      className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-primary via-accent to-primary flex items-center justify-center shadow-lg"
                       animate={{ 
-                        scale: [1, 1.08, 1],
-                        boxShadow: [
-                          "0 4px 14px 0 rgba(var(--primary), 0.25)",
-                          "0 4px 20px 0 rgba(var(--primary), 0.4)",
-                          "0 4px 14px 0 rgba(var(--primary), 0.25)"
-                        ]
+                        scale: [1, 1.05, 1],
                       }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                     >
-                      <Sparkles className="w-6 h-6 text-primary-foreground" />
+                      {/* Outer glow ring */}
+                      <motion.div
+                        className="absolute inset-0 rounded-xl bg-primary/30"
+                        animate={{ 
+                          scale: [1, 1.3, 1],
+                          opacity: [0.5, 0, 0.5]
+                        }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      />
+                      <Sparkles className="w-7 h-7 text-primary-foreground relative z-10" />
                     </motion.div>
                     <div className="flex-1">
-                      <p className="text-base font-semibold text-foreground">AI 产品经理正在思考</p>
-                      <p className="text-sm text-muted-foreground">结合竞品数据生成专业建议，预计 10-15 秒...</p>
+                      <p className="text-lg font-bold text-foreground flex items-center gap-2">
+                        AI 产品经理正在思考
+                        <motion.span
+                          animate={{ opacity: [1, 0.3, 1] }}
+                          transition={{ duration: 1.2, repeat: Infinity }}
+                        >
+                          ...
+                        </motion.span>
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-0.5">结合竞品数据生成专业建议</p>
                     </div>
                   </div>
                   
-                  {/* Enhanced Progress Bar */}
+                  {/* Main Progress Bar */}
                   <div className="space-y-2">
-                    <div className="relative h-2.5 bg-muted/60 rounded-full overflow-hidden">
+                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                      <span>处理进度</span>
+                      <motion.span
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        预计 10-15 秒
+                      </motion.span>
+                    </div>
+                    <div className="relative h-3 bg-muted/40 rounded-full overflow-hidden border border-border/50">
+                      {/* Background glow */}
+                      <motion.div
+                        className="absolute inset-0 bg-gradient-to-r from-primary/20 via-accent/30 to-primary/20"
+                        animate={{ opacity: [0.3, 0.6, 0.3] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      />
+                      {/* Progress fill */}
                       <motion.div
                         className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary via-accent to-primary rounded-full"
                         initial={{ width: "0%" }}
-                        animate={{ width: ["5%", "35%", "65%", "85%", "95%"] }}
+                        animate={{ width: ["3%", "25%", "50%", "75%", "92%"] }}
                         transition={{ 
-                          duration: 12,
-                          times: [0, 0.2, 0.5, 0.8, 1],
+                          duration: 15,
+                          times: [0, 0.15, 0.4, 0.7, 1],
                           ease: "easeOut"
                         }}
                       />
-                      {/* Shimmer effect */}
+                      {/* Shimmer sweep */}
                       <motion.div
-                        className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/40 to-transparent"
-                        animate={{ x: ["-100%", "500%"] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+                        animate={{ x: ["-80px", "400px"] }}
+                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
                       />
                     </div>
                   </div>
                   
-                  {/* Step Indicators */}
-                  <div className="grid grid-cols-3 gap-3">
+                  {/* Step-by-Step Indicators */}
+                  <div className="grid grid-cols-3 gap-3 mt-2">
                     {[
-                      { label: "分析数据", icon: "📊", delay: 0 },
-                      { label: "整合洞察", icon: "🔍", delay: 3 },
-                      { label: "生成提案", icon: "✨", delay: 6 }
+                      { label: "分析数据", icon: "📊", activeRange: [0, 5] },
+                      { label: "整合洞察", icon: "🔍", activeRange: [4, 10] },
+                      { label: "生成提案", icon: "✨", activeRange: [8, 15] }
                     ].map((step, index) => (
                       <motion.div
                         key={step.label}
-                        className="flex flex-col items-center gap-2 p-3 rounded-xl bg-background/50 border border-border/50"
-                        initial={{ opacity: 0.4, scale: 0.95 }}
+                        className="flex flex-col items-center gap-2 p-3 rounded-xl bg-background/70 border border-border/60 backdrop-blur-sm"
+                        initial={{ opacity: 0.5 }}
                         animate={{ 
-                          opacity: [0.4, 1, 0.7],
-                          scale: [0.95, 1, 0.98],
-                          borderColor: ["rgba(var(--border), 0.5)", "rgba(var(--primary), 0.5)", "rgba(var(--border), 0.5)"]
+                          opacity: 1,
+                          borderColor: [
+                            "hsl(var(--border) / 0.6)",
+                            "hsl(var(--primary) / 0.8)", 
+                            "hsl(var(--border) / 0.6)"
+                          ],
+                          backgroundColor: [
+                            "hsl(var(--background) / 0.7)",
+                            "hsl(var(--primary) / 0.1)",
+                            "hsl(var(--background) / 0.7)"
+                          ]
                         }}
                         transition={{ 
-                          duration: 4,
-                          delay: step.delay,
+                          duration: 5,
+                          delay: index * 4,
                           repeat: Infinity,
-                          repeatDelay: 8
+                          repeatDelay: 10
                         }}
                       >
                         <motion.span 
-                          className="text-xl"
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 1, delay: step.delay, repeat: Infinity, repeatDelay: 11 }}
+                          className="text-2xl"
+                          animate={{ 
+                            scale: [1, 1.3, 1],
+                            rotate: [0, 5, -5, 0]
+                          }}
+                          transition={{ 
+                            duration: 1.5, 
+                            delay: index * 4,
+                            repeat: Infinity, 
+                            repeatDelay: 13.5
+                          }}
                         >
                           {step.icon}
                         </motion.span>
-                        <span className="text-xs font-medium text-muted-foreground">{step.label}</span>
-                        <motion.div 
-                          className="w-full h-1 bg-muted/50 rounded-full overflow-hidden"
-                        >
+                        <span className="text-xs font-semibold text-foreground/80">{step.label}</span>
+                        {/* Mini progress bar per step */}
+                        <div className="w-full h-1.5 bg-muted/50 rounded-full overflow-hidden">
                           <motion.div
-                            className="h-full bg-primary rounded-full"
+                            className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
                             initial={{ width: "0%" }}
                             animate={{ width: "100%" }}
-                            transition={{ duration: 4, delay: step.delay, ease: "easeOut" }}
+                            transition={{ 
+                              duration: 5, 
+                              delay: index * 4, 
+                              ease: "easeOut" 
+                            }}
                           />
-                        </motion.div>
+                        </div>
                       </motion.div>
                     ))}
                   </div>
@@ -318,12 +365,12 @@ export function AiProductManagerPanel({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="absolute bottom-4 right-4"
+                className="absolute bottom-4 right-4 z-10"
               >
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="rounded-full shadow-lg gap-1"
+                  className="rounded-full shadow-lg gap-1.5 bg-primary/90 hover:bg-primary text-primary-foreground"
                   onClick={() => scrollToBottom()}
                 >
                   <ChevronDown className="w-4 h-4" />
