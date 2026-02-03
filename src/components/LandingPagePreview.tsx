@@ -18,6 +18,7 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+// getTemplateStyles kept as fallback for legacy data
 import { getTemplateStyles, type TemplateStyle } from "./LandingPageTemplates";
 import {
   Accordion,
@@ -45,6 +46,13 @@ interface SocialProofItem {
   avatar?: string;
 }
 
+interface ColorScheme {
+  primary: string;
+  accent: string;
+  background: string;
+  mode?: string;
+}
+
 interface LandingPagePreviewProps {
   title: string;
   subheadline?: string | null;
@@ -60,6 +68,7 @@ interface LandingPagePreviewProps {
   landingPageId?: string;
   isInteractive?: boolean;
   templateStyle?: TemplateStyle;
+  colorScheme?: ColorScheme | null;
   faqItems?: FaqItem[] | null;
   specifications?: string[] | null;
   usageScenarios?: string[] | null;
@@ -82,6 +91,7 @@ export function LandingPagePreview({
   landingPageId,
   isInteractive = false,
   templateStyle = "modern",
+  colorScheme,
   faqItems,
   specifications,
   usageScenarios,
@@ -93,7 +103,67 @@ export function LandingPagePreview({
   const [isSubscribed, setIsSubscribed] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const styles = getTemplateStyles(templateStyle);
+  // Generate dynamic styles from AI colorScheme, fallback to template styles
+  const generateDynamicStyles = (scheme: ColorScheme | null | undefined) => {
+    if (!scheme) {
+      return getTemplateStyles(templateStyle);
+    }
+
+    const isDark = scheme.mode === "dark";
+    const primary = scheme.primary || "#3B82F6";
+    const accent = scheme.accent || "#8B5CF6";
+
+    return {
+      hero: {
+        bg: isDark ? "bg-slate-900" : "bg-white",
+        gradient: isDark ? "from-slate-900 to-indigo-900" : "from-slate-50 to-slate-100",
+        titleGradient: isDark ? "from-cyan-400 to-violet-400" : "from-slate-900 to-slate-700",
+        subtitleColor: isDark ? "text-cyan-300" : "text-gray-600",
+        isDark,
+        blurOverlay: isDark 
+          ? "from-slate-950/40 via-indigo-950/60 to-slate-950/80" 
+          : "from-slate-900/30 via-slate-900/50 to-slate-950/70",
+        glowColor: isDark ? "from-cyan-500/40 to-transparent" : "from-blue-500/40 to-transparent",
+        glassCard: isDark ? "bg-slate-900/40 border-cyan-500/30" : "bg-white/10 border-white/20",
+      },
+      painPoints: {
+        bg: isDark ? "bg-slate-800" : "bg-red-50",
+        cardBg: isDark ? "bg-slate-700/50" : "bg-white",
+        cardBorder: isDark ? "border-red-500/30" : "border-red-100",
+        iconBg: isDark ? "bg-red-500/20" : "bg-red-100",
+        iconColor: isDark ? "text-red-400" : "text-red-500",
+        isDark,
+      },
+      solutions: {
+        bg: isDark ? "bg-indigo-900" : "bg-gradient-to-br from-green-50 to-emerald-50",
+        cardBg: isDark ? "bg-indigo-800/50" : "bg-white",
+        cardBorder: isDark ? "border-cyan-500/30" : "border-green-100",
+        iconBg: isDark ? "bg-cyan-500/20" : "bg-green-100",
+        iconColor: isDark ? "text-cyan-400" : "text-green-500",
+        isDark,
+      },
+      cta: {
+        gradient: isDark ? "from-cyan-500 to-violet-500" : "from-blue-600 to-purple-600",
+        buttonBg: "bg-white",
+        buttonText: isDark ? "text-indigo-900" : "text-blue-600",
+      },
+      video: {
+        bg: isDark ? "bg-slate-900" : "bg-gray-900",
+        titleColor: isDark ? "text-cyan-300" : "text-white",
+      },
+      footer: {
+        bg: isDark ? "bg-black" : "bg-gray-900",
+      },
+      // Store original colors for inline styles
+      colors: {
+        primary,
+        accent,
+        background: scheme.background || (isDark ? "#0F172A" : "#FFFFFF"),
+      },
+    };
+  };
+
+  const styles = generateDynamicStyles(colorScheme);
 
   const handleSubmitEmail = async () => {
     if (!email.trim() || !landingPageId) return;
