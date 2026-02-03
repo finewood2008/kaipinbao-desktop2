@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { LandingPagePreview } from "./LandingPagePreview";
 import { TemplateSelect, type TemplateStyle } from "./LandingPageTemplates";
 import { LandingPageAnalytics } from "./LandingPageAnalytics";
+import { InlineAssetGenerator } from "./InlineAssetGenerator";
 import { cn } from "@/lib/utils";
 
 interface FaqItem {
@@ -107,15 +108,28 @@ interface PrdDataInput {
   };
 }
 
+interface GeneratedVideo {
+  id: string;
+  video_url: string | null;
+  prompt: string;
+  scene_description: string | null;
+  duration_seconds: number;
+  status: string;
+}
+
 interface LandingPageBuilderProps {
   projectId: string;
   projectName: string;
   selectedImageUrl?: string;
+  selectedImageId?: string;
   prdData?: PrdDataInput;
   marketingImages?: MarketingImage[];
+  videos?: GeneratedVideo[];
   videoUrl?: string;
   landingPage: LandingPageData | null;
   onLandingPageChange: (data: LandingPageData) => void;
+  onMarketingImagesChange?: (images: MarketingImage[]) => void;
+  onVideosChange?: (videos: GeneratedVideo[]) => void;
   onBackToVisual?: () => void;
 }
 
@@ -153,11 +167,15 @@ export function LandingPageBuilder({
   projectId,
   projectName,
   selectedImageUrl,
+  selectedImageId,
   prdData,
   marketingImages = [],
+  videos = [],
   videoUrl,
   landingPage,
   onLandingPageChange,
+  onMarketingImagesChange,
+  onVideosChange,
   onBackToVisual,
 }: LandingPageBuilderProps) {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -541,6 +559,49 @@ export function LandingPageBuilder({
                       </div>
                     </div>
                   </motion.div>
+                )}
+
+                {/* Inline Asset Generator */}
+                {(marketingImages.length === 0 || !videoUrl) && onMarketingImagesChange && onVideosChange && (
+                  <div className="mb-8 max-w-md mx-auto">
+                    <InlineAssetGenerator
+                      projectId={projectId}
+                      selectedImageUrl={selectedImageUrl}
+                      selectedImageId={selectedImageId}
+                      prdData={{
+                        usageScenarios: prdData?.marketingAssets?.sceneDescription 
+                          ? [prdData.marketingAssets.sceneDescription] 
+                          : [],
+                        targetAudience: prdData?.target_audience,
+                        designStyle: prdData?.designStyle,
+                        coreFeatures: prdData?.coreFeatures,
+                      }}
+                      existingImages={marketingImages.map(img => ({
+                        id: img.id,
+                        image_url: img.image_url,
+                        prompt: "",
+                        is_selected: false,
+                        feedback: null,
+                        image_type: img.image_type,
+                        phase: 2,
+                        parent_image_id: null,
+                        marketing_copy: img.marketing_copy || null,
+                      }))}
+                      existingVideos={videos}
+                      onImagesGenerated={(newImages) => {
+                        const converted = newImages.map(img => ({
+                          id: img.id,
+                          image_url: img.image_url,
+                          image_type: img.image_type || "scene",
+                          marketing_copy: img.marketing_copy || undefined,
+                        }));
+                        onMarketingImagesChange(converted);
+                      }}
+                      onVideoGenerated={(newVideo) => {
+                        onVideosChange([...videos, newVideo]);
+                      }}
+                    />
+                  </div>
                 )}
 
                 <Button
