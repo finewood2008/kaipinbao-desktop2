@@ -5,13 +5,109 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface PrdData {
+  usageScenario?: string;
+  usageScenarios?: string[];
+  targetAudience?: string;
+  coreFeatures?: string[];
+  designStyle?: string;
+  selectedDirection?: string;
+}
+
+// Build context from PRD data
+function buildPrdContext(prdData?: PrdData): string {
+  if (!prdData) return "";
+  
+  const parts: string[] = [];
+  
+  if (prdData.selectedDirection) {
+    parts.push(`产品方向：${prdData.selectedDirection}`);
+  }
+  if (prdData.targetAudience) {
+    parts.push(`目标用户：${prdData.targetAudience}`);
+  }
+  if (prdData.usageScenario) {
+    parts.push(`使用场景：${prdData.usageScenario}`);
+  }
+  if (prdData.usageScenarios?.length) {
+    parts.push(`使用场景：${prdData.usageScenarios.join("、")}`);
+  }
+  if (prdData.coreFeatures?.length) {
+    parts.push(`核心功能：${prdData.coreFeatures.join("、")}`);
+  }
+  if (prdData.designStyle) {
+    parts.push(`设计风格：${prdData.designStyle}`);
+  }
+  
+  return parts.length > 0 ? `\n\n产品定义：\n${parts.join("\n")}` : "";
+}
+
+// Generate marketing copy based on image type and PRD data
+async function generateMarketingCopy(
+  imageType: string, 
+  prdData: PrdData | undefined,
+  apiKey: string
+): Promise<string | null> {
+  try {
+    const imageTypeLabels: Record<string, string> = {
+      scene: "场景图",
+      structure: "结构图",
+      exploded: "爆炸图",
+      usage: "使用图",
+      lifestyle: "生活方式图",
+      detail: "细节图",
+      comparison: "对比图",
+    };
+
+    const typeLabel = imageTypeLabels[imageType] || "营销图";
+    const prdContext = buildPrdContext(prdData);
+    
+    const prompt = `为一张产品${typeLabel}生成简短的营销文案（1-2句话，不超过50字）。文案要吸引人、突出产品价值。${prdContext}
+
+要求：
+- 简洁有力，易于理解
+- 突出产品的独特卖点
+- 适合社交媒体或电商平台使用
+- 不要使用引号包裹
+
+只输出文案内容，不要任何其他解释。`;
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("Failed to generate marketing copy:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const copy = data.choices?.[0]?.message?.content?.trim();
+    return copy || null;
+  } catch (error) {
+    console.error("Error generating marketing copy:", error);
+    return null;
+  }
+}
+
 // Prompt engineering templates for different image types
 function buildPromptForImageType(
   basePrompt: string, 
   imageType: string, 
   phase: number,
-  parentImageUrl?: string
+  parentImageUrl?: string,
+  prdData?: PrdData
 ): string {
+  const prdContext = buildPrdContext(prdData);
+  
   const commonQuality = `
 RENDER QUALITY:
 - 8K ultra high resolution render
@@ -24,7 +120,7 @@ RENDER QUALITY:
     // Phase 1: Product design - pure white background
     return `Create a professional e-commerce product photograph:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 PHOTOGRAPHY SPECIFICATIONS:
 - Three-point lighting setup with key light, fill light, and rim light
@@ -50,7 +146,7 @@ OUTPUT: A single, clean, commercially-ready product image suitable for Amazon, S
     case "scene":
       return `Create a lifestyle product scene photograph:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 SCENE REQUIREMENTS:
 - Product naturally placed in an authentic, lifestyle environment
@@ -67,7 +163,7 @@ OUTPUT: A beautiful lifestyle photograph showing the product in its natural usag
     case "structure":
       return `Create a technical structure visualization:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 VISUALIZATION REQUIREMENTS:
 - Semi-transparent outer shell revealing internal structure
@@ -84,7 +180,7 @@ OUTPUT: A clear technical diagram showing the internal structure and key compone
     case "exploded":
       return `Create an exploded view diagram:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 EXPLODED VIEW REQUIREMENTS:
 - All components separated and arranged along central axis
@@ -101,7 +197,7 @@ OUTPUT: A professional exploded view showing all product components in their rel
     case "usage":
       return `Create a product usage photograph:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 USAGE SCENE REQUIREMENTS:
 - Show a person naturally interacting with/using the product
@@ -118,7 +214,7 @@ OUTPUT: An authentic photograph of someone using the product in a natural way. T
     case "lifestyle":
       return `Create a brand lifestyle photograph:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 LIFESTYLE REQUIREMENTS:
 - Product integrated into a curated lifestyle setting
@@ -135,7 +231,7 @@ OUTPUT: A beautiful lifestyle photograph that positions the product within an as
     case "detail":
       return `Create a product detail macro photograph:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 DETAIL REQUIREMENTS:
 - Extreme close-up of key product feature or texture
@@ -152,7 +248,7 @@ OUTPUT: A stunning close-up photograph that highlights the quality, texture, and
     case "comparison":
       return `Create a before/after or comparison image:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 
 COMPARISON REQUIREMENTS:
 - Split or side-by-side comparison layout
@@ -170,7 +266,7 @@ OUTPUT: A clear comparison image showing the problem being solved or improvement
       // Custom or fallback
       return `Create a professional marketing photograph:
 
-PRODUCT: ${basePrompt}
+PRODUCT: ${basePrompt}${prdContext}
 ${commonQuality}
 
 OUTPUT: A high-quality marketing photograph suitable for advertising and promotional use.${referenceNote}`;
@@ -189,7 +285,8 @@ serve(async (req) => {
       imageType = "product", 
       phase = 1,
       parentImageId,
-      parentImageUrl 
+      parentImageUrl,
+      prdData
     } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
@@ -201,8 +298,8 @@ serve(async (req) => {
       throw new Error("Prompt is required");
     }
 
-    // Build prompt based on image type and phase
-    const enhancedPrompt = buildPromptForImageType(prompt, imageType, phase, parentImageUrl);
+    // Build prompt based on image type, phase, and PRD data
+    const enhancedPrompt = buildPromptForImageType(prompt, imageType, phase, parentImageUrl, prdData);
 
     // Use Lovable AI Gateway with Nano Banana Pro model for high-quality image generation
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -255,6 +352,12 @@ serve(async (req) => {
       });
     }
 
+    // Generate marketing copy for phase 2 images
+    let marketingCopy: string | null = null;
+    if (phase === 2 && imageType !== "product") {
+      marketingCopy = await generateMarketingCopy(imageType, prdData, LOVABLE_API_KEY);
+    }
+
     return new Response(
       JSON.stringify({
         imageUrl,
@@ -262,6 +365,7 @@ serve(async (req) => {
         prompt: enhancedPrompt,
         imageType,
         phase,
+        marketingCopy,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
