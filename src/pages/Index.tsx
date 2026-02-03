@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+// useEffect removed - no longer needed for auto-redirect
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -26,11 +26,7 @@ export default function Index() {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!isLoading && user) {
-      navigate("/dashboard");
-    }
-  }, [user, isLoading, navigate]);
+  // Removed auto-redirect: users can now browse homepage even when logged in
 
   if (isLoading) {
     return (
@@ -126,9 +122,9 @@ export default function Index() {
           </Link>
           <Button 
             className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 text-foreground border border-white/10 rounded-full px-5"
-            onClick={() => navigate("/auth")}
+            onClick={() => navigate(user ? "/dashboard" : "/auth")}
           >
-            登录 / 注册
+            {user ? "进入工作台" : "登录 / 注册"}
           </Button>
         </div>
       </header>
@@ -208,10 +204,10 @@ export default function Index() {
           >
             <Button
               className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm px-6 py-5 h-auto rounded-lg shadow-[0_0_30px_rgba(251,146,60,0.25)] hover:shadow-[0_0_40px_rgba(251,146,60,0.35)] transition-all duration-300"
-              onClick={() => navigate("/auth")}
+              onClick={() => navigate(user ? "/dashboard" : "/auth")}
             >
               <Sparkles className="w-4 h-4 mr-1.5" />
-              开始设计
+              {user ? "进入工作台" : "开始设计"}
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </motion.div>
