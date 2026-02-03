@@ -194,7 +194,7 @@ export function MarketAnalysisPhase({ projectId, onComplete, onSkip }: MarketAna
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full overflow-y-auto"
+      className="h-full w-full overflow-y-auto"
     >
       <div className="max-w-4xl mx-auto px-6 py-8 pb-32 space-y-10">
         {/* Compact Hero Header */}
