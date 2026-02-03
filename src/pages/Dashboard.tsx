@@ -81,94 +81,108 @@ export default function Dashboard() {
   }, []);
 
   const fetchProjects = async () => {
-    // Fetch projects with landing pages, email counts, and all generated images
-    const { data, error } = await supabase
-      .from("projects")
-      .select(`
-        *,
-        landing_pages (
-          id,
-          slug,
-          is_published,
-          hero_image_url,
-          screenshot_url,
-          view_count
-        ),
-        generated_images (
-          image_url,
-          image_type,
-          is_selected
+    setIsLoading(true);
+    try {
+      // NOTE: Avoid heavy nested selects (can trigger DB statement timeout).
+      // Fetch projects first, then fetch landing pages / images in separate queries.
+      const { data: projectsData, error: projectsError } = await supabase
+        .from("projects")
+        .select(
+          "id,name,description,current_stage,status,created_at,cover_image_url"
         )
-      `)
-      .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false });
 
-    if (error) {
+      if (projectsError) throw projectsError;
+
+      const projectIds = (projectsData || []).map((p) => p.id);
+
+      // Fetch active landing page per project
+      const { data: landingPagesData, error: landingPagesError } = await supabase
+        .from("landing_pages")
+        .select(
+          "id,project_id,slug,is_published,hero_image_url,screenshot_url,view_count,is_active"
+        )
+        .in("project_id", projectIds)
+        .eq("is_active", true);
+
+      if (landingPagesError) throw landingPagesError;
+
+      const activeLandingPageByProjectId = new Map<string, any>();
+      (landingPagesData || []).forEach((lp: any) => {
+        if (!activeLandingPageByProjectId.has(lp.project_id)) {
+          activeLandingPageByProjectId.set(lp.project_id, lp);
+        }
+      });
+
+      // Fetch product images for all projects
+      const { data: imagesData, error: imagesError } = await supabase
+        .from("generated_images")
+        .select("project_id,image_url,image_type,is_selected,created_at")
+        .in("project_id", projectIds)
+        .eq("image_type", "product")
+        .order("created_at", { ascending: false });
+
+      if (imagesError) throw imagesError;
+
+      const imagesByProjectId = new Map<string, any[]>();
+      (imagesData || []).forEach((img: any) => {
+        const arr = imagesByProjectId.get(img.project_id) || [];
+        arr.push(img);
+        imagesByProjectId.set(img.project_id, arr);
+      });
+
+      // Fetch email counts for all active landing pages
+      const landingPageIds = (landingPagesData || []).map((lp: any) => lp.id);
+      let emailCounts: Record<string, number> = {};
+      if (landingPageIds.length > 0) {
+        const { data: emailData, error: emailError } = await supabase
+          .from("email_submissions")
+          .select("landing_page_id")
+          .in("landing_page_id", landingPageIds);
+
+        if (emailError) throw emailError;
+
+        if (emailData) {
+          emailCounts = emailData.reduce((acc: Record<string, number>, item) => {
+            acc[item.landing_page_id] = (acc[item.landing_page_id] || 0) + 1;
+            return acc;
+          }, {});
+        }
+      }
+
+      const projectsWithData: Project[] = (projectsData || []).map((p: any) => {
+        const allImages = imagesByProjectId.get(p.id) || [];
+        const selectedImages = allImages
+          .filter((img: any) => img.is_selected)
+          .map((img: any) => img.image_url);
+        const otherImages = allImages
+          .filter((img: any) => !img.is_selected)
+          .map((img: any) => img.image_url);
+        const productImages = [...selectedImages, ...otherImages].slice(0, 4);
+
+        const activeLandingPage = activeLandingPageByProjectId.get(p.id) || null;
+
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          current_stage: p.current_stage,
+          status: p.status,
+          created_at: p.created_at,
+          cover_image_url: p.cover_image_url || productImages[0] || null,
+          product_images: productImages,
+          landing_page: activeLandingPage,
+          email_count: activeLandingPage ? (emailCounts[activeLandingPage.id] || 0) : 0,
+        };
+      });
+
+      setProjects(projectsWithData);
+    } catch (error) {
       toast.error("获取项目失败");
       console.error(error);
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // Fetch email counts for all landing pages
-    // landing_pages is now an array (one-to-many), extract active version's ID
-    const landingPageIds = (data || [])
-      .filter((p: any) => p.landing_pages && p.landing_pages.length > 0)
-      .map((p: any) => {
-        const lpArray = p.landing_pages;
-        const activeLp = lpArray.find((lp: any) => lp.is_active) || lpArray[0];
-        return activeLp?.id;
-      })
-      .filter(Boolean);
-
-    let emailCounts: Record<string, number> = {};
-    if (landingPageIds.length > 0) {
-      const { data: emailData } = await supabase
-        .from("email_submissions")
-        .select("landing_page_id")
-        .in("landing_page_id", landingPageIds);
-
-      if (emailData) {
-        emailCounts = emailData.reduce((acc: Record<string, number>, item) => {
-          acc[item.landing_page_id] = (acc[item.landing_page_id] || 0) + 1;
-          return acc;
-        }, {});
-      }
-    }
-
-    // Map projects with all data
-    const projectsWithData: Project[] = (data || []).map((p: any) => {
-      // Get all product images, prioritizing selected ones
-      const allImages = p.generated_images || [];
-      const selectedImages = allImages
-        .filter((img: any) => img.is_selected)
-        .map((img: any) => img.image_url);
-      const otherImages = allImages
-        .filter((img: any) => !img.is_selected && img.image_type === 'product')
-        .map((img: any) => img.image_url);
-      const productImages = [...selectedImages, ...otherImages].slice(0, 4);
-
-      // landing_pages is now an array - get the active version
-      const landingPagesArray = p.landing_pages || [];
-      const activeLandingPage = landingPagesArray.find((lp: any) => lp.is_active) 
-        || landingPagesArray[0] 
-        || null;
-
-      return {
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        current_stage: p.current_stage,
-        status: p.status,
-        created_at: p.created_at,
-        cover_image_url: p.cover_image_url || productImages[0] || null,
-        product_images: productImages,
-        landing_page: activeLandingPage,
-        email_count: activeLandingPage ? (emailCounts[activeLandingPage.id] || 0) : 0,
-      };
-    });
-
-    setProjects(projectsWithData);
-    setIsLoading(false);
   };
 
   const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
