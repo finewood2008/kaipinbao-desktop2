@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StageIndicator } from "@/components/StageIndicator";
@@ -11,12 +11,13 @@ import { StageTransitionPrompt } from "@/components/StageTransitionPrompt";
 import { ChatMessage } from "@/components/ChatMessage";
 import { VisualGenerationPhase } from "@/components/VisualGenerationPhase";
 import { LandingPageBuilder } from "@/components/LandingPageBuilder";
+import { LandingPageAnalytics } from "@/components/LandingPageAnalytics";
 import { MarketResearchPhase } from "@/components/MarketResearchPhase";
 import { PrdPhase } from "@/components/PrdPhase";
 import { PrdData } from "@/components/PrdExtractionSidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, TrendingUp } from "lucide-react";
+import { ArrowLeft, Loader2, Sparkles, MessageSquare, Image, Globe, TrendingUp, BarChart3 } from "lucide-react";
 
 interface Message {
   id: string;
@@ -57,6 +58,8 @@ interface LandingPageData {
   trust_badges: string[] | null;
   is_published: boolean;
   view_count: number;
+  version?: number;
+  is_active?: boolean;
 }
 
 interface Project {
@@ -118,6 +121,8 @@ export default function ProjectPage() {
         setActiveTab("images");
       } else if (project.current_stage === 4) {
         setActiveTab("landing");
+      } else if (project.current_stage === 5) {
+        setActiveTab("analytics");
       }
     }
   }, [project?.current_stage]);
@@ -202,14 +207,29 @@ export default function ProjectPage() {
   };
 
   const fetchLandingPage = async () => {
+    // Get the active version of landing page
     const { data, error } = await supabase
       .from("landing_pages")
       .select("*")
       .eq("project_id", id)
+      .eq("is_active", true)
       .maybeSingle();
 
     if (!error && data) {
       setLandingPage(data as unknown as LandingPageData);
+    } else {
+      // Fallback: try to get any landing page if no active one
+      const { data: anyPage } = await supabase
+        .from("landing_pages")
+        .select("*")
+        .eq("project_id", id)
+        .order("version", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (anyPage) {
+        setLandingPage(anyPage as unknown as LandingPageData);
+      }
     }
   };
 
@@ -343,7 +363,7 @@ export default function ProjectPage() {
     }
     
     const newStage = targetStage || project.current_stage + 1;
-    if (newStage > 4) {
+    if (newStage > 5) {
       const errorMsg = "已是最后阶段，无法继续前进";
       console.warn("[Stage Switch]", errorMsg, { currentStage: project.current_stage, targetStage: newStage });
       return;
@@ -519,12 +539,14 @@ export default function ProjectPage() {
             </div>
           </div>
           <StageIndicator 
-            currentStage={project?.current_stage || 1} 
+            currentStage={project?.current_stage || 1}
+            isProjectCompleted={landingPage?.is_published}
             onStageClick={(stageId) => {
               if (stageId === 1) setActiveTab("research");
               else if (stageId === 2) setActiveTab("prd");
               else if (stageId === 3) setActiveTab("images");
               else if (stageId === 4) setActiveTab("landing");
+              else if (stageId === 5) setActiveTab("analytics");
             }}
           />
         </div>
@@ -539,7 +561,7 @@ export default function ProjectPage() {
             <MarketResearchPhase
               projectId={id || ""}
               onComplete={handleMarketResearchComplete}
-              isReadOnly={project?.current_stage !== 1}
+              isReadOnly={(project?.current_stage || 1) > 1 || landingPage?.is_published}
             />
           </TabsContent>
 
@@ -548,7 +570,7 @@ export default function ProjectPage() {
             <PrdPhase
               projectId={id || ""}
               onComplete={handlePrdPhaseComplete}
-              isReadOnly={project?.current_stage !== 2}
+              isReadOnly={(project?.current_stage || 1) > 2 || landingPage?.is_published}
             />
           </TabsContent>
 
@@ -603,7 +625,42 @@ export default function ProjectPage() {
                 }}
                 onVideosChange={setVideos}
                 onBackToVisual={() => setActiveTab("images")}
+                onStageAdvance={(stage) => {
+                  setProject((prev) => prev ? { ...prev, current_stage: stage } : null);
+                  setActiveTab("analytics");
+                }}
+                isReadOnly={landingPage?.is_published}
               />
+            </div>
+          </TabsContent>
+
+          {/* Analytics Tab - Stage 5 */}
+          <TabsContent value="analytics" className="flex-1 overflow-auto p-4 m-0">
+            <div className="max-w-5xl mx-auto">
+              {landingPage?.is_published ? (
+                <LandingPageAnalytics
+                  landingPageId={landingPage.id}
+                  landingPageSlug={landingPage.slug}
+                  landingPageTitle={landingPage.title}
+                  viewCount={landingPage.view_count}
+                />
+              ) : (
+                <Card className="glass border-border/50">
+                  <CardContent className="p-8 text-center">
+                    <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">暂无数据</h3>
+                    <p className="text-muted-foreground mb-4">
+                      请先发布落地页以开始收集市场数据
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setActiveTab("landing")}
+                    >
+                      返回落地页
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </TabsContent>
         </Tabs>

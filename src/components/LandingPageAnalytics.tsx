@@ -86,7 +86,7 @@ interface LandingPageAnalyticsProps {
   landingPageSlug: string;
   landingPageTitle: string;
   viewCount: number;
-  onBackToEdit: () => void;
+  onBackToEdit?: () => void; // Now optional for standalone mode
 }
 
 export function LandingPageAnalytics({
@@ -302,9 +302,11 @@ export function LandingPageAnalytics({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={onBackToEdit}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
+          {onBackToEdit && (
+            <Button variant="ghost" size="icon" onClick={onBackToEdit}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          )}
           <div>
             <h2 className="text-xl font-bold">{landingPageTitle}</h2>
             <p className="text-sm text-muted-foreground">数据监控与市场分析</p>
