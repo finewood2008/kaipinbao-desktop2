@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.93.3";
+import {
+  GoogleGenAI,
+} from "https://esm.sh/@google/genai@0.14.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,6 +41,20 @@ interface PrdData {
   selectedDirection?: string;
 }
 
+// Fetch image and convert to base64
+async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; mimeType: string }> {
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.status}`);
+  }
+  
+  const contentType = response.headers.get("content-type") || "image/png";
+  const arrayBuffer = await response.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+  
+  return { base64, mimeType: contentType };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -56,7 +73,12 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
     
+    if (!GOOGLE_API_KEY) {
+      throw new Error("GOOGLE_API_KEY is not configured");
+    }
+
     // Create client with user's auth token for verification
     const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } }
@@ -89,12 +111,6 @@ serve(async (req) => {
       duration = 6,
       prdData 
     } = await req.json();
-    
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
 
     if (!projectId || !sceneDescription) {
       throw new Error("Project ID and scene description are required");
@@ -113,7 +129,7 @@ serve(async (req) => {
     }
 
     // Build enhanced video prompt with PRD context
-    const videoPrompt = buildVideoPrompt(sceneDescription, parentImageUrl, prdData);
+    const videoPrompt = buildVideoPrompt(sceneDescription, prdData);
 
     // Create video record with pending status
     const { data: videoRecord, error: insertError } = await supabase
@@ -134,27 +150,72 @@ serve(async (req) => {
       throw new Error("Failed to create video record");
     }
 
-    // Attempt to generate video using Lovable AI Gateway
-    try {
-      // Call video generation API
-      const videoResponse = await fetch("https://ai.gateway.lovable.dev/v1/video/generate", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: videoPrompt,
-          duration: duration,
-          starting_frame: parentImageUrl || undefined,
-          resolution: "720p",
-          aspect_ratio: "16:9",
-        }),
-      });
+    // Initialize Google GenAI
+    const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
-      if (videoResponse.ok) {
-        const videoData = await videoResponse.json();
-        const videoUrl = videoData.video_url || videoData.url;
+    // Attempt to generate video using Google Veo
+    try {
+      let operation;
+      
+      if (parentImageUrl) {
+        // Image-to-video generation - maintain product consistency
+        console.log("Using image-to-video mode with parent image:", parentImageUrl);
+        
+        const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
+        
+        const imageToVideoPrompt = `基于这个产品图片生成6秒的产品展示视频。
+
+${videoPrompt}
+
+【最重要的要求】
+这是产品营销视频。产品的外观必须与图片中100%一致：
+- 产品形状、颜色、材质不能有任何改变
+- 产品设计细节必须完全保留
+- 只添加轻微的相机运动和环境光线变化
+- 产品始终是画面焦点`;
+
+        operation = await ai.models.generateVideos({
+          model: "veo-2.0-generate-001",
+          prompt: imageToVideoPrompt,
+          image: {
+            imageBytes: base64,
+            mimeType: mimeType,
+          },
+          config: {
+            personGeneration: "dont_allow",
+            aspectRatio: "16:9",
+            numberOfVideos: 1,
+          },
+        });
+      } else {
+        // Text-to-video generation
+        operation = await ai.models.generateVideos({
+          model: "veo-2.0-generate-001",
+          prompt: videoPrompt,
+          config: {
+            personGeneration: "dont_allow",
+            aspectRatio: "16:9",
+            numberOfVideos: 1,
+          },
+        });
+      }
+
+      // Poll for video generation completion
+      let attempts = 0;
+      const maxAttempts = 60; // Max 5 minutes (5s interval)
+      
+      while (!operation.done && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        operation = await ai.operations.getVideosOperation({
+          operation: operation,
+        });
+        attempts++;
+        console.log(`Video generation attempt ${attempts}/${maxAttempts}, done: ${operation.done}`);
+      }
+
+      if (operation.done && operation.response?.generatedVideos?.[0]) {
+        const video = operation.response.generatedVideos[0];
+        const videoUrl = video.video?.uri;
 
         if (videoUrl) {
           // Update video record with completed status and URL
@@ -186,7 +247,7 @@ serve(async (req) => {
         }
       }
 
-      // If video generation failed or didn't return a URL, mark as pending
+      // If video generation didn't complete, mark as pending
       await supabase
         .from("generated_videos")
         .update({ status: "pending" })
@@ -230,55 +291,55 @@ serve(async (req) => {
 
 function buildVideoPrompt(
   sceneDescription: string, 
-  parentImageUrl?: string,
   prdData?: PrdData
 ): string {
   // Build PRD context
   const prdParts: string[] = [];
   if (prdData?.selectedDirection) {
-    prdParts.push(`Product: ${prdData.selectedDirection}`);
+    prdParts.push(`产品：${prdData.selectedDirection}`);
   }
   if (prdData?.targetAudience) {
-    prdParts.push(`Target audience: ${prdData.targetAudience}`);
+    prdParts.push(`目标用户：${prdData.targetAudience}`);
   }
   if (prdData?.designStyle) {
-    prdParts.push(`Style: ${prdData.designStyle}`);
+    prdParts.push(`设计风格：${prdData.designStyle}`);
   }
   if (prdData?.coreFeatures?.length) {
-    prdParts.push(`Key features: ${prdData.coreFeatures.join(", ")}`);
+    prdParts.push(`核心功能：${prdData.coreFeatures.join("、")}`);
   }
   
   const prdContext = prdParts.length > 0 
-    ? `\n\nPRODUCT CONTEXT:\n${prdParts.join("\n")}` 
+    ? `\n\n产品信息：\n${prdParts.join("\n")}` 
     : "";
 
-  const basePrompt = `Create a 6-second professional product video:
+  return `创建一个6秒的专业产品展示视频：
 
-SCENE: ${sceneDescription}${prdContext}
+场景描述：${sceneDescription}${prdContext}
 
-VIDEO SPECIFICATIONS:
-- Duration: 6 seconds
-- Resolution: 720p or higher
-- Frame rate: 24fps
-- Style: Cinematic product showcase
+【视频规格】
+- 时长：6秒
+- 分辨率：720p或更高
+- 帧率：24fps
+- 风格：电影级产品展示
 
-CINEMATOGRAPHY:
-- Smooth camera movement (slow pan, gentle rotation, or subtle zoom)
-- Professional lighting with soft shadows
-- Clean, uncluttered background appropriate to the scene
-- Focus on product details and usability
+【摄影要求】
+- 流畅的相机运动（慢速平移、轻柔旋转或微妙变焦）
+- 专业灯光配合柔和阴影
+- 干净整洁的背景，与场景相协调
+- 聚焦产品细节和可用性
 
-MOOD & TONE:
-- Professional and premium feel
-- Natural and authentic interaction
-- Warm, inviting color grading
-- Subtle depth of field for cinematic look
+【氛围与基调】
+- 专业高端感
+- 自然真实的呈现
+- 温暖舒适的色彩调性
+- 适度景深营造电影质感
 
-OUTPUT: A seamless, looping-friendly product video suitable for marketing and e-commerce use.`;
+【关键约束 - 产品一致性】
+如果基于产品图片生成，必须：
+- 产品外观、颜色、形状必须与原图100%一致
+- 不得改变产品任何设计细节
+- 产品始终是画面焦点
+- 只添加相机运动和环境变化
 
-  if (parentImageUrl) {
-    return `${basePrompt}\n\nREFERENCE PRODUCT IMAGE: The product should match the design shown in the reference image.`;
-  }
-
-  return basePrompt;
+输出：一个流畅的、适合循环播放的产品视频，可用于营销和电商展示。`;
 }

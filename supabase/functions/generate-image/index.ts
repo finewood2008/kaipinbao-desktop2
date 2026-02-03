@@ -1,4 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  GoogleGenAI,
+  Modality,
+} from "https://esm.sh/@google/genai@0.14.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,7 +50,7 @@ function buildPrdContext(prdData?: PrdData): string {
 async function generateMarketingCopy(
   imageType: string, 
   prdData: PrdData | undefined,
-  apiKey: string
+  ai: GoogleGenAI
 ): Promise<string | null> {
   try {
     const imageTypeLabels: Record<string, string> = {
@@ -72,25 +76,12 @@ async function generateMarketingCopy(
 
 只输出文案内容，不要任何其他解释。`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
-        messages: [{ role: "user", content: prompt }],
-      }),
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-lite",
+      contents: prompt,
     });
 
-    if (!response.ok) {
-      console.error("Failed to generate marketing copy:", response.status);
-      return null;
-    }
-
-    const data = await response.json();
-    const copy = data.choices?.[0]?.message?.content?.trim();
+    const copy = response.text?.trim();
     return copy || null;
   } catch (error) {
     console.error("Error generating marketing copy:", error);
@@ -103,7 +94,6 @@ function buildPromptForImageType(
   basePrompt: string, 
   imageType: string, 
   phase: number,
-  parentImageUrl?: string,
   prdData?: PrdData
 ): string {
   const prdContext = buildPrdContext(prdData);
@@ -137,16 +127,21 @@ COMPOSITION: Hero product angle with 3/4 perspective view; Centered composition 
 OUTPUT: A single, clean, commercially-ready product image suitable for Amazon, Shopify, or premium e-commerce listings. The product should be the sole focus with no distracting elements, props, or text. Maintain accurate proportions and showcase the product's key design features and material quality.`;
   }
 
-  // Phase 2: Marketing images based on type
-  const referenceNote = parentImageUrl 
-    ? `\n\nREFERENCE: The product should match the design established in the reference image. Maintain consistent product appearance, colors, and proportions.`
-    : "";
+  // Phase 2: Marketing images based on type - with product consistency emphasis
+  const productConsistencyNote = `
+【关键约束 - 产品造型一致性】
+- 产品的外观、颜色、形状、尺寸、比例必须与原产品图100%一致
+- 不得改变产品的任何设计细节（按钮位置、线条、材质纹理等）
+- 不得添加或移除产品的任何部件
+- 产品的品牌标识、logo位置必须保持原样
+- 产品材质的反光、高光特性需保持一致`;
 
   switch (imageType) {
     case "scene":
       return `Create a lifestyle product scene photograph:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 
 SCENE REQUIREMENTS:
 - Product naturally placed in an authentic, lifestyle environment
@@ -158,12 +153,13 @@ SCENE REQUIREMENTS:
 MOOD: Aspirational lifestyle, premium quality, authentic usage context
 ${commonQuality}
 
-OUTPUT: A beautiful lifestyle photograph showing the product in its natural usage environment. The scene should tell a story and evoke desire for the product.${referenceNote}`;
+OUTPUT: A beautiful lifestyle photograph showing the product in its natural usage environment. The scene should tell a story and evoke desire for the product. THE PRODUCT APPEARANCE MUST REMAIN EXACTLY AS SHOWN IN THE REFERENCE.`;
 
     case "structure":
       return `Create a technical structure visualization:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 
 VISUALIZATION REQUIREMENTS:
 - Semi-transparent outer shell revealing internal structure
@@ -175,12 +171,13 @@ VISUALIZATION REQUIREMENTS:
 STYLE: Technical illustration, cutaway view, component breakdown
 ${commonQuality}
 
-OUTPUT: A clear technical diagram showing the internal structure and key components of the product. Professional engineering visualization quality.${referenceNote}`;
+OUTPUT: A clear technical diagram showing the internal structure and key components of the product. Professional engineering visualization quality. THE PRODUCT SHAPE AND PROPORTIONS MUST MATCH THE REFERENCE EXACTLY.`;
 
     case "exploded":
       return `Create an exploded view diagram:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 
 EXPLODED VIEW REQUIREMENTS:
 - All components separated and arranged along central axis
@@ -192,12 +189,13 @@ EXPLODED VIEW REQUIREMENTS:
 STYLE: Technical exploded view, isometric perspective, assembly diagram
 ${commonQuality}
 
-OUTPUT: A professional exploded view showing all product components in their relative positions with clear visual separation.${referenceNote}`;
+OUTPUT: A professional exploded view showing all product components in their relative positions with clear visual separation. EACH COMPONENT MUST MATCH THE DESIGN OF THE REFERENCE PRODUCT.`;
 
     case "usage":
       return `Create a product usage photograph:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 
 USAGE SCENE REQUIREMENTS:
 - Show a person naturally interacting with/using the product
@@ -209,12 +207,13 @@ USAGE SCENE REQUIREMENTS:
 MOOD: Natural, authentic, relatable, aspirational
 ${commonQuality}
 
-OUTPUT: An authentic photograph of someone using the product in a natural way. The image should help potential customers visualize themselves using the product.${referenceNote}`;
+OUTPUT: An authentic photograph of someone using the product in a natural way. The image should help potential customers visualize themselves using the product. THE PRODUCT IN THE SCENE MUST BE IDENTICAL TO THE REFERENCE IMAGE.`;
 
     case "lifestyle":
       return `Create a brand lifestyle photograph:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 
 LIFESTYLE REQUIREMENTS:
 - Product integrated into a curated lifestyle setting
@@ -226,12 +225,13 @@ LIFESTYLE REQUIREMENTS:
 MOOD: Premium, aspirational, brand-aligned, magazine-quality
 ${commonQuality}
 
-OUTPUT: A beautiful lifestyle photograph that positions the product within an aspirational lifestyle context. Think premium magazine editorial quality.${referenceNote}`;
+OUTPUT: A beautiful lifestyle photograph that positions the product within an aspirational lifestyle context. Think premium magazine editorial quality. THE PRODUCT MUST LOOK EXACTLY AS IT DOES IN THE REFERENCE IMAGE.`;
 
     case "detail":
       return `Create a product detail macro photograph:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 
 DETAIL REQUIREMENTS:
 - Extreme close-up of key product feature or texture
@@ -243,12 +243,13 @@ DETAIL REQUIREMENTS:
 STYLE: Macro photography, texture detail, craftsmanship showcase
 ${commonQuality}
 
-OUTPUT: A stunning close-up photograph that highlights the quality, texture, and craftsmanship of a specific product detail.${referenceNote}`;
+OUTPUT: A stunning close-up photograph that highlights the quality, texture, and craftsmanship of a specific product detail. THE DETAIL MUST BE FROM THE SAME PRODUCT AS SHOWN IN THE REFERENCE.`;
 
     case "comparison":
       return `Create a before/after or comparison image:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 
 COMPARISON REQUIREMENTS:
 - Split or side-by-side comparison layout
@@ -260,17 +261,32 @@ COMPARISON REQUIREMENTS:
 STYLE: Comparison, before/after, problem-solution
 ${commonQuality}
 
-OUTPUT: A clear comparison image showing the problem being solved or improvement being made, effectively communicating the product's value proposition.${referenceNote}`;
+OUTPUT: A clear comparison image showing the problem being solved or improvement being made, effectively communicating the product's value proposition. THE PRODUCT SHOWN MUST MATCH THE REFERENCE EXACTLY.`;
 
     default:
       // Custom or fallback
       return `Create a professional marketing photograph:
 
 PRODUCT: ${basePrompt}${prdContext}
+${productConsistencyNote}
 ${commonQuality}
 
-OUTPUT: A high-quality marketing photograph suitable for advertising and promotional use.${referenceNote}`;
+OUTPUT: A high-quality marketing photograph suitable for advertising and promotional use. THE PRODUCT MUST REMAIN VISUALLY IDENTICAL TO THE REFERENCE IMAGE.`;
   }
+}
+
+// Fetch image and convert to base64
+async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; mimeType: string }> {
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.status}`);
+  }
+  
+  const contentType = response.headers.get("content-type") || "image/png";
+  const arrayBuffer = await response.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+  
+  return { base64, mimeType: contentType };
 }
 
 serve(async (req) => {
@@ -288,104 +304,106 @@ serve(async (req) => {
       parentImageUrl,
       prdData
     } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
+    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_API_KEY) {
+      throw new Error("GOOGLE_API_KEY is not configured");
     }
 
     if (!prompt) {
       throw new Error("Prompt is required");
     }
 
+    // Initialize Google GenAI
+    const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
+
     // Build prompt based on image type, phase, and PRD data
-    const enhancedPrompt = buildPromptForImageType(prompt, imageType, phase, parentImageUrl, prdData);
+    const enhancedPrompt = buildPromptForImageType(prompt, imageType, phase, prdData);
 
     // Determine if we should use image editing mode (phase 2 with parent image)
     const useImageEditing = phase === 2 && parentImageUrl && imageType !== "product";
     
-    let requestBody: any;
-    
+    let imageUrl: string | undefined;
+    let description: string | undefined;
+
     if (useImageEditing) {
       // Use image editing mode to maintain product consistency
       console.log("Using image editing mode with parent image:", parentImageUrl);
-      requestBody = {
-        model: "google/gemini-3-pro-image-preview",
-        messages: [
+      
+      // Fetch parent image and convert to base64
+      const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
+      
+      const editPrompt = `基于这个产品图片生成新的营销场景图。
+
+${enhancedPrompt}
+
+【最重要的要求】
+这是一个产品营销图生成任务。你必须：
+1. 保持产品外观100%不变 - 产品的形状、颜色、材质、设计细节必须与原图完全一致
+2. 只改变产品周围的场景和环境
+3. 产品必须清晰可见，是画面的焦点
+4. 不要对产品进行任何修改、变形或重新设计
+
+生成一张高质量的营销场景图。`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-exp-image-generation",
+        contents: [
           {
             role: "user",
-            content: [
+            parts: [
+              { text: editPrompt },
               {
-                type: "text",
-                text: `基于这个产品图片，${enhancedPrompt}
-
-重要要求：
-- 产品的外观、颜色、形状、材质必须与原图完全一致
-- 不要改变产品本身的任何设计细节
-- 只改变产品所在的场景和环境
-- 保持产品的高品质渲染效果`
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64,
+                },
               },
-              {
-                type: "image_url",
-                image_url: {
-                  url: parentImageUrl
-                }
-              }
-            ]
-          }
+            ],
+          },
         ],
-        modalities: ["image", "text"]
-      };
+        config: {
+          responseModalities: [Modality.TEXT, Modality.IMAGE],
+        },
+      });
+
+      // Extract image from response
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.text) {
+            description = part.text;
+          }
+          if (part.inlineData) {
+            imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          }
+        }
+      }
     } else {
       // Use text-to-image mode for product design or when no parent image
-      requestBody = {
-        model: "google/gemini-3-pro-image-preview",
-        messages: [
-          { role: "user", content: enhancedPrompt },
-        ],
-        modalities: ["image", "text"],
-      };
-    }
-
-    // Use Lovable AI Gateway with Nano Banana Pro model for high-quality image generation
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "请求过于频繁，请稍后再试" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "API 额度已用完，请充值后再试" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const text = await response.text();
-      console.error("Lovable AI Gateway error:", response.status, text);
-      return new Response(JSON.stringify({ error: "图像生成失败" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-exp-image-generation",
+        contents: enhancedPrompt,
+        config: {
+          responseModalities: [Modality.TEXT, Modality.IMAGE],
+        },
       });
-    }
 
-    const data = await response.json();
-    
-    // Extract image from Lovable AI Gateway response
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    const description = data.choices?.[0]?.message?.content;
+      // Extract image from response
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.text) {
+            description = part.text;
+          }
+          if (part.inlineData) {
+            imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+          }
+        }
+      }
+    }
 
     if (!imageUrl) {
-      console.error("No image in response:", JSON.stringify(data));
+      console.error("No image in response");
       return new Response(JSON.stringify({ error: "未能生成图像" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -395,7 +413,7 @@ serve(async (req) => {
     // Generate marketing copy for phase 2 images
     let marketingCopy: string | null = null;
     if (phase === 2 && imageType !== "product") {
-      marketingCopy = await generateMarketingCopy(imageType, prdData, LOVABLE_API_KEY);
+      marketingCopy = await generateMarketingCopy(imageType, prdData, ai);
     }
 
     return new Response(
@@ -413,6 +431,15 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Generate image error:", error);
+    
+    // Handle rate limiting
+    if (error instanceof Error && error.message.includes("429")) {
+      return new Response(JSON.stringify({ error: "请求过于频繁，请稍后再试" }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {
