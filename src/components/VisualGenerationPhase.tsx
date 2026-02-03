@@ -15,7 +15,7 @@ import {
 import { ProductDesignGallery } from "./ProductDesignGallery";
 import { ImageTypeSelector, ImageType } from "./ImageTypeSelector";
 import { MarketingImageGallery } from "./MarketingImageGallery";
-import { VideoGenerationSection } from "./VideoGenerationSection";
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,14 +42,6 @@ interface GeneratedImage {
   marketing_copy?: string | null;
 }
 
-interface GeneratedVideo {
-  id: string;
-  video_url: string | null;
-  prompt: string;
-  scene_description: string | null;
-  duration_seconds: number;
-  status: string;
-}
 
 interface CompetitorProduct {
   id: string;
@@ -73,10 +65,8 @@ interface VisualGenerationPhaseProps {
   projectId: string;
   productImages: GeneratedImage[];
   marketingImages: GeneratedImage[];
-  videos: GeneratedVideo[];
   onProductImagesChange: (images: GeneratedImage[]) => void;
   onMarketingImagesChange: (images: GeneratedImage[]) => void;
-  onVideosChange: (videos: GeneratedVideo[]) => void;
   onConfirmAndProceed: () => void;
   prdSummary?: string;
   prdData?: PrdData;
@@ -87,10 +77,8 @@ export function VisualGenerationPhase({
   projectId,
   productImages,
   marketingImages,
-  videos,
   onProductImagesChange,
   onMarketingImagesChange,
-  onVideosChange,
   onConfirmAndProceed,
   prdSummary,
   prdData,
@@ -137,12 +125,8 @@ export function VisualGenerationPhase({
 
   // Handle design change - shows confirmation if there are associated assets
   const handleDesignChange = async (oldImageId: string, newImageId: string): Promise<boolean> => {
-    // Check if there are associated marketing images or videos
-    const associatedImagesCount = marketingImages.filter(img => img.parent_image_id === oldImageId).length;
-    const associatedVideosCount = videos.filter(v => (v as any).parent_image_id === oldImageId).length;
-    
-    // Also count all marketing images/videos if they exist (in case parent_image_id wasn't set)
-    const totalAssets = marketingImages.length + videos.length;
+    // Check if there are associated marketing images
+    const totalAssets = marketingImages.length;
     
     if (totalAssets === 0) {
       // No assets to clear, proceed directly
@@ -173,19 +157,8 @@ export function VisualGenerationPhase({
         console.error("Error deleting marketing images:", imagesError);
       }
 
-      // Delete associated videos from database
-      const { error: videosError } = await supabase
-        .from("generated_videos")
-        .delete()
-        .eq("parent_image_id", oldImageId);
-      
-      if (videosError) {
-        console.error("Error deleting videos:", videosError);
-      }
-
       // Clear frontend state
       onMarketingImagesChange([]);
-      onVideosChange([]);
       
       // Reset image type selection
       setSelectedImageTypes([]);
@@ -199,7 +172,6 @@ export function VisualGenerationPhase({
       
       // Still clear frontend state even if DB deletion failed
       onMarketingImagesChange([]);
-      onVideosChange([]);
       setSelectedImageTypes([]);
       
       resolve(true);
@@ -277,7 +249,7 @@ export function VisualGenerationPhase({
             <Badge variant="outline" className="bg-background/50">
               {currentPhase === 1 
                 ? "生成并选择产品造型" 
-                : "生成营销素材 & 视频"
+                : "生成营销素材"
               }
             </Badge>
           </div>
@@ -468,16 +440,6 @@ export function VisualGenerationPhase({
               prdData={prdData}
             />
 
-            {/* Video Generation - Pass full prdData */}
-            <VideoGenerationSection
-              projectId={projectId}
-              parentImageId={selectedProductImage?.id}
-              parentImageUrl={selectedProductImage?.image_url}
-              videos={videos}
-              onVideosChange={onVideosChange}
-              usageScenarios={prdData?.usageScenarios}
-              prdData={prdData}
-            />
 
             {/* Proceed to Landing Page */}
             {selectedProductImage && (
@@ -504,8 +466,7 @@ export function VisualGenerationPhase({
                         </h4>
                         <p className="text-sm text-muted-foreground">
                           已生成 {marketingImages.length} 张营销图片
-                          {`，${videos.length} 个视频`}
-                          {marketingImages.length === 0 && videos.length === 0 && (
+                          {marketingImages.length === 0 && (
                             <span>（未生成也可继续，稍后可在落地页阶段补齐/重新生成）</span>
                           )}
                         </p>
@@ -539,7 +500,6 @@ export function VisualGenerationPhase({
               <p>更换产品造型将清除已生成的关联素材：</p>
               <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
                 <li>{marketingImages.length} 张营销图片</li>
-                <li>{videos.length} 个视频</li>
               </ul>
               <p className="text-sm text-muted-foreground pt-2">
                 此操作不可撤销，您需要基于新造型重新生成营销素材。

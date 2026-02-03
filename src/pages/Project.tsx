@@ -559,10 +559,8 @@ export default function ProjectPage() {
                 projectId={id || ""}
                 productImages={productImages}
                 marketingImages={marketingImages}
-                videos={videos}
                 onProductImagesChange={setProductImages}
                 onMarketingImagesChange={setMarketingImages}
-                onVideosChange={setVideos}
                 onConfirmAndProceed={handleVisualPhaseConfirm}
                 prdSummary={project?.name}
                 prdData={getPrdData()}
