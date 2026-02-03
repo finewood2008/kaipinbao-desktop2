@@ -1,384 +1,411 @@
 
-# 升级图像生成模型与统一双备份机制
+# 落地页版本管理与数据分析阶段分离
 
 ## 概述
 
-根据需求，将所有 AI 调用统一为：
-1. **优先调用 Google 直连 API**
-2. **被屏蔽时自动切换到 Lovable AI Gateway 备份**
-3. **图像生成统一使用 `google/gemini-3-pro-image-preview`（Google 直连）和 `google/gemini-3-pro-image-preview`（Lovable 备份）**
+本次升级将实现三个核心功能：
+1. **落地页版本管理**：重新生成落地页时创建新版本，保留历史版本供用户切换比较
+2. **发布后流程锁定**：发布落地页后，整个流程结束，所有阶段变为只读模式
+3. **数据分析阶段分离**：在落地页阶段后新增"数据分析"阶段（第5阶段），将原有的数据分析板块迁移至此
 
-## 一、当前状态分析
+## 一、数据库架构调整
 
-| 边缘函数 | 当前主调用 | 状态 |
-|----------|----------|------|
-| `generate-image` | Google 直连 `google/gemini-3-pro-image-preview` | ⚠️ 无备份 |
-| `chat` | Lovable AI Gateway | ⚠️ 需改为 Google 优先 |
-| `market-analysis` | Google 直连 `gemini-2.5-flash` | ⚠️ 无备份 |
-| `generate-landing-page` | Lovable AI Gateway | ⚠️ 需改为 Google 优先 |
-| `analyze-reviews` | Lovable AI Gateway | ⚠️ 需改为 Google 优先 |
-| `initial-market-analysis` | Google 直连 | ⚠️ 无备份 |
-| `regenerate-prd-section` | Google 直连 | ⚠️ 无备份 |
-| `scrape-competitor` | Lovable AI Gateway（OCR） | ⚠️ 需改为 Google 优先 |
+### 1.1 `landing_pages` 表修改
 
-## 二、统一调用策略
+当前 `landing_pages` 表的关系是 `isOneToOne: true`（一对一），需要修改为一对多关系，支持多个版本：
 
-### 2.1 文本生成模型
+```sql
+-- 添加版本号字段
+ALTER TABLE landing_pages ADD COLUMN version INTEGER DEFAULT 1;
+-- 添加 is_active 字段标记当前活跃版本
+ALTER TABLE landing_pages ADD COLUMN is_active BOOLEAN DEFAULT true;
+-- 移除一对一约束（通过新建索引）
+-- 创建唯一约束：每个项目只能有一个活跃版本
+ALTER TABLE landing_pages 
+  DROP CONSTRAINT IF EXISTS landing_pages_project_id_fkey,
+  ADD CONSTRAINT landing_pages_project_id_fkey 
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-| 调用顺序 | API | 模型 |
-|----------|-----|------|
-| 主调用 | Google 直连 | `gemini-2.5-flash` |
-| 备份 | Lovable AI Gateway | `google/gemini-2.5-flash` |
+CREATE UNIQUE INDEX landing_pages_project_active_idx 
+  ON landing_pages(project_id) WHERE is_active = true;
+```
 
-### 2.2 图像生成模型
+### 1.2 `projects` 表修改
 
-| 调用顺序 | API | 模型 |
-|----------|-----|------|
-| 主调用 | Google 直连 | `google/gemini-3-pro-image-preview` |
-| 备份 | Lovable AI Gateway | `google/gemini-3-pro-image-preview` |
+扩展阶段约束，支持第5阶段（数据分析）：
 
-### 2.3 视觉理解/OCR模型
+```sql
+-- 更新 current_stage 约束范围：1-5
+ALTER TABLE projects 
+  DROP CONSTRAINT IF EXISTS projects_current_stage_check,
+  ADD CONSTRAINT projects_current_stage_check CHECK (current_stage >= 1 AND current_stage <= 5);
+```
 
-| 调用顺序 | API | 模型 |
-|----------|-----|------|
-| 主调用 | Google 直连 | `gemini-2.5-pro`（支持视觉） |
-| 备份 | Lovable AI Gateway | `google/gemini-2.5-pro` |
+## 二、阶段指示器升级
 
-## 三、核心技术实现
+### 2.1 `StageIndicator.tsx` 修改
 
-### 3.1 创建共享备份工具 `_shared/ai-fallback.ts`
-
-创建统一的 AI 调用包装器，实现自动故障切换：
+增加第5阶段"数据分析"：
 
 ```typescript
-// supabase/functions/_shared/ai-fallback.ts
+const stages = [
+  { id: 1, name: "市场调研", icon: MessageSquare, description: "市场分析与竞品研究" },
+  { id: 2, name: "产品定义", icon: MessageSquare, description: "AI产品经理与PRD" },
+  { id: 3, name: "产品设计", icon: Palette, description: "AI图像生成与迭代" },
+  { id: 4, name: "落地页", icon: Rocket, description: "营销页面生成" },
+  { id: 5, name: "数据分析", icon: BarChart3, description: "市场验证与数据监控" }, // 新增
+];
+```
 
-export interface CallAIOptions {
-  logPrefix?: string;
-  retryCount?: number;
-}
+**阶段逻辑变更**：
+- 落地页发布前：可在 1-4 阶段间切换
+- 落地页发布后：自动进入第5阶段，所有阶段标记为完成（打勾），但仍可点击查看只读内容
 
-// 判断是否应该切换到备份
-export function shouldFallback(error: unknown): boolean {
-  if (error instanceof Response) {
-    return [429, 402, 500, 502, 503, 504].includes(error.status);
-  }
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase();
-    return (
-      msg.includes("429") ||
-      msg.includes("rate limit") ||
-      msg.includes("blocked") ||
-      msg.includes("network") ||
-      msg.includes("timeout") ||
-      msg.includes("503") ||
-      msg.includes("502")
-    );
-  }
-  return true; // 默认切换备份
-}
+### 2.2 完成状态样式增强
 
-// 统一的双备份调用函数
-export async function callWithFallback<T>(
-  primaryCall: () => Promise<T>,
-  fallbackCall: () => Promise<T>,
-  options?: CallAIOptions
-): Promise<{ result: T; usedFallback: boolean }> {
-  const prefix = options?.logPrefix || "AI";
+发布后所有阶段显示完成状态（绿色勾），并添加"已完成"徽章：
+
+```typescript
+// 当项目已发布时，所有阶段显示为完成
+const isProjectCompleted = landingPage?.is_published;
+const isCompleted = isProjectCompleted || currentStage > stage.id;
+```
+
+## 三、落地页版本管理
+
+### 3.1 数据流设计
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                    落地页版本管理                              │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   [版本 1]  ←→  [版本 2]  ←→  [版本 3 (当前)]               │
+│                                                              │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │  切换版本时：                                         │   │
+│   │  1. 更新原 is_active = false                         │   │
+│   │  2. 更新目标 is_active = true                        │   │
+│   │  3. 刷新前端状态                                      │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │  重新生成时：                                         │   │
+│   │  1. 将当前版本 is_active = false                     │   │
+│   │  2. 创建新版本 version = max(version) + 1           │   │
+│   │  3. 新版本 is_active = true                          │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 3.2 `LandingPageBuilder.tsx` 改造
+
+**新增状态**：
+
+```typescript
+const [allVersions, setAllVersions] = useState<LandingPageData[]>([]);
+const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
+```
+
+**新增版本切换 UI**：
+
+```typescript
+{allVersions.length > 1 && !landingPage.is_published && (
+  <Card className="glass border-border/50">
+    <CardHeader>
+      <CardTitle className="text-lg flex items-center gap-2">
+        <History className="w-5 h-5" />
+        版本历史
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <div className="flex gap-2 flex-wrap">
+        {allVersions.map((version, index) => (
+          <Button
+            key={version.id}
+            variant={version.is_active ? "default" : "outline"}
+            size="sm"
+            onClick={() => handleSwitchVersion(version)}
+          >
+            版本 {version.version}
+            {version.is_active && <Badge className="ml-2">当前</Badge>}
+          </Button>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+)}
+```
+
+**重新生成逻辑改造**：
+
+```typescript
+const handleRegenerate = async () => {
+  // 1. 将当前版本设为非活跃
+  await supabase
+    .from("landing_pages")
+    .update({ is_active: false })
+    .eq("id", landingPage.id);
+
+  // 2. 获取最大版本号
+  const { data: versions } = await supabase
+    .from("landing_pages")
+    .select("version")
+    .eq("project_id", projectId)
+    .order("version", { ascending: false })
+    .limit(1);
+
+  const nextVersion = (versions?.[0]?.version || 0) + 1;
+
+  // 3. 生成新版本（复用 handleAIGenerateLandingPage 但传入版本号）
+  await generateNewVersion(nextVersion);
+};
+```
+
+### 3.3 版本切换逻辑
+
+```typescript
+const handleSwitchVersion = async (targetVersion: LandingPageData) => {
+  // 1. 将当前活跃版本设为非活跃
+  await supabase
+    .from("landing_pages")
+    .update({ is_active: false })
+    .eq("project_id", projectId)
+    .eq("is_active", true);
+
+  // 2. 将目标版本设为活跃
+  await supabase
+    .from("landing_pages")
+    .update({ is_active: true })
+    .eq("id", targetVersion.id);
+
+  // 3. 更新本地状态
+  onLandingPageChange({ ...targetVersion, is_active: true });
   
+  toast.success(`已切换到版本 ${targetVersion.version}`);
+};
+```
+
+## 四、发布后流程锁定
+
+### 4.1 发布逻辑改造
+
+`handlePublish` 函数中增加阶段推进：
+
+```typescript
+const handlePublish = async () => {
+  if (!landingPage) return;
+  
+  setIsPublishing(true);
   try {
-    console.log(`${prefix}: Attempting primary call (Google Direct)...`);
-    const result = await primaryCall();
-    console.log(`${prefix}: Primary call succeeded`);
-    return { result, usedFallback: false };
-  } catch (primaryError) {
-    console.warn(`${prefix}: Primary call failed:`, primaryError);
+    // 1. 更新落地页为已发布
+    await supabase
+      .from("landing_pages")
+      .update({ is_published: true })
+      .eq("id", landingPage.id);
+
+    // 2. 将项目推进到第5阶段（数据分析）
+    await supabase
+      .from("projects")
+      .update({ current_stage: 5 })
+      .eq("id", projectId);
+
+    onLandingPageChange({ ...landingPage, is_published: true });
+    onStageAdvance?.(5); // 通知父组件更新阶段
     
-    if (!shouldFallback(primaryError)) {
-      throw primaryError;
-    }
-    
-    console.log(`${prefix}: Switching to fallback (Lovable AI)...`);
-    try {
-      const result = await fallbackCall();
-      console.log(`${prefix}: Fallback succeeded`);
-      return { result, usedFallback: true };
-    } catch (fallbackError) {
-      console.error(`${prefix}: Both primary and fallback failed`);
-      throw fallbackError;
-    }
+    toast.success("落地页发布成功！进入数据监控阶段");
+  } catch (error) {
+    toast.error("发布失败");
+  } finally {
+    setIsPublishing(false);
   }
-}
+};
 ```
 
-### 3.2 `generate-image/index.ts` 改造
+### 4.2 只读模式传递
 
-添加 Lovable AI 备份，使用 `google/gemini-3-pro-image-preview`：
+`Project.tsx` 中传递只读状态：
 
 ```typescript
-// 新增：通过 Lovable AI 生成图片（备份）
-async function generateImageViaLovable(
-  prompt: string,
-  parentImageUrl?: string
-): Promise<{ imageUrl: string; description?: string }> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+// 判断项目是否已完成（落地页已发布）
+const isProjectCompleted = landingPage?.is_published;
 
-  const content: any[] = [{ type: "text", text: prompt }];
-  if (parentImageUrl) {
-    const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
-    content.push({
-      type: "image_url",
-      image_url: { url: `data:${mimeType};base64,${base64}` }
-    });
+// 所有阶段组件接收只读状态
+<MarketResearchPhase
+  isReadOnly={project?.current_stage !== 1 || isProjectCompleted}
+/>
+<PrdPhase
+  isReadOnly={project?.current_stage !== 2 || isProjectCompleted}
+/>
+<VisualGenerationPhase
+  isReadOnly={project?.current_stage !== 3 || isProjectCompleted}
+/>
+<LandingPageBuilder
+  isReadOnly={isProjectCompleted} // 发布后隐藏重新生成按钮
+/>
+```
+
+### 4.3 UI 变化
+
+发布后的落地页阶段显示：
+- 隐藏"重新生成"按钮
+- 隐藏版本切换 UI
+- 显示"已发布"徽章
+- 显示"查看数据分析"按钮引导跳转
+
+## 五、数据分析阶段
+
+### 5.1 `Project.tsx` 新增 Tab
+
+```typescript
+// 新增 analytics Tab
+<TabsContent value="analytics" className="flex-1 overflow-auto p-4 m-0">
+  <div className="max-w-5xl mx-auto">
+    {landingPage ? (
+      <LandingPageAnalytics
+        landingPageId={landingPage.id}
+        landingPageSlug={landingPage.slug}
+        landingPageTitle={landingPage.title}
+        viewCount={landingPage.view_count}
+        isReadOnly={true}
+      />
+    ) : (
+      <Card className="glass border-border/50">
+        <CardContent className="p-8 text-center">
+          <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-2">暂无数据</h3>
+          <p className="text-muted-foreground">
+            请先发布落地页以开始收集市场数据
+          </p>
+        </CardContent>
+      </Card>
+    )}
+  </div>
+</TabsContent>
+```
+
+### 5.2 阶段切换逻辑更新
+
+```typescript
+useEffect(() => {
+  if (project) {
+    if (project.current_stage === 1) setActiveTab("research");
+    else if (project.current_stage === 2) setActiveTab("prd");
+    else if (project.current_stage === 3) setActiveTab("images");
+    else if (project.current_stage === 4) setActiveTab("landing");
+    else if (project.current_stage === 5) setActiveTab("analytics"); // 新增
   }
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-3-pro-image-preview",
-      messages: [{ role: "user", content }],
-      modalities: ["image", "text"],
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Lovable AI failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-  const description = data.choices?.[0]?.message?.content;
-  
-  if (!imageData) throw new Error("No image in Lovable response");
-  return { imageUrl: imageData, description };
-}
-
-// 主流程使用双备份
-let imageResult: { imageUrl: string; description?: string };
-let usedFallback = false;
-
-try {
-  // 主调用：Google 直连
-  imageResult = await generateImageViaGoogle(enhancedPrompt, parentImageUrl);
-} catch (googleError) {
-  console.warn("Google API failed, switching to Lovable AI...", googleError);
-  usedFallback = true;
-  imageResult = await generateImageViaLovable(enhancedPrompt, parentImageUrl);
-}
+}, [project?.current_stage]);
 ```
 
-### 3.3 `chat/index.ts` 改造
-
-改为 Google 优先，Lovable 备份：
+### 5.3 StageIndicator 点击处理更新
 
 ```typescript
-// 主调用：Google 直连
-async function chatViaGoogle(contents: GeminiContent[], systemPrompt: string) {
-  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
-  if (!GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY not configured");
-  
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GOOGLE_API_KEY,
-      },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents,
-        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
-      }),
-    }
-  );
-  return response;
-}
-
-// 备份调用：Lovable AI
-async function chatViaLovable(messages: OpenAIMessage[]) {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-  
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages,
-      stream: true,
-    }),
-  });
-  return response;
-}
+<StageIndicator 
+  currentStage={project?.current_stage || 1}
+  isProjectCompleted={landingPage?.is_published}
+  onStageClick={(stageId) => {
+    if (stageId === 1) setActiveTab("research");
+    else if (stageId === 2) setActiveTab("prd");
+    else if (stageId === 3) setActiveTab("images");
+    else if (stageId === 4) setActiveTab("landing");
+    else if (stageId === 5) setActiveTab("analytics");
+  }}
+/>
 ```
 
-### 3.4 其他边缘函数统一改造
+### 5.4 `LandingPageAnalytics.tsx` 改造
 
-所有边缘函数遵循相同模式：
+移除返回按钮（因为现在是独立阶段），调整 props：
 
 ```typescript
-import { callWithFallback, shouldFallback } from "../_shared/ai-fallback.ts";
-
-// 每个函数内部：
-const { result, usedFallback } = await callWithFallback(
-  () => callGoogleDirect(prompt),
-  () => callLovableAI(prompt),
-  { logPrefix: "MarketAnalysis" }
-);
-```
-
-## 四、各边缘函数改造清单
-
-| 文件 | 改造内容 |
-|------|----------|
-| `supabase/functions/_shared/ai-fallback.ts` | 新建共享备份工具 |
-| `supabase/functions/generate-image/index.ts` | 添加 `generateImageViaLovable()` 备份函数 |
-| `supabase/functions/chat/index.ts` | 改为 Google 优先，添加 `chatViaGoogle()` 主调用 |
-| `supabase/functions/market-analysis/index.ts` | 添加 Lovable 备份 |
-| `supabase/functions/generate-landing-page/index.ts` | 改为 Google 优先 |
-| `supabase/functions/analyze-reviews/index.ts` | 改为 Google 优先 |
-| `supabase/functions/initial-market-analysis/index.ts` | 添加 Lovable 备份 |
-| `supabase/functions/regenerate-prd-section/index.ts` | 添加 Lovable 备份 |
-| `supabase/functions/scrape-competitor/index.ts` | OCR 部分改为 Google 优先 |
-
-## 五、前端进度显示增强
-
-### 5.1 新建进度组件 `ImageGenerationProgress.tsx`
-
-```typescript
-interface ImageGenerationProgressProps {
-  isGenerating: boolean;
-  currentType?: string;
-  currentStep?: string;
-  totalTypes: number;
-  completedCount: number;
-  estimatedTimeRemaining?: number;
-}
-
-export function ImageGenerationProgress({ ... }) {
-  const progress = (completedCount / totalTypes) * 100;
-
-  return (
-    <Card className="border-primary/30 bg-primary/5">
-      <CardContent className="p-4">
-        {/* 整体进度条 */}
-        <Progress value={progress} />
-        
-        {/* 当前任务状态 */}
-        <div className="flex items-center gap-3">
-          <Loader2 className="animate-spin" />
-          <div>
-            <p>正在生成: {currentType}</p>
-            <p className="text-sm text-muted-foreground">{currentStep}</p>
-          </div>
-        </div>
-        
-        {/* 预估时间 */}
-        {estimatedTimeRemaining && (
-          <p>预计剩余时间: 约 {Math.ceil(estimatedTimeRemaining / 60)} 分钟</p>
-        )}
-      </CardContent>
-    </Card>
-  );
+interface LandingPageAnalyticsProps {
+  landingPageId: string;
+  landingPageSlug: string;
+  landingPageTitle: string;
+  viewCount: number;
+  // 移除 onBackToEdit，因为不再需要返回
+  isReadOnly?: boolean; // 新增
 }
 ```
 
-### 5.2 `ProductDesignGallery.tsx` 增强
-
-添加详细步骤显示：
-
-```typescript
-const [generationStep, setGenerationStep] = useState("");
-const [estimatedTime, setEstimatedTime] = useState(0);
-
-// 生成时更新步骤
-setGenerationStep("正在连接 AI 服务...");
-// 调用 API
-setGenerationStep("AI 正在绘制产品造型...");
-// 保存
-setGenerationStep("正在保存到数据库...");
-```
-
-### 5.3 `MarketingImageGallery.tsx` 增强
-
-批量生成详细进度：
-
-```typescript
-const [currentGeneratingType, setCurrentGeneratingType] = useState("");
-const [completedCount, setCompletedCount] = useState(0);
-
-// 生成循环中
-for (const type of selectedTypes) {
-  setCurrentGeneratingType(type.label);
-  // 生成逻辑...
-  setCompletedCount(prev => prev + 1);
-}
-```
-
-## 六、错误处理增强
-
-### 6.1 错误消息映射
-
-```typescript
-function getErrorMessage(status: number, source: "google" | "lovable"): string {
-  switch (status) {
-    case 429:
-      return source === "google" 
-        ? "Google API 请求频率过高，正在切换备用服务..."
-        : "AI 请求频率过高，请稍后再试";
-    case 402:
-      return "AI 额度已用完，请充值后再试";
-    case 503:
-    case 502:
-      return source === "google"
-        ? "Google 服务暂时不可用，正在切换备用服务..."
-        : "AI 服务暂时不可用";
-    default:
-      return "AI 服务出错，请重试";
-  }
-}
-```
-
-### 6.2 前端错误提示
-
-在边缘函数返回中添加 `usedFallback` 标记，前端可显示：
-
-```typescript
-if (data.usedFallback) {
-  toast.info("已使用备用 AI 服务");
-}
-```
-
-## 七、涉及文件清单
+## 六、涉及文件清单
 
 | 文件路径 | 修改类型 | 说明 |
 |----------|----------|------|
-| `supabase/functions/_shared/ai-fallback.ts` | 新建 | 统一双备份工具函数 |
-| `supabase/functions/generate-image/index.ts` | 修改 | 添加 Lovable 备份 |
-| `supabase/functions/chat/index.ts` | 修改 | 改为 Google 优先 + Lovable 备份 |
-| `supabase/functions/market-analysis/index.ts` | 修改 | 添加 Lovable 备份 |
-| `supabase/functions/generate-landing-page/index.ts` | 修改 | 改为 Google 优先 |
-| `supabase/functions/analyze-reviews/index.ts` | 修改 | 改为 Google 优先 |
-| `supabase/functions/initial-market-analysis/index.ts` | 修改 | 添加 Lovable 备份 |
-| `supabase/functions/regenerate-prd-section/index.ts` | 修改 | 添加 Lovable 备份 |
-| `supabase/functions/scrape-competitor/index.ts` | 修改 | OCR 改为 Google 优先 |
-| `src/components/ImageGenerationProgress.tsx` | 新建 | 进度显示组件 |
-| `src/components/ProductDesignGallery.tsx` | 修改 | 添加详细进度 |
-| `src/components/MarketingImageGallery.tsx` | 修改 | 添加详细进度 |
-| `src/components/InlineAssetGenerator.tsx` | 修改 | 增强进度显示 |
+| 数据库迁移 | 新建 | 添加 version、is_active 字段，更新阶段约束 |
+| `src/components/StageIndicator.tsx` | 修改 | 添加第5阶段，支持完成状态样式 |
+| `src/pages/Project.tsx` | 修改 | 添加 analytics Tab，更新阶段切换逻辑 |
+| `src/components/LandingPageBuilder.tsx` | 修改 | 版本管理UI，发布后锁定，只读模式 |
+| `src/components/LandingPageAnalytics.tsx` | 修改 | 移除返回按钮，作为独立阶段 |
 
-## 八、预期效果
+## 七、用户流程变化
 
-1. **服务稳定性提升**：双备份确保 99%+ 可用性
-2. **用户体验优化**：生成过程透明化，进度可视
-3. **统一架构**：所有 AI 调用遵循相同模式，便于维护
-4. **自动故障转移**：网络屏蔽或限流时无感切换
+### 发布前
+
+```text
+市场调研 → 产品定义 → 产品设计 → 落地页
+                                    ↓
+                              [生成落地页]
+                                    ↓
+                         [版本 1] ←→ [版本 2] ←→ ...
+                                    ↓
+                              [选择版本]
+                                    ↓
+                              [发布落地页]
+```
+
+### 发布后
+
+```text
+✓ 市场调研 → ✓ 产品定义 → ✓ 产品设计 → ✓ 落地页 → ✓ 数据分析
+                                                      ↓
+                                            [实时数据监控]
+                                            [AI 市场分析]
+                                            [邮箱导出]
+
+（所有阶段可点击查看，但均为只读模式）
+```
+
+## 八、技术细节
+
+### 8.1 版本获取
+
+```typescript
+const fetchAllVersions = async () => {
+  const { data, error } = await supabase
+    .from("landing_pages")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("version", { ascending: true });
+
+  if (!error && data) {
+    setAllVersions(data);
+    // 设置当前活跃版本
+    const activeVersion = data.find(v => v.is_active);
+    if (activeVersion) {
+      onLandingPageChange(activeVersion);
+    }
+  }
+};
+```
+
+### 8.2 版本比较UI
+
+可选增强 - 双栏对比视图：
+
+```typescript
+{isComparing && (
+  <div className="grid grid-cols-2 gap-4">
+    <div>
+      <h4>版本 {compareVersion1.version}</h4>
+      <LandingPagePreview {...compareVersion1} />
+    </div>
+    <div>
+      <h4>版本 {compareVersion2.version}</h4>
+      <LandingPagePreview {...compareVersion2} />
+    </div>
+  </div>
+)}
+```
