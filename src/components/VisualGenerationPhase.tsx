@@ -9,13 +9,26 @@ import {
   Check, 
   ChevronRight,
   ArrowLeft,
-  Sparkles
+  Sparkles,
+  AlertTriangle
 } from "lucide-react";
 import { ProductDesignGallery } from "./ProductDesignGallery";
 import { ImageTypeSelector, ImageType } from "./ImageTypeSelector";
 import { MarketingImageGallery } from "./MarketingImageGallery";
 import { VideoGenerationSection } from "./VideoGenerationSection";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface GeneratedImage {
   id: string;
@@ -87,6 +100,14 @@ export function VisualGenerationPhase({
   const [selectedProductImage, setSelectedProductImage] = useState<GeneratedImage | null>(null);
   const [showPhaseTransition, setShowPhaseTransition] = useState(false);
   const [selectedImageTypes, setSelectedImageTypes] = useState<ImageType[]>([]);
+  
+  // State for design change confirmation
+  const [showDesignChangeConfirm, setShowDesignChangeConfirm] = useState(false);
+  const [pendingDesignChange, setPendingDesignChange] = useState<{
+    oldImageId: string;
+    newImageId: string;
+    resolve: (value: boolean) => void;
+  } | null>(null);
 
   // Check for existing selected product image
   useEffect(() => {
@@ -112,6 +133,89 @@ export function VisualGenerationPhase({
 
   const handleBackToPhase1 = () => {
     setCurrentPhase(1);
+  };
+
+  // Handle design change - shows confirmation if there are associated assets
+  const handleDesignChange = async (oldImageId: string, newImageId: string): Promise<boolean> => {
+    // Check if there are associated marketing images or videos
+    const associatedImagesCount = marketingImages.filter(img => img.parent_image_id === oldImageId).length;
+    const associatedVideosCount = videos.filter(v => (v as any).parent_image_id === oldImageId).length;
+    
+    // Also count all marketing images/videos if they exist (in case parent_image_id wasn't set)
+    const totalAssets = marketingImages.length + videos.length;
+    
+    if (totalAssets === 0) {
+      // No assets to clear, proceed directly
+      return true;
+    }
+
+    // Show confirmation dialog
+    return new Promise((resolve) => {
+      setPendingDesignChange({ oldImageId, newImageId, resolve });
+      setShowDesignChangeConfirm(true);
+    });
+  };
+
+  // Confirm design change and clear assets
+  const confirmDesignChange = async () => {
+    if (!pendingDesignChange) return;
+    
+    const { oldImageId, resolve } = pendingDesignChange;
+    
+    try {
+      // Delete associated marketing images from database
+      const { error: imagesError } = await supabase
+        .from("generated_images")
+        .delete()
+        .eq("parent_image_id", oldImageId);
+      
+      if (imagesError) {
+        console.error("Error deleting marketing images:", imagesError);
+      }
+
+      // Delete associated videos from database
+      const { error: videosError } = await supabase
+        .from("generated_videos")
+        .delete()
+        .eq("parent_image_id", oldImageId);
+      
+      if (videosError) {
+        console.error("Error deleting videos:", videosError);
+      }
+
+      // Clear frontend state
+      onMarketingImagesChange([]);
+      onVideosChange([]);
+      
+      // Reset image type selection
+      setSelectedImageTypes([]);
+      
+      toast.success("已清除旧造型的营销素材，请重新生成");
+      
+      resolve(true);
+    } catch (error) {
+      console.error("Error clearing assets:", error);
+      toast.error("清除素材时出错，但可以继续操作");
+      
+      // Still clear frontend state even if DB deletion failed
+      onMarketingImagesChange([]);
+      onVideosChange([]);
+      setSelectedImageTypes([]);
+      
+      resolve(true);
+    } finally {
+      setShowDesignChangeConfirm(false);
+      setPendingDesignChange(null);
+    }
+  };
+
+  // Cancel design change
+  const cancelDesignChange = () => {
+    if (pendingDesignChange) {
+      pendingDesignChange.resolve(false);
+    }
+    setShowDesignChangeConfirm(false);
+    setPendingDesignChange(null);
   };
 
   const phases = [
@@ -296,6 +400,7 @@ export function VisualGenerationPhase({
               images={productImages}
               onImagesChange={onProductImagesChange}
               onSelectImage={handleProductSelection}
+              onDesignChange={handleDesignChange}
               prdSummary={prdSummary}
               prdData={prdData}
               competitorProducts={competitorProducts}
@@ -421,6 +526,39 @@ export function VisualGenerationPhase({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Design Change Confirmation Dialog */}
+      <AlertDialog open={showDesignChangeConfirm} onOpenChange={setShowDesignChangeConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+              确认更换产品造型？
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>更换产品造型将清除已生成的关联素材：</p>
+              <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                <li>{marketingImages.length} 张营销图片</li>
+                <li>{videos.length} 个视频</li>
+              </ul>
+              <p className="text-sm text-muted-foreground pt-2">
+                此操作不可撤销，您需要基于新造型重新生成营销素材。
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDesignChange}>
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDesignChange}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              确认更换
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
