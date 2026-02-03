@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Bot, ChevronDown, Sparkles, ImagePlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,28 +49,32 @@ interface AiProductManagerPanelProps {
   onImageRemove?: (imageId: string) => void;
 }
 
-export function AiProductManagerPanel({
-  projectId,
-  messages,
-  isStreaming,
-  isSending,
-  inputValue,
-  prdData,
-  competitorProducts = [],
-  referenceImages = [],
-  isUploadingImage = false,
-  onInputChange,
-  onSend,
-  onSendDirect,
-  onPrdComplete,
-  showPrdReadyPrompt,
-  onDismissPrdPrompt,
-  isReadOnly = false,
-  onFieldEdit,
-  onProceedToDesign,
-  onImageUpload,
-  onImageRemove,
-}: AiProductManagerPanelProps) {
+export const AiProductManagerPanel = forwardRef<HTMLDivElement, AiProductManagerPanelProps>(
+  function AiProductManagerPanel(
+    {
+      projectId,
+      messages,
+      isStreaming,
+      isSending,
+      inputValue,
+      prdData,
+      competitorProducts = [],
+      referenceImages = [],
+      isUploadingImage = false,
+      onInputChange,
+      onSend,
+      onSendDirect,
+      onPrdComplete,
+      showPrdReadyPrompt,
+      onDismissPrdPrompt,
+      isReadOnly = false,
+      onFieldEdit,
+      onProceedToDesign,
+      onImageUpload,
+      onImageRemove,
+    },
+    ref
+  ) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -152,7 +156,7 @@ export function AiProductManagerPanel({
   };
 
   return (
-    <div className="h-full grid grid-cols-1 md:grid-cols-[260px_1fr] overflow-hidden">
+    <div ref={ref} className="h-full grid grid-cols-1 md:grid-cols-[260px_1fr] overflow-hidden">
       {/* Left Sidebar - PRD Extraction */}
       <PrdExtractionSidebar
         prdData={prdData}
@@ -347,4 +351,6 @@ export function AiProductManagerPanel({
       </div>
     </div>
   );
-}
+});
+
+AiProductManagerPanel.displayName = "AiProductManagerPanel";
