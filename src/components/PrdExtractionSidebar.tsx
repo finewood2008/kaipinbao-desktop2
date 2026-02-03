@@ -34,6 +34,31 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
+export interface ReferenceImage {
+  id: string;
+  url: string;
+  description?: string;
+  uploadedAt: string;
+}
+
+export interface DesignStyleDetails {
+  overallStyle?: string | null;
+  colorTone?: string | null;
+  surfaceTexture?: string | null;
+  shapeLanguage?: string | null;
+  inspirationKeywords?: string[] | null;
+  materialPreference?: string[] | null;
+  avoidElements?: string[] | null;
+}
+
+export interface CoreFeatureDetail {
+  feature: string;
+  description: string;
+  userBenefit: string;
+  technicalApproach?: string;
+  priority: "must-have" | "important" | "nice-to-have";
+}
+
 export interface PrdData {
   // Core fields
   usageScenario?: string | null;
@@ -50,6 +75,15 @@ export interface PrdData {
   productCategory?: string | null;
   dialoguePhase?: "direction-exploration" | "direction-confirmed" | "details-refinement" | "prd-ready";
   selectedDirection?: string | null;
+  
+  // NEW: Enhanced design style details
+  designStyleDetails?: DesignStyleDetails | null;
+  
+  // NEW: Enhanced core features details
+  coreFeaturesDetails?: CoreFeatureDetail[] | null;
+  
+  // NEW: User uploaded reference images
+  referenceImages?: ReferenceImage[] | null;
   
   // Specifications
   specifications?: {
@@ -140,10 +174,12 @@ interface CompetitorProduct {
 interface PrdExtractionSidebarProps {
   prdData: PrdData | null;
   competitorProducts?: CompetitorProduct[];
+  referenceImages?: ReferenceImage[];
   className?: string;
   isEditable?: boolean;
   onFieldEdit?: (field: string, value: unknown) => void;
   onProceedToDesign?: () => void;
+  onImageRemove?: (imageId: string) => void;
 }
 
 const progressItems = [
@@ -203,10 +239,12 @@ function getPhaseLabel(phase: string | undefined): { label: string; color: strin
 export function PrdExtractionSidebar({
   prdData,
   competitorProducts = [],
+  referenceImages = [],
   className,
   isEditable = false,
   onFieldEdit,
   onProceedToDesign,
+  onImageRemove,
 }: PrdExtractionSidebarProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
@@ -394,6 +432,45 @@ export function PrdExtractionSidebar({
                     </div>
                   ))}
                 </div>
+              </div>
+            </>
+          )}
+
+          {/* User Reference Images */}
+          {referenceImages.length > 0 && (
+            <>
+              <Separator className="my-4" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-3.5 h-3.5 text-primary" />
+                  <h4 className="text-xs font-medium text-muted-foreground">我的参考图片</h4>
+                  <Badge variant="secondary" className="text-xs">{referenceImages.length}</Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {referenceImages.map((img) => (
+                    <div
+                      key={img.id}
+                      className="relative group aspect-square rounded-md overflow-hidden border border-primary/30"
+                    >
+                      <img
+                        src={img.url}
+                        alt="参考图片"
+                        className="w-full h-full object-cover"
+                      />
+                      {onImageRemove && (
+                        <button
+                          onClick={() => onImageRemove(img.id)}
+                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-destructive rounded-full p-1 transition-opacity"
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  这些图片将作为产品设计的参考
+                </p>
               </div>
             </>
           )}

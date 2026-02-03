@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, ChevronRight, ArrowRight, Sparkles } from "lucide-react";
 import { AiProductManagerPanel } from "@/components/AiProductManagerPanel";
-import { PrdData } from "@/components/PrdExtractionSidebar";
+import { PrdData, ReferenceImage } from "@/components/PrdExtractionSidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -63,6 +63,7 @@ export function PrdPhase({
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [competitorProducts, setCompetitorProducts] = useState<CompetitorProduct[]>([]);
   const [showDesignReadyPrompt, setShowDesignReadyPrompt] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const getUserAccessToken = async () => {
     const { data, error } = await supabase.auth.getSession();
@@ -548,6 +549,77 @@ export function PrdPhase({
     }
   };
 
+  // Handle image upload
+  const handleImageUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error("请上传图片文件");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      // 1. Upload to Supabase Storage
+      const fileName = `${projectId}/${crypto.randomUUID()}-${file.name}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("reference-images")
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from("reference-images")
+        .getPublicUrl(uploadData.path);
+
+      // 3. Update prd_data with new reference image
+      const newImage: ReferenceImage = {
+        id: crypto.randomUUID(),
+        url: publicUrl,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      const currentReferenceImages = prdData?.referenceImages || [];
+      const updatedReferenceImages = [...currentReferenceImages, newImage];
+
+      const updatedPrdData = {
+        ...prdData,
+        referenceImages: updatedReferenceImages,
+      } as PrdData;
+
+      await supabase
+        .from("projects")
+        .update({ prd_data: JSON.parse(JSON.stringify(updatedPrdData)) })
+        .eq("id", projectId);
+
+      setPrdData(updatedPrdData);
+      toast.success("参考图片上传成功");
+    } catch (error) {
+      console.error(error);
+      toast.error("图片上传失败");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Handle image remove
+  const handleImageRemove = async (imageId: string) => {
+    const currentReferenceImages = prdData?.referenceImages || [];
+    const updatedReferenceImages = currentReferenceImages.filter(img => img.id !== imageId);
+
+    const updatedPrdData = {
+      ...prdData,
+      referenceImages: updatedReferenceImages,
+    } as PrdData;
+
+    await supabase
+      .from("projects")
+      .update({ prd_data: JSON.parse(JSON.stringify(updatedPrdData)) })
+      .eq("id", projectId);
+
+    setPrdData(updatedPrdData);
+    toast.success("参考图片已删除");
+  };
+
   // Handle proceed to design phase
   const handleProceedToDesign = async () => {
     setShowDesignReadyPrompt(false);
@@ -689,6 +761,8 @@ export function PrdPhase({
           inputValue={inputValue}
           prdData={prdData}
           competitorProducts={competitorProducts}
+          referenceImages={prdData?.referenceImages || []}
+          isUploadingImage={isUploadingImage}
           onInputChange={setInputValue}
           onSend={handleSendMessage}
           onSendDirect={handleSendDirect}
@@ -698,6 +772,8 @@ export function PrdPhase({
           isReadOnly={isReadOnly}
           onFieldEdit={handleFieldEdit}
           onProceedToDesign={handleProceedToDesign}
+          onImageUpload={handleImageUpload}
+          onImageRemove={handleImageRemove}
         />
       </div>
     </div>
