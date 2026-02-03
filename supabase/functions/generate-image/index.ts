@@ -309,6 +309,145 @@ async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; m
   return { base64, mimeType: contentType };
 }
 
+// Generate image via Google Direct API (Primary)
+async function generateImageViaGoogle(
+  ai: GoogleGenAI,
+  prompt: string,
+  parentImageUrl?: string
+): Promise<{ imageUrl: string; description?: string }> {
+  let imageUrl: string | undefined;
+  let description: string | undefined;
+
+  if (parentImageUrl) {
+    // Use image editing mode
+    const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
+    
+    const editPrompt = `基于这个产品图片生成新的营销场景图。
+
+${prompt}
+
+【最重要的要求】
+这是一个产品营销图生成任务。你必须：
+1. 保持产品外观100%不变 - 产品的形状、颜色、材质、设计细节必须与原图完全一致
+2. 只改变产品周围的场景和环境
+3. 产品必须清晰可见，是画面的焦点
+4. 不要对产品进行任何修改、变形或重新设计
+
+生成一张高质量的营销场景图。`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: editPrompt },
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64,
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: [Modality.TEXT, Modality.IMAGE],
+      },
+    });
+
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.text) {
+          description = part.text;
+        }
+        if (part.inlineData) {
+          imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+  } else {
+    // Text-to-image mode
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation",
+      contents: prompt,
+      config: {
+        responseModalities: [Modality.TEXT, Modality.IMAGE],
+      },
+    });
+
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.text) {
+          description = part.text;
+        }
+        if (part.inlineData) {
+          imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+  }
+
+  if (!imageUrl) {
+    throw new Error("No image generated from Google API");
+  }
+
+  return { imageUrl, description };
+}
+
+// Generate image via Lovable AI Gateway (Fallback)
+async function generateImageViaLovable(
+  prompt: string,
+  parentImageUrl?: string
+): Promise<{ imageUrl: string; description?: string }> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+  const content: any[] = [{ type: "text", text: prompt }];
+  
+  if (parentImageUrl) {
+    // Add reference image for editing
+    let imageData = parentImageUrl;
+    if (!parentImageUrl.startsWith("data:")) {
+      const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
+      imageData = `data:${mimeType};base64,${base64}`;
+    }
+    content.push({
+      type: "image_url",
+      image_url: { url: imageData }
+    });
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-pro-image-preview",
+      messages: [{ role: "user", content }],
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Lovable AI error:", response.status, errorText);
+    throw new Error(`Lovable AI failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  const description = data.choices?.[0]?.message?.content;
+  
+  if (!imageData) {
+    throw new Error("No image in Lovable AI response");
+  }
+
+  return { imageUrl: imageData, description };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -344,90 +483,28 @@ serve(async (req) => {
     // Determine if we should use image editing mode (phase 2 with parent image)
     const useImageEditing = phase === 2 && parentImageUrl && imageType !== "product";
     
-    let imageUrl: string | undefined;
-    let description: string | undefined;
+    let imageResult: { imageUrl: string; description?: string };
+    let usedFallback = false;
 
-    if (useImageEditing) {
-      // Use image editing mode to maintain product consistency
-      console.log("Using image editing mode with parent image:", parentImageUrl);
+    // Primary: Google Direct API
+    try {
+      console.log("GenerateImage: Attempting Google Direct API...");
+      imageResult = await generateImageViaGoogle(
+        ai,
+        enhancedPrompt,
+        useImageEditing ? parentImageUrl : undefined
+      );
+      console.log("GenerateImage: Google Direct API succeeded");
+    } catch (googleError) {
+      console.warn("GenerateImage: Google API failed, switching to Lovable AI...", googleError);
+      usedFallback = true;
       
-      // Fetch parent image and convert to base64
-      const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
-      
-      const editPrompt = `基于这个产品图片生成新的营销场景图。
-
-${enhancedPrompt}
-
-【最重要的要求】
-这是一个产品营销图生成任务。你必须：
-1. 保持产品外观100%不变 - 产品的形状、颜色、材质、设计细节必须与原图完全一致
-2. 只改变产品周围的场景和环境
-3. 产品必须清晰可见，是画面的焦点
-4. 不要对产品进行任何修改、变形或重新设计
-
-生成一张高质量的营销场景图。`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-exp-image-generation",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: editPrompt },
-              {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: base64,
-                },
-              },
-            ],
-          },
-        ],
-        config: {
-          responseModalities: [Modality.TEXT, Modality.IMAGE],
-        },
-      });
-
-      // Extract image from response
-      if (response.candidates?.[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.text) {
-            description = part.text;
-          }
-          if (part.inlineData) {
-            imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-          }
-        }
-      }
-    } else {
-      // Use text-to-image mode for product design or when no parent image
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-exp-image-generation",
-        contents: enhancedPrompt,
-        config: {
-          responseModalities: [Modality.TEXT, Modality.IMAGE],
-        },
-      });
-
-      // Extract image from response
-      if (response.candidates?.[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.text) {
-            description = part.text;
-          }
-          if (part.inlineData) {
-            imageUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-          }
-        }
-      }
-    }
-
-    if (!imageUrl) {
-      console.error("No image in response");
-      return new Response(JSON.stringify({ error: "未能生成图像" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Fallback: Lovable AI Gateway
+      imageResult = await generateImageViaLovable(
+        enhancedPrompt,
+        useImageEditing ? parentImageUrl : undefined
+      );
+      console.log("GenerateImage: Lovable AI fallback succeeded");
     }
 
     // Generate marketing copy for phase 2 images
@@ -438,12 +515,13 @@ ${enhancedPrompt}
 
     return new Response(
       JSON.stringify({
-        imageUrl,
-        description,
+        imageUrl: imageResult.imageUrl,
+        description: imageResult.description,
         prompt: enhancedPrompt,
         imageType,
         phase,
         marketingCopy,
+        usedFallback,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

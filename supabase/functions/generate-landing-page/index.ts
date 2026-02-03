@@ -1,15 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
-
-// Note: This function generates landing page content based on PRD data.
-// Authentication is optional since the generated content is based on provided data,
-// not fetched from database. The actual save operation happens on the client side
-// which uses authenticated requests through RLS policies.
 
 interface MarketingImageWithCopy {
   id: string;
@@ -81,6 +75,87 @@ You are designing an advertising landing page for a BRAND NEW PRODUCT. The core 
 - Action-oriented language, create visual imagery
 - Data-driven, use specific numbers to enhance persuasion`;
 
+// Call Google Gemini API directly (Primary)
+async function callGoogleDirect(strategyPrompt: string): Promise<string> {
+  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+  if (!GOOGLE_API_KEY) {
+    throw new Error("GOOGLE_API_KEY not configured");
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GOOGLE_API_KEY,
+      },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: SYSTEM_PROMPT }],
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: strategyPrompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Google API error:", response.status, errorText);
+    throw new Error(`Google API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+// Call Lovable AI Gateway (Fallback)
+async function callLovableAI(strategyPrompt: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: strategyPrompt },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error("Rate limit exceeded");
+    }
+    if (response.status === 402) {
+      throw new Error("Payment required");
+    }
+    const errorText = await response.text();
+    console.error("Lovable AI error:", response.status, errorText);
+    throw new Error(`Lovable AI error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -94,11 +169,6 @@ serve(async (req) => {
       visualAssets?: VisualAssets;
       templateStyle?: string;
     };
-
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
 
     // Get marketing images with their copy
     const marketingImagesWithCopy: MarketingImageWithCopy[] = visualAssets?.marketingImages || [];
@@ -180,43 +250,24 @@ CRITICAL:
 - Usage scenarios should help users visualize themselves using the product
 Only return the JSON object, no other text.`;
 
-    const strategyResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-preview",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: strategyPrompt },
-        ],
-      }),
-    });
+    console.log("GenerateLandingPage: Attempting Google Direct API...");
 
-    if (!strategyResponse.ok) {
-      if (strategyResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "AI 请求频率过高，请稍后重试" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (strategyResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "AI 额度已用完，请充值后再试" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errorText = await strategyResponse.text();
-      console.error("Strategy generation failed:", errorText);
-      throw new Error("营销策略生成失败");
+    // Primary: Google Direct API
+    let content: string;
+    let usedFallback = false;
+
+    try {
+      content = await callGoogleDirect(strategyPrompt);
+      console.log("GenerateLandingPage: Google Direct API succeeded");
+    } catch (googleError) {
+      console.warn("GenerateLandingPage: Google API failed, switching to Lovable AI...", googleError);
+      usedFallback = true;
+      content = await callLovableAI(strategyPrompt);
+      console.log("GenerateLandingPage: Lovable AI fallback succeeded");
     }
 
-    const strategyData = await strategyResponse.json();
     let strategy;
     try {
-      const content = strategyData.choices?.[0]?.message?.content || "";
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
                         content.match(/```\s*([\s\S]*?)\s*```/) ||
                         [null, content];
@@ -290,6 +341,7 @@ Only return the JSON object, no other text.`;
         usageScenarios: strategy?.usageScenarios || [],
         socialProofItems: strategy?.socialProofItems || [],
         urgencyMessage: strategy?.urgencyMessage || "",
+        usedFallback,
         // Conversion optimization fields for frontend
         conversionOptimization: {
           primaryCta: strategy?.ctaText || "Get Early Access",
@@ -304,6 +356,22 @@ Only return the JSON object, no other text.`;
     );
   } catch (error) {
     console.error("Generate landing page error:", error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes("Rate limit")) {
+        return new Response(JSON.stringify({ error: "AI 请求频率过高，请稍后重试" }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (error.message.includes("Payment required")) {
+        return new Response(JSON.stringify({ error: "AI 额度已用完，请充值后再试" }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {

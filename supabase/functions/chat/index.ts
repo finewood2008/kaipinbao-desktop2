@@ -913,39 +913,8 @@ ${projectDescription ? `**项目描述**：${projectDescription}` : ""}
   return prompt;
 }
 
-// Call Lovable AI Gateway (primary)
-async function callLovableAI(
-  messages: OpenAIMessage[],
-  systemPrompt: string
-): Promise<Response> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    throw new Error("LOVABLE_API_KEY not configured");
-  }
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages.filter(m => m.role !== "system"),
-      ],
-      stream: true,
-      temperature: 0.85,
-      max_tokens: 16384,
-    }),
-  });
-
-  return response;
-}
-
-// Call Google Gemini API directly (fallback)
-async function callGeminiDirect(
+// Call Google Gemini API directly (Primary)
+async function callGoogleDirect(
   messages: OpenAIMessage[],
   systemPrompt: string
 ): Promise<Response> {
@@ -974,6 +943,37 @@ async function callGeminiDirect(
       }),
     }
   );
+
+  return response;
+}
+
+// Call Lovable AI Gateway (Fallback)
+async function callLovableAI(
+  messages: OpenAIMessage[],
+  systemPrompt: string
+): Promise<Response> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.filter(m => m.role !== "system"),
+      ],
+      stream: true,
+      temperature: 0.85,
+      max_tokens: 16384,
+    }),
+  });
 
   return response;
 }
@@ -1124,25 +1124,25 @@ serve(async (req) => {
       ...(messages || []),
     ];
 
-    console.log("Attempting to call Lovable AI (Gemini 3 Pro)...");
+    console.log("Chat: Attempting Google Direct API...");
 
-    // Try Lovable AI first (Gemini 3 Pro)
+    // Primary: Google Direct API
     let response: Response;
     let usedFallback = false;
 
     try {
-      response = await callLovableAI(apiMessages, systemPrompt);
+      response = await callGoogleDirect(apiMessages, systemPrompt);
       
-      // Check for rate limit or payment errors
+      // Check for rate limit or errors
       if (response.status === 429 || response.status === 402 || response.status >= 500) {
-        console.log(`Lovable AI returned ${response.status}, falling back to Gemini direct...`);
+        console.log(`Chat: Google returned ${response.status}, falling back to Lovable AI...`);
         usedFallback = true;
-        response = await callGeminiDirect(apiMessages, systemPrompt);
+        response = await callLovableAI(apiMessages, systemPrompt);
       }
-    } catch (lovableError) {
-      console.error("Lovable AI error, falling back to Gemini direct:", lovableError);
+    } catch (googleError) {
+      console.warn("Chat: Google API failed, switching to Lovable AI...", googleError);
       usedFallback = true;
-      response = await callGeminiDirect(apiMessages, systemPrompt);
+      response = await callLovableAI(apiMessages, systemPrompt);
     }
 
     if (!response.ok) {
@@ -1151,8 +1151,8 @@ serve(async (req) => {
       throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
-    // If using fallback (Gemini direct), transform the response
-    if (usedFallback) {
+    // If using primary (Google direct), transform the response
+    if (!usedFallback) {
       const transformStream = createGeminiToOpenAITransformer();
       const readableStream = response.body!.pipeThrough(transformStream);
 

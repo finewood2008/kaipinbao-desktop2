@@ -47,6 +47,82 @@ const MARKET_ANALYST_SYSTEM_PROMPT = `你是一位资深市场分析专家，拥
 3. 差异化优先：重点发现市场空白和机会
 4. 用户导向：从用户评论中提取真实痛点`;
 
+// Call Google Gemini API directly (Primary)
+async function callGoogleDirect(prompt: string): Promise<string> {
+  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+  if (!GOOGLE_API_KEY) {
+    throw new Error("GOOGLE_API_KEY not configured");
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GOOGLE_API_KEY,
+      },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: MARKET_ANALYST_SYSTEM_PROMPT }],
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 4000,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Google API error:", response.status, errorText);
+    throw new Error(`Google API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+// Call Lovable AI Gateway (Fallback)
+async function callLovableAI(prompt: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: MARKET_ANALYST_SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Lovable AI error:", response.status, errorText);
+    throw new Error(`Lovable AI error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -123,15 +199,6 @@ serve(async (req) => {
       );
     }
 
-    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
-    if (!GOOGLE_API_KEY) {
-      console.error("GOOGLE_API_KEY not configured");
-      return new Response(
-        JSON.stringify({ success: false, error: "AI service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Fetch competitor products
     const { data: products, error: productsError } = await supabase
       .from("competitor_products")
@@ -184,51 +251,21 @@ ${JSON.stringify(reviewTexts, null, 2)}
 
 请基于以上数据，输出JSON格式的市场分析报告。`;
 
-    console.log("Calling Google Gemini API for market analysis...");
+    console.log("MarketAnalysis: Attempting Google Direct API...");
 
-    // Call Google Gemini API directly
-    const aiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": GOOGLE_API_KEY,
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: MARKET_ANALYST_SYSTEM_PROMPT }],
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: analysisPrompt }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 4000,
-          },
-        }),
-      }
-    );
+    // Primary: Google Direct API
+    let analysisContent: string;
+    let usedFallback = false;
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error("Gemini API error:", aiResponse.status, errorText);
-      
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ success: false, error: "AI请求频率过高，请稍后重试" }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error(`AI request failed: ${aiResponse.status}`);
+    try {
+      analysisContent = await callGoogleDirect(analysisPrompt);
+      console.log("MarketAnalysis: Google Direct API succeeded");
+    } catch (googleError) {
+      console.warn("MarketAnalysis: Google API failed, switching to Lovable AI...", googleError);
+      usedFallback = true;
+      analysisContent = await callLovableAI(analysisPrompt);
+      console.log("MarketAnalysis: Lovable AI fallback succeeded");
     }
-
-    const aiData = await aiResponse.json();
-    const analysisContent = aiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     console.log("AI response received, length:", analysisContent.length);
 
@@ -289,6 +326,7 @@ ${JSON.stringify(reviewTexts, null, 2)}
       JSON.stringify({
         success: true,
         analysis,
+        usedFallback,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
