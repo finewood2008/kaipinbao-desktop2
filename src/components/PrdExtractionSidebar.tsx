@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   MapPin, 
@@ -14,7 +14,10 @@ import {
   Pencil,
   X,
   ArrowRight,
-  Asterisk
+  Asterisk,
+  FileText,
+  ImagePlus,
+  Loader2
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -33,6 +36,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface ReferenceImage {
   id: string;
@@ -179,7 +184,11 @@ interface PrdExtractionSidebarProps {
   isEditable?: boolean;
   onFieldEdit?: (field: string, value: unknown) => void;
   onProceedToDesign?: () => void;
+  onOpenPrdDocument?: () => void;
   onImageRemove?: (imageId: string) => void;
+  onImageUpload?: (file: File) => Promise<void>;
+  isUploadingImage?: boolean;
+  projectId?: string;
 }
 
 const progressItems = [
@@ -244,10 +253,16 @@ export function PrdExtractionSidebar({
   isEditable = false,
   onFieldEdit,
   onProceedToDesign,
+  onOpenPrdDocument,
   onImageRemove,
+  onImageUpload,
+  isUploadingImage = false,
+  projectId,
 }: PrdExtractionSidebarProps) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
+  const [localIsUploading, setLocalIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const completedCount = progressItems.filter((item) => 
     isItemCompleted(prdData, item.key)
@@ -299,6 +314,59 @@ export function PrdExtractionSidebar({
   const handleCancelEdit = () => {
     setEditingField(null);
     setEditValue("");
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error("请上传图片文件");
+      return;
+    }
+
+    if (onImageUpload) {
+      // Use provided upload handler
+      await onImageUpload(file);
+    } else if (projectId && onFieldEdit) {
+      // Handle upload internally
+      setLocalIsUploading(true);
+      try {
+        const fileName = `${projectId}/${crypto.randomUUID()}-${file.name}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("reference-images")
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from("reference-images")
+          .getPublicUrl(uploadData.path);
+
+        const newImage: ReferenceImage = {
+          id: crypto.randomUUID(),
+          url: publicUrl,
+          uploadedAt: new Date().toISOString(),
+        };
+
+        const currentReferenceImages = prdData?.referenceImages || [];
+        const updatedReferenceImages = [...currentReferenceImages, newImage];
+        onFieldEdit("referenceImages", updatedReferenceImages);
+        
+        toast.success("参考图片上传成功");
+      } catch (error) {
+        console.error(error);
+        toast.error("图片上传失败");
+      } finally {
+        setLocalIsUploading(false);
+      }
+    }
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const currentEditItem = progressItems.find(i => i.key === editingField);
@@ -436,47 +504,81 @@ export function PrdExtractionSidebar({
             </>
           )}
 
-          {/* User Reference Images */}
-          {referenceImages.length > 0 && (
-            <>
-              <Separator className="my-4" />
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="w-3.5 h-3.5 text-primary" />
-                  <h4 className="text-xs font-medium text-muted-foreground">我的参考图片</h4>
-                  <Badge variant="secondary" className="text-xs">{referenceImages.length}</Badge>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {referenceImages.map((img) => (
-                    <div
-                      key={img.id}
-                      className="relative group aspect-square rounded-md overflow-hidden border border-primary/30"
-                    >
-                      <img
-                        src={img.url}
-                        alt="参考图片"
-                        className="w-full h-full object-cover"
-                      />
-                      {onImageRemove && (
-                        <button
-                          onClick={() => onImageRemove(img.id)}
-                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-destructive rounded-full p-1 transition-opacity"
-                        >
-                          <X className="w-3 h-3 text-white" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  这些图片将作为产品设计的参考
-                </p>
+          {/* User Reference Images with Upload */}
+          <Separator className="my-4" />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <ImageIcon className="w-3.5 h-3.5 text-primary" />
+              <h4 className="text-xs font-medium text-muted-foreground">我的参考图片</h4>
+              {referenceImages.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{referenceImages.length}</Badge>
+              )}
+            </div>
+            
+            {referenceImages.length > 0 && (
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
+                {referenceImages.map((img) => (
+                  <div
+                    key={img.id}
+                    className="relative group aspect-square rounded-md overflow-hidden border border-primary/30"
+                  >
+                    <img
+                      src={img.url}
+                      alt="参考图片"
+                      className="w-full h-full object-cover"
+                    />
+                    {onImageRemove && (
+                      <button
+                        onClick={() => onImageRemove(img.id)}
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-destructive rounded-full p-1 transition-opacity"
+                      >
+                        <X className="w-3 h-3 text-white" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-            </>
-          )}
+            )}
+            
+            {/* Upload Button */}
+            {isEditable && (
+              <label className="cursor-pointer block">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                  disabled={localIsUploading || isUploadingImage}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  asChild
+                  disabled={localIsUploading || isUploadingImage}
+                >
+                  <span>
+                    {(localIsUploading || isUploadingImage) ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <ImagePlus className="w-4 h-4 mr-2" />
+                    )}
+                    {(localIsUploading || isUploadingImage) ? "上传中..." : "上传参考图片"}
+                  </span>
+                </Button>
+              </label>
+            )}
+            
+            <p className="text-xs text-muted-foreground">
+              {referenceImages.length > 0 
+                ? "这些图片将作为产品设计的参考"
+                : "上传参考图片指导产品设计"}
+            </p>
+          </div>
 
           {/* Completion Status & Action - Compact */}
-          {isAllCompleted && onProceedToDesign && (
+          {isAllCompleted && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -486,14 +588,30 @@ export function PrdExtractionSidebar({
                   <Check className="w-4 h-4 text-primary" />
                   <span className="text-sm font-semibold text-foreground">已完成</span>
                 </div>
-                <Button
-                  size="sm"
-                  className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                  onClick={onProceedToDesign}
-                >
-                  进入产品设计
-                  <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-                </Button>
+                
+                {/* View Document Button */}
+                {onOpenPrdDocument && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mb-2"
+                    onClick={onOpenPrdDocument}
+                  >
+                    <FileText className="w-3.5 h-3.5 mr-1.5" />
+                    查看完整文档
+                  </Button>
+                )}
+                
+                {onProceedToDesign && (
+                  <Button
+                    size="sm"
+                    className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                    onClick={onProceedToDesign}
+                  >
+                    进入产品设计
+                    <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                  </Button>
+                )}
               </div>
             </motion.div>
           )}
