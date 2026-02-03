@@ -26,6 +26,7 @@ interface LandingPageData {
   slug: string;
   is_published: boolean;
   hero_image_url: string | null;
+  screenshot_url: string | null;
   view_count: number;
 }
 
@@ -71,6 +72,7 @@ export default function Dashboard() {
           slug,
           is_published,
           hero_image_url,
+          screenshot_url,
           view_count
         ),
         generated_images (
@@ -181,6 +183,53 @@ export default function Dashboard() {
       // Remove from local state
       setProjects(prev => prev.filter(p => p.id !== projectId));
     }
+  };
+
+  const handleUpdateProject = async (projectId: string, updates: { name?: string; description?: string }) => {
+    const { error } = await supabase
+      .from("projects")
+      .update({
+        name: updates.name,
+        description: updates.description || null,
+      })
+      .eq("id", projectId);
+
+    if (error) {
+      toast.error("更新项目失败");
+      console.error(error);
+      throw error;
+    }
+
+    // Update local state
+    setProjects(prev => prev.map(p => 
+      p.id === projectId 
+        ? { ...p, name: updates.name || p.name, description: updates.description || null }
+        : p
+    ));
+  };
+
+  const handleCaptureScreenshot = async (projectId: string, landingPageId: string, slug: string) => {
+    const { data, error } = await supabase.functions.invoke('capture-landing-screenshot', {
+      body: { landingPageId, slug },
+    });
+
+    if (error || !data?.success) {
+      console.error('Screenshot capture error:', error || data?.error);
+      throw new Error(data?.error || 'Failed to capture screenshot');
+    }
+
+    // Update local state with new screenshot URL
+    setProjects(prev => prev.map(p => 
+      p.id === projectId && p.landing_page
+        ? { 
+            ...p, 
+            landing_page: { 
+              ...p.landing_page, 
+              screenshot_url: data.screenshotUrl 
+            } 
+          }
+        : p
+    ));
   };
 
   const handleSignOut = async () => {
@@ -441,11 +490,22 @@ export default function Dashboard() {
                     slug: project.landing_page.slug,
                     isPublished: project.landing_page.is_published,
                     heroImageUrl: project.landing_page.hero_image_url || undefined,
+                    screenshotUrl: project.landing_page.screenshot_url || undefined,
                     viewCount: project.landing_page.view_count,
                     emailCount: project.email_count,
                   } : undefined}
                   onClick={() => navigate(`/project/${project.id}`)}
                   onDelete={() => handleDeleteProject(project.id)}
+                  onUpdate={(updates) => handleUpdateProject(project.id, updates)}
+                  onCaptureScreenshot={
+                    project.landing_page?.is_published 
+                      ? () => handleCaptureScreenshot(
+                          project.id, 
+                          project.landing_page!.id, 
+                          project.landing_page!.slug
+                        )
+                      : undefined
+                  }
                 />
               </motion.div>
             ))}
