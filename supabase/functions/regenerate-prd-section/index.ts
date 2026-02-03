@@ -108,6 +108,78 @@ Output as JSON object in Chinese.`,
 Output as JSON object in Chinese.`,
 };
 
+// Call Google Gemini API directly (Primary)
+async function callGoogleDirect(prompt: string): Promise<string> {
+  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+  if (!GOOGLE_API_KEY) {
+    throw new Error("GOOGLE_API_KEY is not configured");
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GOOGLE_API_KEY,
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 2048,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("Google API error:", error);
+    throw new Error(`Google API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+// Call Lovable AI Gateway (Fallback)
+async function callLovableAI(prompt: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.8,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("Lovable AI error:", error);
+    throw new Error(`Lovable AI error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -172,11 +244,6 @@ serve(async (req) => {
       );
     }
 
-    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
-    if (!GOOGLE_API_KEY) {
-      throw new Error("GOOGLE_API_KEY is not configured");
-    }
-
     // Get project info
     const { data: project } = await supabase
       .from("projects")
@@ -217,38 +284,23 @@ ${competitors.map((c: any) => `- ${c.product_title} (${c.price || "价格未知"
       );
     }
 
-    // Call Google Gemini API directly
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": GOOGLE_API_KEY,
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: `${context}\n\n${sectionPrompt}` }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.8,
-            maxOutputTokens: 2048,
-          },
-        }),
-      }
-    );
+    const fullPrompt = `${context}\n\n${sectionPrompt}`;
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("Gemini API error:", error);
-      throw new Error("AI generation failed");
+    console.log("RegeneratePrdSection: Attempting Google Direct API...");
+
+    // Primary: Google Direct API
+    let generatedText: string;
+    let usedFallback = false;
+
+    try {
+      generatedText = await callGoogleDirect(fullPrompt);
+      console.log("RegeneratePrdSection: Google Direct API succeeded");
+    } catch (googleError) {
+      console.warn("RegeneratePrdSection: Google API failed, switching to Lovable AI...", googleError);
+      usedFallback = true;
+      generatedText = await callLovableAI(fullPrompt);
+      console.log("RegeneratePrdSection: Lovable AI fallback succeeded");
     }
-
-    const data = await response.json();
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     // Parse the generated content based on section type
     let regeneratedContent: any;
@@ -330,7 +382,7 @@ ${competitors.map((c: any) => `- ${c.product_title} (${c.price || "价格未知"
       .eq("id", projectId);
 
     return new Response(
-      JSON.stringify({ success: true, regeneratedContent }),
+      JSON.stringify({ success: true, regeneratedContent, usedFallback }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

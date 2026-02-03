@@ -82,6 +82,87 @@ const SYSTEM_PROMPT = `你是一位资深市场分析专家，拥有15年消费�
 - 如果信息不足，基于行业经验做合理推断
 - 只输出 JSON，不要有其他内容`;
 
+// Call Google Gemini API directly (Primary)
+async function callGoogleDirect(userPrompt: string): Promise<string> {
+  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+  if (!GOOGLE_API_KEY) {
+    throw new Error("GOOGLE_API_KEY is not configured");
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GOOGLE_API_KEY,
+      },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: SYSTEM_PROMPT }],
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: userPrompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 4096,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Google API error:", response.status, errorText);
+    
+    if (response.status === 429) {
+      throw new Error("Rate limit exceeded");
+    }
+    
+    throw new Error(`Google API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+// Call Lovable AI Gateway (Fallback)
+async function callLovableAI(userPrompt: string): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) {
+    throw new Error("LOVABLE_API_KEY is not configured");
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Lovable AI error:", response.status, errorText);
+    throw new Error(`Lovable AI error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.choices?.[0]?.message?.content || "";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -146,11 +227,6 @@ serve(async (req) => {
       );
     }
 
-    const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
-    if (!GOOGLE_API_KEY) {
-      throw new Error("GOOGLE_API_KEY is not configured");
-    }
-
     // Get project info
     const { data: project, error: projectError } = await supabase
       .from("projects")
@@ -162,7 +238,7 @@ serve(async (req) => {
       throw new Error("Project not found");
     }
 
-    console.log("Analyzing project:", project.name);
+    console.log("InitialMarketAnalysis: Analyzing project:", project.name);
 
     // Build user prompt
     const userPrompt = `请分析以下产品项目：
@@ -173,55 +249,24 @@ serve(async (req) => {
 
 请基于以上信息进行市场分析，返回 JSON 格式结果。`;
 
-    // Call Google Gemini API directly
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": GOOGLE_API_KEY,
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: SYSTEM_PROMPT }],
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: userPrompt }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 4096,
-          },
-        }),
-      }
-    );
+    // Primary: Google Direct API
+    let content: string;
+    let usedFallback = false;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ success: false, error: "请求过于频繁，请稍后再试" }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error("AI service unavailable");
+    try {
+      console.log("InitialMarketAnalysis: Attempting Google Direct API...");
+      content = await callGoogleDirect(userPrompt);
+      console.log("InitialMarketAnalysis: Google Direct API succeeded");
+    } catch (googleError) {
+      console.warn("InitialMarketAnalysis: Google API failed, switching to Lovable AI...", googleError);
+      usedFallback = true;
+      content = await callLovableAI(userPrompt);
+      console.log("InitialMarketAnalysis: Lovable AI fallback succeeded");
     }
-
-    const aiResponse = await response.json();
-    const content = aiResponse.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!content) {
       throw new Error("No response from AI");
     }
-
-    console.log("AI response received");
 
     // Parse JSON from response
     let analysis;
@@ -259,14 +304,22 @@ serve(async (req) => {
       .update({ prd_data: updatedPrdData })
       .eq("id", projectId);
 
-    console.log("Market analysis saved successfully");
+    console.log("InitialMarketAnalysis: Market analysis saved successfully");
 
     return new Response(
-      JSON.stringify({ success: true, analysis }),
+      JSON.stringify({ success: true, analysis, usedFallback }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Market analysis error:", error);
+    console.error("InitialMarketAnalysis error:", error);
+    
+    if (error instanceof Error && error.message.includes("Rate limit")) {
+      return new Response(
+        JSON.stringify({ success: false, error: "请求过于频繁，请稍后再试" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

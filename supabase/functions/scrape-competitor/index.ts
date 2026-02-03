@@ -471,22 +471,11 @@ async function scrapeAmazonReviewsWithOCR(
       const imageDataUrl = `data:image/png;base64,${imageBase64}`;
       console.log("Sending to Gemini, base64 length:", imageBase64.length);
       
-      // Use google/gemini-2.5-pro for multimodal (vision) capabilities
-      const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${lovableApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { 
-                  type: "text", 
-                  text: `You are an expert OCR specialist. Extract ALL user reviews from this Amazon reviews page screenshot.
+      // Primary: Google Direct API for OCR
+      const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+      let ocrContent = "";
+      
+      const ocrPrompt = `You are an expert OCR specialist. Extract ALL user reviews from this Amazon reviews page screenshot.
 
 Return a JSON array with this exact format (no markdown code blocks, just raw JSON):
 [
@@ -500,33 +489,71 @@ IMPORTANT:
 - Rating should be 1-5 based on the star icons visible
 - If rating or title is not visible, omit that field
 - Return an empty array [] if no reviews are visible
-- Return ONLY the JSON array, no explanations or markdown`
-                },
-                { 
-                  type: "image_url", 
-                  image_url: { 
-                    url: imageDataUrl
-                  } 
-                }
+- Return ONLY the JSON array, no explanations or markdown`;
+
+      try {
+        // Try Google Direct first
+        console.log("ScrapeCompetitor OCR: Attempting Google Direct API...");
+        const googleResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": GOOGLE_API_KEY!,
+            },
+            body: JSON.stringify({
+              contents: [{
+                role: "user",
+                parts: [
+                  { text: ocrPrompt },
+                  { inlineData: { mimeType: "image/png", data: imageBase64 } }
+                ]
+              }],
+              generationConfig: { temperature: 0.1, maxOutputTokens: 8000 },
+            }),
+          }
+        );
+
+        if (googleResponse.ok) {
+          const googleData = await googleResponse.json();
+          ocrContent = googleData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          console.log("ScrapeCompetitor OCR: Google Direct succeeded");
+        } else {
+          throw new Error(`Google API error: ${googleResponse.status}`);
+        }
+      } catch (googleError) {
+        console.warn("ScrapeCompetitor OCR: Google failed, trying Lovable AI...", googleError);
+        
+        // Fallback to Lovable AI
+        const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${lovableApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-pro",
+            messages: [{
+              role: "user",
+              content: [
+                { type: "text", text: ocrPrompt },
+                { type: "image_url", image_url: { url: imageDataUrl } }
               ]
-            }
-          ],
-          temperature: 0.1,
-          max_tokens: 8000,
-        }),
-      });
+            }],
+            temperature: 0.1,
+            max_tokens: 8000,
+          }),
+        });
 
-      if (!ocrResponse.ok) {
-        const errorText = await ocrResponse.text();
-        console.error("OCR API error:", ocrResponse.status, errorText);
-        // Fallback to markdown extraction
-        const markdownReviews = extractReviewsFromMarkdownAdvanced(markdown);
-        allReviews.push(...markdownReviews);
-        continue;
+        if (!ocrResponse.ok) {
+          throw new Error(`Lovable AI OCR error: ${ocrResponse.status}`);
+        }
+
+        const ocrData = await ocrResponse.json();
+        ocrContent = ocrData.choices?.[0]?.message?.content || "";
+        console.log("ScrapeCompetitor OCR: Lovable AI fallback succeeded");
       }
-
-      const ocrData = await ocrResponse.json();
-      const ocrContent = ocrData.choices?.[0]?.message?.content || "";
       
       console.log("OCR response received, length:", ocrContent.length);
 
