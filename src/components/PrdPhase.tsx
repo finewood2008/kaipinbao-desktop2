@@ -64,6 +64,14 @@ export function PrdPhase({
   const [competitorProducts, setCompetitorProducts] = useState<CompetitorProduct[]>([]);
   const [showDesignReadyPrompt, setShowDesignReadyPrompt] = useState(false);
 
+  const getUserAccessToken = async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    const token = data.session?.access_token;
+    if (!token) throw new Error("No active session");
+    return token;
+  };
+
   // Load initial data
   useEffect(() => {
     loadProjectData();
@@ -141,13 +149,14 @@ export function PrdPhase({
     setIsStreaming(true);
 
     try {
+      const accessToken = await getUserAccessToken();
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             messages: [{ role: "user", content: "开始PRD细化对话" }],
@@ -315,13 +324,14 @@ export function PrdPhase({
 
     setIsStreaming(true);
     try {
+      const accessToken = await getUserAccessToken();
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             messages: chatHistory,
@@ -428,13 +438,14 @@ export function PrdPhase({
 
     setIsStreaming(true);
     try {
+      const accessToken = await getUserAccessToken();
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             messages: chatHistory,
