@@ -375,7 +375,7 @@ export function VisualGenerationPhase({
             />
 
             {/* Proceed to Landing Page */}
-            {(marketingImages.length > 0 || videos.length > 0) && (
+            {selectedProductImage && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -395,11 +395,14 @@ export function VisualGenerationPhase({
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="font-semibold text-stage-3">
-                          素材生成完成！
+                          准备进入落地页阶段
                         </h4>
                         <p className="text-sm text-muted-foreground">
-                          已生成 {marketingImages.length} 张图片
-                          {videos.length > 0 && ` 和 ${videos.length} 个视频`}
+                          已生成 {marketingImages.length} 张营销图片
+                          {`，${videos.length} 个视频`}
+                          {marketingImages.length === 0 && videos.length === 0 && (
+                            <span>（未生成也可继续，稍后可在落地页阶段补齐/重新生成）</span>
+                          )}
                         </p>
                       </div>
                       <Button 
