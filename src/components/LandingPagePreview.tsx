@@ -307,37 +307,85 @@ export function LandingPagePreview({
         </motion.div>
       </section>
 
-      {/* Pain Points Section */}
+      {/* Pain Points Section - Staggered Layout */}
       {painPoints && painPoints.length > 0 && (
-        <section className={cn("py-20 px-8", styles.painPoints.bg)}>
-          <div className="max-w-5xl mx-auto">
+        <section className={cn("py-24 px-8", styles.painPoints.bg)}>
+          <div className="max-w-6xl mx-auto">
             <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="text-center mb-12"
+              className="text-center mb-16"
             >
+              <motion.span 
+                className={cn(
+                  "inline-block px-4 py-2 rounded-full text-sm font-medium mb-4",
+                  styles.painPoints.isDark ? "bg-red-500/20 text-red-400" : "bg-red-100 text-red-600"
+                )}
+                initial={{ scale: 0.9 }}
+                whileInView={{ scale: 1 }}
+                viewport={{ once: true }}
+              >
+                😤 痛点共鸣
+              </motion.span>
               <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", styles.painPoints.isDark ? "text-white" : "text-gray-800")}>
-                😤 Sound Familiar?
+                这些问题，是否困扰着您？
               </h2>
-              <p className={cn("text-lg", isDarkTheme ? "text-gray-400" : "text-gray-600")}>
-                We understand your frustrations
+              <p className={cn("text-lg max-w-2xl mx-auto", isDarkTheme ? "text-gray-400" : "text-gray-600")}>
+                我们深刻理解您面临的挑战
               </p>
             </motion.div>
-            <div className="grid md:grid-cols-3 gap-8">
+            
+            {/* Staggered Cards */}
+            <div className="space-y-6">
               {painPoints.map((point, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                  className={cn("p-8 rounded-2xl shadow-lg border", styles.painPoints.cardBg, styles.painPoints.cardBorder)}
+                  initial={{ opacity: 0, x: i % 2 === 0 ? -60 : 60 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ delay: i * 0.15, type: "spring", stiffness: 100 }}
+                  whileHover={{ 
+                    scale: 1.02, 
+                    x: i % 2 === 0 ? 10 : -10,
+                    transition: { duration: 0.3 }
+                  }}
+                  className={cn(
+                    "flex items-center gap-6 p-6 md:p-8 rounded-2xl shadow-lg border cursor-pointer group",
+                    "transition-all duration-300",
+                    i % 2 === 0 ? "md:mr-24" : "md:ml-24",
+                    styles.painPoints.cardBg, 
+                    styles.painPoints.cardBorder,
+                    "hover:shadow-xl hover:border-red-500/30"
+                  )}
                 >
-                  <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mb-6", styles.painPoints.iconBg)}>
+                  <motion.div 
+                    className={cn(
+                      "w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0",
+                      styles.painPoints.iconBg,
+                      "group-hover:scale-110 transition-transform duration-300"
+                    )}
+                    whileHover={{ rotate: [0, -10, 10, 0] }}
+                    transition={{ duration: 0.5 }}
+                  >
                     <span className={cn("text-2xl", styles.painPoints.iconColor)}>✕</span>
+                  </motion.div>
+                  <div className="flex-1">
+                    <p className={cn(
+                      "text-lg md:text-xl font-medium",
+                      styles.painPoints.isDark ? "text-gray-200" : "text-gray-700"
+                    )}>{point}</p>
                   </div>
-                  <p className={cn("text-lg", styles.painPoints.isDark ? "text-gray-200" : "text-gray-700")}>{point}</p>
+                  <motion.div 
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    initial={{ x: -10 }}
+                    whileHover={{ x: 0 }}
+                  >
+                    <ChevronDown className={cn(
+                      "w-5 h-5 -rotate-90",
+                      styles.painPoints.isDark ? "text-gray-400" : "text-gray-500"
+                    )} />
+                  </motion.div>
                 </motion.div>
               ))}
             </div>
@@ -405,37 +453,94 @@ export function LandingPagePreview({
         </section>
       )}
 
-      {/* Selling Points / Solution Section */}
+      {/* Selling Points / Solution Section - Enhanced Cards */}
       {sellingPoints && sellingPoints.length > 0 && (
-        <section className={cn("py-20 px-8", styles.solutions.bg)}>
-          <div className="max-w-5xl mx-auto">
+        <section className={cn("py-24 px-8", styles.solutions.bg)}>
+          <div className="max-w-6xl mx-auto">
             <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="text-center mb-12"
+              className="text-center mb-16"
             >
+              <motion.span 
+                className={cn(
+                  "inline-block px-4 py-2 rounded-full text-sm font-medium mb-4",
+                  styles.solutions.isDark ? "bg-green-500/20 text-green-400" : "bg-green-100 text-green-600"
+                )}
+                initial={{ scale: 0.9 }}
+                whileInView={{ scale: 1 }}
+                viewport={{ once: true }}
+              >
+                ✨ 产品亮点
+              </motion.span>
               <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", styles.solutions.isDark ? "text-white" : "text-gray-800")}>
-                ✨ The Solution You've Been Waiting For
+                您一直期待的解决方案
               </h2>
-              <p className={cn("text-lg", isDarkTheme ? "text-gray-400" : "text-gray-600")}>
-                Built to address your real needs
+              <p className={cn("text-lg max-w-2xl mx-auto", isDarkTheme ? "text-gray-400" : "text-gray-600")}>
+                专为解决您的真实需求而设计
               </p>
             </motion.div>
-            <div className="grid md:grid-cols-3 gap-8">
+            
+            {/* Staggered Grid with Hover Effects */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {sellingPoints.map((point, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                  className={cn("p-8 rounded-2xl shadow-lg border", styles.solutions.cardBg, styles.solutions.cardBorder)}
+                  initial={{ opacity: 0, y: 40, rotateX: -15 }}
+                  whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
+                  viewport={{ once: true, margin: "-30px" }}
+                  transition={{ delay: i * 0.12, type: "spring", stiffness: 100 }}
+                  whileHover={{ 
+                    y: -8,
+                    scale: 1.03,
+                    transition: { duration: 0.3, ease: "easeOut" }
+                  }}
+                  className={cn(
+                    "relative p-8 rounded-2xl shadow-lg border cursor-pointer group overflow-hidden",
+                    "transition-all duration-300",
+                    styles.solutions.cardBg, 
+                    styles.solutions.cardBorder,
+                    "hover:shadow-2xl hover:border-green-500/30"
+                  )}
+                  style={{ 
+                    marginTop: i % 3 === 1 ? '2rem' : '0',
+                  }}
                 >
-                  <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mb-6", styles.solutions.iconBg)}>
-                    <CheckCircle className={cn("w-7 h-7", styles.solutions.iconColor)} />
+                  {/* Background Glow on Hover */}
+                  <motion.div 
+                    className={cn(
+                      "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500",
+                      styles.solutions.isDark 
+                        ? "bg-gradient-to-br from-green-500/10 to-cyan-500/10" 
+                        : "bg-gradient-to-br from-green-50 to-cyan-50"
+                    )}
+                  />
+                  
+                  {/* Content */}
+                  <div className="relative z-10">
+                    <motion.div 
+                      className={cn(
+                        "w-14 h-14 rounded-2xl flex items-center justify-center mb-6",
+                        styles.solutions.iconBg,
+                        "group-hover:scale-110 transition-transform duration-300"
+                      )}
+                      whileHover={{ rotate: 360 }}
+                      transition={{ duration: 0.6 }}
+                    >
+                      <CheckCircle className={cn("w-7 h-7", styles.solutions.iconColor)} />
+                    </motion.div>
+                    <p className={cn(
+                      "text-lg font-medium leading-relaxed",
+                      styles.solutions.isDark ? "text-gray-200" : "text-gray-700"
+                    )}>{point}</p>
                   </div>
-                  <p className={cn("text-lg", styles.solutions.isDark ? "text-gray-200" : "text-gray-700")}>{point}</p>
+                  
+                  {/* Corner Accent */}
+                  <div className={cn(
+                    "absolute -bottom-2 -right-2 w-20 h-20 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-500",
+                    styles.solutions.isDark ? "bg-green-500" : "bg-green-400"
+                  )} />
                 </motion.div>
               ))}
             </div>
