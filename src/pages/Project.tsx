@@ -35,6 +35,7 @@ interface GeneratedImage {
   image_type?: string;
   phase?: number;
   parent_image_id?: string | null;
+  marketing_copy?: string | null;
 }
 
 interface GeneratedVideo {
@@ -426,6 +427,11 @@ export default function ProjectPage() {
     return selected?.image_url;
   };
 
+  const getSelectedImageId = () => {
+    const selected = productImages.find((img) => img.is_selected);
+    return selected?.id;
+  };
+
   const getPrdData = () => {
     const data = project?.prd_data as any;
     return {
@@ -545,15 +551,32 @@ export default function ProjectPage() {
                 projectId={id || ""}
                 projectName={project?.name || ""}
                 selectedImageUrl={getSelectedImageUrl()}
+                selectedImageId={getSelectedImageId()}
                 prdData={getPrdData()}
                 marketingImages={marketingImages.map(img => ({
                   id: img.id,
                   image_url: img.image_url,
-                  image_type: img.image_type || "scene"
+                  image_type: img.image_type || "scene",
+                  marketing_copy: img.marketing_copy || undefined,
                 }))}
+                videos={videos}
                 videoUrl={videos.find(v => v.video_url)?.video_url || undefined}
                 landingPage={landingPage}
                 onLandingPageChange={setLandingPage}
+                onMarketingImagesChange={(newImages) => {
+                  setMarketingImages(newImages.map(img => ({
+                    id: img.id,
+                    image_url: img.image_url,
+                    prompt: "",
+                    is_selected: false,
+                    feedback: null,
+                    image_type: img.image_type,
+                    phase: 2,
+                    parent_image_id: null,
+                    marketing_copy: img.marketing_copy || null,
+                  })));
+                }}
+                onVideosChange={setVideos}
                 onBackToVisual={() => setActiveTab("images")}
               />
             </div>
