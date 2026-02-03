@@ -37,6 +37,7 @@ interface Project {
   status: string;
   created_at: string;
   cover_image_url: string | null;
+  product_images: string[];
   landing_page: LandingPageData | null;
   email_count: number;
 }
@@ -60,7 +61,7 @@ export default function Dashboard() {
   }, []);
 
   const fetchProjects = async () => {
-    // Fetch projects with landing pages and email counts
+    // Fetch projects with landing pages, email counts, and all generated images
     const { data, error } = await supabase
       .from("projects")
       .select(`
@@ -72,11 +73,12 @@ export default function Dashboard() {
           hero_image_url,
           view_count
         ),
-        generated_images!generated_images_project_id_fkey (
-          image_url
+        generated_images (
+          image_url,
+          image_type,
+          is_selected
         )
       `)
-      .eq("generated_images.is_selected", true)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -107,17 +109,30 @@ export default function Dashboard() {
     }
 
     // Map projects with all data
-    const projectsWithData: Project[] = (data || []).map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      current_stage: p.current_stage,
-      status: p.status,
-      created_at: p.created_at,
-      cover_image_url: p.cover_image_url || p.generated_images?.[0]?.image_url || null,
-      landing_page: p.landing_pages || null,
-      email_count: p.landing_pages ? (emailCounts[p.landing_pages.id] || 0) : 0,
-    }));
+    const projectsWithData: Project[] = (data || []).map((p: any) => {
+      // Get all product images, prioritizing selected ones
+      const allImages = p.generated_images || [];
+      const selectedImages = allImages
+        .filter((img: any) => img.is_selected)
+        .map((img: any) => img.image_url);
+      const otherImages = allImages
+        .filter((img: any) => !img.is_selected && img.image_type === 'product')
+        .map((img: any) => img.image_url);
+      const productImages = [...selectedImages, ...otherImages].slice(0, 4);
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        current_stage: p.current_stage,
+        status: p.status,
+        created_at: p.created_at,
+        cover_image_url: p.cover_image_url || productImages[0] || null,
+        product_images: productImages,
+        landing_page: p.landing_pages || null,
+        email_count: p.landing_pages ? (emailCounts[p.landing_pages.id] || 0) : 0,
+      };
+    });
 
     setProjects(projectsWithData);
     setIsLoading(false);
@@ -149,6 +164,22 @@ export default function Dashboard() {
       toast.success("项目创建成功！");
       setIsDialogOpen(false);
       navigate(`/project/${data.id}`);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    const { error } = await supabase
+      .from("projects")
+      .delete()
+      .eq("id", projectId);
+
+    if (error) {
+      toast.error("删除项目失败");
+      console.error(error);
+    } else {
+      toast.success("项目已删除");
+      // Remove from local state
+      setProjects(prev => prev.filter(p => p.id !== projectId));
     }
   };
 
@@ -363,7 +394,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Projects Grid */}
+        {/* Projects List - Single Column */}
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -389,7 +420,7 @@ export default function Dashboard() {
             </p>
           </motion.div>
         ) : (
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="flex flex-col gap-6">
             {filteredProjects.map((project, i) => (
               <motion.div
                 key={project.id}
@@ -405,6 +436,7 @@ export default function Dashboard() {
                   status={project.status}
                   createdAt={project.created_at}
                   coverImage={project.cover_image_url || undefined}
+                  productImages={project.product_images}
                   landingPage={project.landing_page ? {
                     slug: project.landing_page.slug,
                     isPublished: project.landing_page.is_published,
@@ -413,6 +445,7 @@ export default function Dashboard() {
                     emailCount: project.email_count,
                   } : undefined}
                   onClick={() => navigate(`/project/${project.id}`)}
+                  onDelete={() => handleDeleteProject(project.id)}
                 />
               </motion.div>
             ))}
