@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -15,6 +15,8 @@ import {
   ChevronDown,
   ArrowRight,
   Sparkles,
+  FileType,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +33,11 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { PrdData, DesignStyleDetails, CoreFeatureDetail } from "@/components/PrdExtractionSidebar";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle, Table, TableRow, TableCell, WidthType } from "docx";
+import { saveAs } from "file-saver";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import { toast } from "sonner";
 
 interface PrdDocumentModalProps {
   isOpen: boolean;
@@ -172,6 +179,211 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
+// Generate Word document using docx library
+async function generateWordDocument(prdData: PrdData | null, projectName?: string): Promise<Blob> {
+  if (!prdData) throw new Error("No PRD data");
+
+  const name = prdData.productName || projectName || "产品";
+  
+  const children: Paragraph[] = [];
+
+  // Title
+  children.push(
+    new Paragraph({
+      text: `${name} - 产品定义文档`,
+      heading: HeadingLevel.TITLE,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 400 },
+    })
+  );
+
+  // Tagline
+  if (prdData.productTagline) {
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: prdData.productTagline,
+            italics: true,
+            color: "666666",
+          }),
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      })
+    );
+  }
+
+  // Usage Scenario
+  children.push(
+    new Paragraph({
+      text: "📍 使用场景",
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 400, after: 200 },
+    }),
+    new Paragraph({
+      text: prdData.usageScenario || "待补充",
+      spacing: { after: 300 },
+    })
+  );
+
+  // Target Audience
+  children.push(
+    new Paragraph({
+      text: "👥 目标用户",
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 400, after: 200 },
+    })
+  );
+  
+  const audienceText = typeof prdData.targetAudience === "string" 
+    ? prdData.targetAudience 
+    : JSON.stringify(prdData.targetAudience, null, 2);
+  children.push(
+    new Paragraph({
+      text: audienceText || "待补充",
+      spacing: { after: 300 },
+    })
+  );
+
+  // Design Style
+  children.push(
+    new Paragraph({
+      text: "🎨 外观风格",
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 400, after: 200 },
+    })
+  );
+
+  if (prdData.designStyleDetails) {
+    const d = prdData.designStyleDetails;
+    const styleItems = [
+      d.overallStyle && `整体风格: ${d.overallStyle}`,
+      d.colorTone && `色彩基调: ${d.colorTone}`,
+      d.surfaceTexture && `表面质感: ${d.surfaceTexture}`,
+      d.shapeLanguage && `造型语言: ${d.shapeLanguage}`,
+      d.materialPreference?.length && `材质偏好: ${d.materialPreference.join("、")}`,
+      d.avoidElements?.length && `避免元素: ${d.avoidElements.join("、")}`,
+    ].filter(Boolean);
+
+    styleItems.forEach((item) => {
+      children.push(
+        new Paragraph({
+          text: `• ${item}`,
+          spacing: { after: 100 },
+        })
+      );
+    });
+  } else {
+    children.push(
+      new Paragraph({
+        text: prdData.designStyle || "待补充",
+        spacing: { after: 300 },
+      })
+    );
+  }
+
+  // Core Features
+  children.push(
+    new Paragraph({
+      text: "⚡ 核心功能",
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 400, after: 200 },
+    })
+  );
+
+  if (prdData.coreFeaturesDetails?.length) {
+    prdData.coreFeaturesDetails.forEach((f, i) => {
+      const priority = f.priority === "must-have" ? "⭐ 必备" : f.priority === "important" ? "重要" : "可选";
+      children.push(
+        new Paragraph({
+          text: `${i + 1}. ${f.feature} [${priority}]`,
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 200, after: 100 },
+        }),
+        new Paragraph({
+          text: `描述：${f.description}`,
+          spacing: { after: 50 },
+        }),
+        new Paragraph({
+          text: `用户收益：${f.userBenefit}`,
+          spacing: { after: 50 },
+        })
+      );
+      if (f.technicalApproach) {
+        children.push(
+          new Paragraph({
+            text: `技术方案：${f.technicalApproach}`,
+            spacing: { after: 200 },
+          })
+        );
+      }
+    });
+  } else if (prdData.coreFeatures?.length) {
+    prdData.coreFeatures.forEach((f, i) => {
+      children.push(
+        new Paragraph({
+          text: `${i + 1}. ${f}`,
+          spacing: { after: 100 },
+        })
+      );
+    });
+  } else {
+    children.push(
+      new Paragraph({
+        text: "待补充",
+        spacing: { after: 300 },
+      })
+    );
+  }
+
+  // Pricing
+  children.push(
+    new Paragraph({
+      text: "💰 定价策略",
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 400, after: 200 },
+    }),
+    new Paragraph({
+      text: prdData.pricingRange || "待补充",
+      spacing: { after: 300 },
+    })
+  );
+
+  // Footer
+  children.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: "─".repeat(50),
+          color: "CCCCCC",
+        }),
+      ],
+      spacing: { before: 400, after: 100 },
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: `文档生成时间：${new Date().toLocaleDateString("zh-CN")}`,
+          italics: true,
+          color: "999999",
+          size: 20,
+        }),
+      ],
+    })
+  );
+
+  const doc = new Document({
+    sections: [
+      {
+        children,
+      },
+    ],
+  });
+
+  return await Packer.toBlob(doc);
+}
+
 export function PrdDocumentModal({
   isOpen,
   onClose,
@@ -186,6 +398,8 @@ export function PrdDocumentModal({
   const [editValue, setEditValue] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isExporting, setIsExporting] = useState<"word" | "pdf" | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const displayName = prdData?.productName || projectName || "产品定义文档";
 
@@ -199,8 +413,64 @@ export function PrdDocumentModal({
     downloadFile(content, `${displayName}-PRD.json`, "application/json");
   };
 
-  const handleExportPdf = () => {
-    window.print();
+  const handleExportWord = async () => {
+    if (isExporting) return;
+    setIsExporting("word");
+    try {
+      const blob = await generateWordDocument(prdData, projectName);
+      saveAs(blob, `${displayName}-PRD.docx`);
+      toast.success("Word 文档导出成功");
+    } catch (error) {
+      console.error("Word export error:", error);
+      toast.error("导出失败，请重试");
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (isExporting || !contentRef.current) return;
+    setIsExporting("pdf");
+    try {
+      const element = contentRef.current;
+      
+      // Create canvas from HTML content
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      const pdf = new jsPDF("p", "mm", "a4");
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`${displayName}-PRD.pdf`);
+      toast.success("PDF 导出成功");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("导出失败，请重试");
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   const handleStartEdit = (sectionKey: string) => {
@@ -450,6 +720,22 @@ export function PrdDocumentModal({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportWord} disabled={isExporting === "word"}>
+                  {isExporting === "word" ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileType className="w-4 h-4 mr-2" />
+                  )}
+                  导出 Word (.docx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPdf} disabled={isExporting === "pdf"}>
+                  {isExporting === "pdf" ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileText className="w-4 h-4 mr-2" />
+                  )}
+                  导出 PDF
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportMarkdown}>
                   <FileText className="w-4 h-4 mr-2" />
                   导出 Markdown
@@ -457,10 +743,6 @@ export function PrdDocumentModal({
                 <DropdownMenuItem onClick={handleExportJson}>
                   <FileText className="w-4 h-4 mr-2" />
                   导出 JSON
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportPdf}>
-                  <FileText className="w-4 h-4 mr-2" />
-                  打印 / PDF
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -472,7 +754,7 @@ export function PrdDocumentModal({
 
         {/* Content */}
         <ScrollArea className="flex-1">
-          <div className="p-6 space-y-6 print:space-y-4">
+          <div ref={contentRef} className="p-6 space-y-6 print:space-y-4 bg-background">
             {/* Product Name Section */}
             <DocumentSection
               icon={Tag}
