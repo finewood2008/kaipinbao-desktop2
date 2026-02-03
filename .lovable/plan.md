@@ -1,259 +1,245 @@
 
-# 产品定义阶段重构计划
+# 产品设计模块优化计划
 
 ## 目标概述
 
-移除独立的"产品PRD文档"页面，将产品定义集中在对话流程中完成。左侧边栏展示6个核心必填字段（带必填图标），支持手动编辑。当所有字段完成后，AI提示进入产品设计阶段。
+优化产品设计模块的三个核心问题：
+1. **营销图片生成**：参考产品定义设定，完成一张显示一张，增大图片尺寸，配上营销文案
+2. **视频生成**：参考产品定义场景，并正确显示生成后的视频
+3. **数据传递**：确保 PRD 数据（场景、功能、风格等）正确传递到生成引擎
 
 ---
 
-## 一、移除"产品PRD文档"子阶段
+## 一、营销图片生成优化
 
-### 当前结构
-```
-产品定义阶段
-├── AI产品经理（对话）
-└── 产品PRD文档（独立页面）← 移除
-```
+### 1.1 逐张实时显示（流式渲染）
 
-### 新结构
-```
-产品定义阶段
-└── AI产品经理对话 + 可编辑侧边栏
-```
+**当前问题**：图片批量生成后一起显示，用户等待时间长
 
-### 修改文件
-- `src/components/PrdPhase.tsx`
-  - 移除 `subPhases` 数组和切换逻辑
-  - 移除 `PrdDocumentPanel` 导入和渲染
-  - 简化为只渲染 `AiProductManagerPanel`
-  - 移除 `showTransition` 和相关逻辑
+**解决方案**：改为每完成一张立即显示，而不是等所有图片生成完毕
 
----
+**修改文件**：`src/components/MarketingImageGallery.tsx`
 
-## 二、增强左侧边栏（PrdExtractionSidebar）
+```text
+原逻辑：
+for (type in selectedTypes) → 生成 → 收集到 newImages[]
+循环结束后 → onImagesChange([...images, ...newImages])
 
-### UI 设计
-
-```
-┌────────────────────────────────────┐
-│  对话阶段  [探索方向]               │
-├────────────────────────────────────┤
-│  产品名称（如有）                   │
-├────────────────────────────────────┤
-│  产品定义  [3/6 必填项]             │
-│  ▓▓▓▓▓▓░░░░░░ 50%                 │
-├────────────────────────────────────┤
-│  ┌──────────────────────────────┐  │
-│  │ ⭐ 产品方向 * [必填]          │  │
-│  │ 智能便携方向                  │  │
-│  │                      [编辑]  │  │
-│  └──────────────────────────────┘  │
-│                                    │
-│  ┌──────────────────────────────┐  │
-│  │ 📍 使用场景 * [必填]          │  │
-│  │ 户外露营场景                  │  │
-│  │                      [编辑]  │  │
-│  └──────────────────────────────┘  │
-│                                    │
-│  ... 其他4个必填字段 ...            │
-├────────────────────────────────────┤
-│  ✅ 所有必填项已完成               │
-│  [进入产品设计阶段 →]              │
-└────────────────────────────────────┘
-```
-
-### 6个核心必填字段
-
-| 序号 | 字段 Key | 字段名称 | 图标 |
-|------|----------|----------|------|
-| 1 | selectedDirection | 产品方向 | Lightbulb |
-| 2 | usageScenario | 使用场景 | MapPin |
-| 3 | targetAudience | 目标用户 | Users |
-| 4 | designStyle | 外观风格 | Palette |
-| 5 | coreFeatures | 核心功能 | Zap |
-| 6 | pricingRange | 定价策略 | DollarSign |
-
-### 新增功能
-
-1. **必填标识**：每个字段卡片右上角显示红色星号 `*` 和 `[必填]` 徽章
-2. **手动编辑**：点击"编辑"按钮弹出编辑模态框或内联编辑
-3. **完成状态**：所有字段完成后显示"进入产品设计"按钮
-
-### 修改文件
-- `src/components/PrdExtractionSidebar.tsx`
-  - 添加必填标识图标
-  - 添加编辑功能（模态框或内联）
-  - 添加"进入产品设计"按钮
-  - 添加 `onEdit` 和 `onProceedToDesign` 回调
-
----
-
-## 三、更新 AI 对话逻辑
-
-### 流程变化
-
-```
-用户开始对话
-    ↓
-AI 引导填写6个必填字段
-    ↓
-检测所有字段完成
-    ↓
-AI 消息包含 [DESIGN_READY] 信号
-并提示："所有产品定义已完成！是否进入产品设计阶段？"
-    ↓
-├── 用户选择"进入产品设计" → 切换阶段
-└── 用户选择"继续对话" → AI 在后续回复中再次询问
-```
-
-### 修改文件
-
-1. `supabase/functions/chat/index.ts`
-   - 添加检测6个必填字段是否完成的逻辑
-   - 当所有字段完成时，在回复末尾添加 `[DESIGN_READY]` 信号
-   - 如果用户继续对话，后续回复持续询问
-
-2. `src/components/PrdPhase.tsx`
-   - 检测 `[DESIGN_READY]` 信号（替代 `[PRD_READY]`）
-   - 显示"进入产品设计"提示卡片
-   - 处理用户选择
-
-3. `src/components/PrdCompletionCard.tsx`
-   - 更新文案："PRD 完成" → "产品定义完成"
-   - 按钮："查看 PRD 文档" → "进入产品设计阶段"
-
----
-
-## 四、数据传递到产品设计阶段
-
-### 传递内容
-
-当用户进入产品设计阶段时，需要传递：
-
-1. **PRD 数据**（prd_data）
-   - 6个核心字段
-   - 其他已收集的详细信息
-
-2. **竞品参考图片**（competitor_products）
-   - main_image
-   - product_images 数组
-
-3. **对话摘要**（可选）
-   - 关键决策点总结
-
-### 数据流
-
-```
-PrdPhase (current_stage=2)
-    │
-    │ 用户点击"进入产品设计"
-    │
-    ├─→ 更新 project.current_stage = 3
-    │
-    └─→ VisualGenerationPhase
-            │
-            ├─→ 读取 project.prd_data
-            │
-            └─→ 读取 competitor_products（含图片）
-                 传递给图片生成 prompt
-```
-
-### 修改文件
-
-1. `src/pages/Project.tsx`
-   - 在 `handlePrdPhaseComplete` 中传递完整数据
-   - 确保 `VisualGenerationPhase` 接收 prd_data 和竞品图片
-
-2. `src/components/VisualGenerationPhase.tsx`
-   - 扩展 props 接收完整 PRD 数据
-   - 将数据传递给 `ProductDesignGallery`
-
-3. `src/components/ProductDesignGallery.tsx`
-   - 接收竞品图片列表
-   - 在生成 prompt 时引用竞品风格
-
----
-
-## 五、技术实现细节
-
-### 1. PrdExtractionSidebar 编辑功能
-
-```tsx
-interface PrdExtractionSidebarProps {
-  prdData: PrdData | null;
-  competitorProducts?: CompetitorProduct[];
-  className?: string;
-  isEditable?: boolean;  // 新增：是否可编辑
-  onFieldEdit?: (field: string, value: any) => void;  // 新增：编辑回调
-  onProceedToDesign?: () => void;  // 新增：进入设计阶段
+新逻辑：
+for (type in selectedTypes) {
+  生成完成 → 立即 onImagesChange([...images, newImage])
+  UI 即时更新显示新图片
 }
 ```
 
-### 2. 必填字段检测
+### 1.2 增大图片尺寸
+
+**当前布局**：`grid-cols-2 md:grid-cols-3 lg:grid-cols-4`，图片较小
+
+**新布局**：`grid-cols-1 md:grid-cols-2`，每张图片更大，配合营销文案
+
+### 1.3 添加营销文案
+
+**修改内容**：
+- Edge Function 返回时同时生成文案（利用 AI 生成）
+- 数据库表 `generated_images` 新增 `marketing_copy` 字段
+- UI 在图片下方展示营销文案
+
+**数据库更改**：
+```sql
+ALTER TABLE generated_images 
+ADD COLUMN marketing_copy TEXT;
+```
+
+### 1.4 传递 PRD 数据到图片生成
+
+**当前问题**：`MarketingImageGallery` 只接收 `prdSummary`，缺少详细场景信息
+
+**优化**：传递完整 `prdData` 到 `generate-image` Edge Function，包括：
+- `usageScenarios`：使用场景
+- `targetAudience`：目标用户
+- `coreFeatures`：核心功能
+- `designStyle`：设计风格
+
+---
+
+## 二、视频生成优化
+
+### 2.1 传递 PRD 场景到视频生成
+
+**当前状态**：`VideoGenerationSection` 接收 `usageScenarios`，但需要更完整的场景描述
+
+**优化**：
+- 从 `prdData` 中提取使用场景 (`usageScenario`) 和其他相关设定
+- 将场景信息融入视频生成 prompt
+
+**修改文件**：
+- `src/components/VisualGenerationPhase.tsx`：传递完整场景数据
+- `src/components/VideoGenerationSection.tsx`：使用场景数据构建 prompt
+- `supabase/functions/generate-video/index.ts`：接收并应用 PRD 数据
+
+### 2.2 正确显示生成的视频
+
+**当前问题**：
+1. Edge Function 目前是模拟实现，没有实际生成视频
+2. 视频状态停留在 `pending` 无法正确显示
+
+**解决方案**：
+1. 使用 Lovable AI Gateway 的视频生成能力（如果支持）
+2. 如果暂不支持，则：
+   - 显示清晰的状态提示
+   - 完善 UI 以正确处理各种状态
+   - 当视频 URL 存在时正确渲染 `<video>` 元素
+
+**UI 优化**：
+- 视频预览区域放大
+- 添加视频播放控件
+- 显示生成进度和状态
+
+---
+
+## 三、技术实现细节
+
+### 3.1 MarketingImageGallery 改造
 
 ```tsx
-const requiredFields = [
-  'selectedDirection',
-  'usageScenario', 
-  'targetAudience',
-  'designStyle',
-  'coreFeatures',
-  'pricingRange'
-];
+// 新的 props 接口
+interface MarketingImageGalleryProps {
+  // ...现有 props
+  prdData?: {
+    usageScenario?: string;
+    targetAudience?: string;
+    coreFeatures?: string[];
+    designStyle?: string;
+    selectedDirection?: string;
+  };
+}
 
-const isAllRequiredFilled = requiredFields.every(field => {
-  if (field === 'coreFeatures') {
-    return prdData?.coreFeatures && prdData.coreFeatures.length > 0;
+// 逐张生成逻辑
+const generateMarketingImages = async () => {
+  for (const type of selectedTypes) {
+    const response = await fetch(...);
+    const data = await response.json();
+    
+    // 立即保存并更新 UI
+    const { data: savedImage } = await supabase
+      .from("generated_images")
+      .insert({...})
+      .select()
+      .single();
+    
+    // 每张图片完成后立即更新
+    onImagesChange((prev) => [...prev, savedImage]);
   }
-  return !!prdData?.[field];
-});
+};
 ```
 
-### 3. AI Prompt 更新（chat Edge Function）
+### 3.2 图片卡片新布局（含营销文案）
 
-在系统提示中添加：
-
+```text
+┌─────────────────────────────────────────────┐
+│  [营销图片 - 更大尺寸 aspect-[16/10]]        │
+│                                             │
+│                                             │
+├─────────────────────────────────────────────┤
+│  类型标签: 场景图                            │
+│                                             │
+│  营销文案:                                   │
+│  "在户外探险中，xxx产品为您提供可靠保障..."    │
+│                                             │
+│  [重新生成] [下载] [删除]                    │
+└─────────────────────────────────────────────┘
 ```
-## 完成检测
 
-当用户通过对话确认了以下6个必填字段后，你的回复必须：
-1. 在末尾添加 [DESIGN_READY] 标记
-2. 询问用户是否进入产品设计阶段
-3. 提供选项：[进入产品设计] | [我想继续完善]
+### 3.3 Edge Function 增强
 
-如果用户选择"继续完善"，在之后的每次回复末尾都要询问是否进入产品设计。
+**generate-image/index.ts**：
+```typescript
+// 新增参数
+const { 
+  prompt, 
+  projectId, 
+  imageType, 
+  phase,
+  parentImageId,
+  parentImageUrl,
+  prdData  // 新增：完整 PRD 数据
+} = await req.json();
+
+// 生成营销文案
+const marketingCopy = await generateMarketingCopy(imageType, prdData);
+
+// 返回结果包含文案
+return { imageUrl, description, prompt, imageType, phase, marketingCopy };
+```
+
+### 3.4 VideoGenerationSection 优化
+
+**接收完整 PRD 数据**：
+```tsx
+interface VideoGenerationSectionProps {
+  // ...现有 props
+  prdData?: {
+    usageScenario?: string;
+    usageScenarios?: string[];
+    targetAudience?: string;
+    coreFeatures?: string[];
+    designStyle?: string;
+  };
+}
+```
+
+**UI 改进**：
+- 视频预览区域从 `w-40` 放大到 `w-full max-w-md`
+- 添加 `<video>` 控件的正确样式
+- 处理视频加载失败情况
+
+---
+
+## 四、数据库修改
+
+```sql
+-- 为营销图片添加文案字段
+ALTER TABLE generated_images 
+ADD COLUMN IF NOT EXISTS marketing_copy TEXT;
 ```
 
 ---
 
-## 修改文件清单
+## 五、修改文件清单
 
 | 文件 | 操作 | 修改内容 |
 |------|------|----------|
-| `src/components/PrdPhase.tsx` | 修改 | 移除子阶段切换，简化为单一对话界面 |
-| `src/components/PrdExtractionSidebar.tsx` | 修改 | 添加必填图标、编辑功能、进入设计按钮 |
-| `src/components/PrdCompletionCard.tsx` | 修改 | 更新文案和按钮行为 |
-| `src/components/AiProductManagerPanel.tsx` | 修改 | 支持编辑回调和完成状态 |
-| `supabase/functions/chat/index.ts` | 修改 | 添加完成检测和 DESIGN_READY 信号 |
-| `src/pages/Project.tsx` | 修改 | 传递竞品图片到产品设计阶段 |
-| `src/components/VisualGenerationPhase.tsx` | 修改 | 接收完整 PRD 和竞品图片 |
-| `src/components/ProductDesignGallery.tsx` | 修改 | 使用竞品图片生成 prompt |
+| `src/components/MarketingImageGallery.tsx` | 修改 | 逐张显示、放大图片、显示营销文案 |
+| `src/components/VideoGenerationSection.tsx` | 修改 | 接收完整 PRD 数据、优化视频显示 |
+| `src/components/VisualGenerationPhase.tsx` | 修改 | 传递完整 prdData 到子组件 |
+| `supabase/functions/generate-image/index.ts` | 修改 | 接收 PRD 数据、生成营销文案 |
+| `supabase/functions/generate-video/index.ts` | 修改 | 接收 PRD 场景数据用于视频生成 |
+| 数据库迁移 | 新增 | 添加 `marketing_copy` 字段 |
 
 ---
 
-## 用户体验流程
+## 六、用户体验流程
 
+```text
+1. 用户进入产品设计阶段
+2. 选择要生成的营销图片类型
+3. 点击"批量生成"按钮
+4. 每张图片生成完成后：
+   - 立即显示在界面上（无需等待全部完成）
+   - 显示更大的图片
+   - 图片下方显示 AI 生成的营销文案
+5. 视频生成：
+   - 场景选择基于 PRD 中定义的使用场景
+   - 生成过程显示进度
+   - 完成后正确播放视频
 ```
-1. 用户进入产品定义阶段
-2. AI 开始对话，引导用户确定产品方向
-3. 左侧边栏实时显示已收集的信息（带必填标识）
-4. 用户可随时手动编辑任何字段
-5. 当6个必填字段全部完成：
-   - 侧边栏显示"进入产品设计"按钮
-   - AI 在对话中提示可以进入下一阶段
-6. 用户点击"进入产品设计"：
-   - 系统保存所有 PRD 数据
-   - 传递竞品图片到设计阶段
-   - 切换到产品设计界面
-```
+
+---
+
+## 七、技术注意事项
+
+1. **并发控制**：图片生成改为串行处理，确保逐张显示的顺序
+2. **状态管理**：使用回调函数更新父组件状态，确保 UI 同步
+3. **错误处理**：单张图片失败不影响其他图片生成
+4. **视频 API 限制**：Lovable AI Gateway 目前可能不支持视频生成，需要优雅降级处理
