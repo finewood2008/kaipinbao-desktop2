@@ -454,7 +454,7 @@ export function LandingPageBuilder({
                 </div>
 
                 {/* Inline Asset Generator */}
-                {(marketingImages.length === 0 || !videoUrl) && onMarketingImagesChange && onVideosChange && (
+                {marketingImages.length === 0 && onMarketingImagesChange && (
                   <div className="mb-8 max-w-md mx-auto">
                     <InlineAssetGenerator
                       projectId={projectId}
@@ -479,7 +479,6 @@ export function LandingPageBuilder({
                         parent_image_id: null,
                         marketing_copy: img.marketing_copy || null,
                       }))}
-                      existingVideos={videos}
                       onImagesGenerated={(newImages) => {
                         const converted = newImages.map(img => ({
                           id: img.id,
@@ -488,9 +487,6 @@ export function LandingPageBuilder({
                           marketing_copy: img.marketing_copy || undefined,
                         }));
                         onMarketingImagesChange(converted);
-                      }}
-                      onVideoGenerated={(newVideo) => {
-                        onVideosChange([...videos, newVideo]);
                       }}
                     />
                   </div>

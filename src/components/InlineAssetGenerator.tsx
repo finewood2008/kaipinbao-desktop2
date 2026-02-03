@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { 
   ImagePlus, 
-  Video, 
   Loader2, 
   ChevronDown, 
   ChevronUp,
@@ -29,15 +28,6 @@ interface GeneratedImage {
   marketing_copy?: string | null;
 }
 
-interface GeneratedVideo {
-  id: string;
-  video_url: string | null;
-  prompt: string;
-  scene_description: string | null;
-  duration_seconds: number;
-  status: string;
-}
-
 interface PrdData {
   usageScenario?: string;
   usageScenarios?: string[];
@@ -53,9 +43,7 @@ interface InlineAssetGeneratorProps {
   selectedImageId?: string;
   prdData?: PrdData;
   onImagesGenerated: (images: GeneratedImage[]) => void;
-  onVideoGenerated: (video: GeneratedVideo) => void;
   existingImages: GeneratedImage[];
-  existingVideos: GeneratedVideo[];
 }
 
 export function InlineAssetGenerator({
@@ -64,13 +52,10 @@ export function InlineAssetGenerator({
   selectedImageId,
   prdData,
   onImagesGenerated,
-  onVideoGenerated,
   existingImages,
-  existingVideos,
 }: InlineAssetGeneratorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>(["scene", "structure"]);
   const [generatingTypeIds, setGeneratingTypeIds] = useState<string[]>([]);
   const [generatedCount, setGeneratedCount] = useState(0);
@@ -172,68 +157,7 @@ export function InlineAssetGenerator({
     setGeneratingTypeIds([]);
   };
 
-  const handleGenerateVideo = async () => {
-    if (!selectedImageId || !selectedImageUrl) {
-      toast.error("缺少产品造型图，请先在产品设计阶段选择造型");
-      return;
-    }
-
-    setIsGeneratingVideo(true);
-
-    try {
-      const scenarios = [
-        ...(prdData?.usageScenarios || []),
-        ...(prdData?.usageScenario ? [prdData.usageScenario] : []),
-      ].filter(Boolean);
-
-      const sceneDescription = scenarios[0] || "产品展示动态效果";
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-video`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            projectId,
-            parentImageId: selectedImageId,
-            parentImageUrl: selectedImageUrl,
-            sceneDescription,
-            durationSeconds: 6,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("视频生成请求失败");
-      }
-
-      const data = await response.json();
-
-      if (data.videoId) {
-        const newVideo: GeneratedVideo = {
-          id: data.videoId,
-          video_url: null,
-          prompt: data.prompt || "",
-          scene_description: sceneDescription,
-          duration_seconds: 6,
-          status: "pending",
-        };
-        onVideoGenerated(newVideo);
-        toast.success("视频生成已开始，请稍候...");
-      }
-    } catch (error) {
-      console.error("Video generation error:", error);
-      toast.error("视频生成失败");
-    } finally {
-      setIsGeneratingVideo(false);
-    }
-  };
-
   const hasProductImage = !!selectedImageUrl && !!selectedImageId;
-  const hasVideo = existingVideos.some(v => v.video_url);
 
   return (
     <Card className={cn(
@@ -344,35 +268,10 @@ export function InlineAssetGenerator({
                       </>
                     )}
                   </Button>
-
-                  <Button
-                    onClick={handleGenerateVideo}
-                    disabled={!hasProductImage || isGeneratingVideo || hasVideo}
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                  >
-                    {isGeneratingVideo ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        生成中...
-                      </>
-                    ) : hasVideo ? (
-                      <>
-                        <Check className="w-4 h-4 mr-2" />
-                        已有视频
-                      </>
-                    ) : (
-                      <>
-                        <Video className="w-4 h-4 mr-2" />
-                        生成视频
-                      </>
-                    )}
-                  </Button>
                 </div>
 
                 {/* Existing Assets Preview */}
-                {(existingImages.length > 0 || existingVideos.length > 0) && (
+                {existingImages.length > 0 && (
                   <div className="pt-3 border-t border-border/50">
                     <p className="text-xs text-muted-foreground mb-2">已有素材</p>
                     <div className="flex gap-2 overflow-x-auto pb-2">
@@ -393,14 +292,6 @@ export function InlineAssetGenerator({
                           <span className="text-xs text-muted-foreground">+{existingImages.length - 4}</span>
                         </div>
                       )}
-                      {existingVideos.filter(v => v.video_url).map((video) => (
-                        <div 
-                          key={video.id} 
-                          className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-border/50 bg-muted flex items-center justify-center"
-                        >
-                          <Video className="w-6 h-6 text-muted-foreground" />
-                        </div>
-                      ))}
                     </div>
                   </div>
                 )}
