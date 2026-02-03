@@ -554,6 +554,7 @@ export default function ProjectPage() {
                 videoUrl={videos.find(v => v.video_url)?.video_url || undefined}
                 landingPage={landingPage}
                 onLandingPageChange={setLandingPage}
+                onBackToVisual={() => setActiveTab("images")}
               />
             </div>
           </TabsContent>

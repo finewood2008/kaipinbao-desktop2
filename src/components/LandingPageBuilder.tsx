@@ -116,6 +116,7 @@ interface LandingPageBuilderProps {
   videoUrl?: string;
   landingPage: LandingPageData | null;
   onLandingPageChange: (data: LandingPageData) => void;
+  onBackToVisual?: () => void;
 }
 
 type GenerationStep = "idle" | "analyzing" | "designing" | "generating-images" | "finalizing" | "complete";
@@ -157,6 +158,7 @@ export function LandingPageBuilder({
   videoUrl,
   landingPage,
   onLandingPageChange,
+  onBackToVisual,
 }: LandingPageBuilderProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<GenerationStep>("idle");
@@ -421,6 +423,44 @@ export function LandingPageBuilder({
                     )}
                   </div>
                 </div>
+
+                {/* Missing assets warning */}
+                {(marketingImages.length === 0 || !videoUrl) && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-8 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg max-w-md mx-auto"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <ImageIcon className="w-4 h-4 text-amber-500" />
+                      </div>
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1">
+                          素材不完整
+                        </p>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          {marketingImages.length === 0 && !videoUrl 
+                            ? "缺少营销图片和视频，落地页效果可能受限" 
+                            : marketingImages.length === 0 
+                            ? "缺少营销图片，建议先生成场景图、结构图等" 
+                            : "缺少视频，建议先生成产品视频提升转化率"}
+                        </p>
+                        {onBackToVisual && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={onBackToVisual}
+                            className="text-xs border-amber-500/30 hover:bg-amber-500/10"
+                          >
+                            <ImageIcon className="w-3 h-3 mr-1" />
+                            返回生成素材
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
 
                 <Button
                   onClick={handleAIGenerateLandingPage}
