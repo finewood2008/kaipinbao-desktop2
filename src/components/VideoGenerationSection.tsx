@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -10,18 +9,18 @@ import {
   Video, 
   Loader2, 
   Play, 
-  RefreshCw, 
   Trash2,
-  Plus,
   Sparkles,
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Download
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface GeneratedVideo {
   id: string;
@@ -32,6 +31,15 @@ interface GeneratedVideo {
   status: string;
 }
 
+interface PrdData {
+  usageScenario?: string;
+  usageScenarios?: string[];
+  targetAudience?: string;
+  coreFeatures?: string[];
+  designStyle?: string;
+  selectedDirection?: string;
+}
+
 interface VideoGenerationSectionProps {
   projectId: string;
   parentImageId?: string;
@@ -39,6 +47,7 @@ interface VideoGenerationSectionProps {
   videos: GeneratedVideo[];
   onVideosChange: (videos: GeneratedVideo[]) => void;
   usageScenarios?: string[];
+  prdData?: PrdData;
 }
 
 export function VideoGenerationSection({
@@ -48,11 +57,19 @@ export function VideoGenerationSection({
   videos,
   onVideosChange,
   usageScenarios = [],
+  prdData,
 }: VideoGenerationSectionProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<string>("");
   const [customScenario, setCustomScenario] = useState("");
   const [generationProgress, setGenerationProgress] = useState(0);
+
+  // Merge usageScenarios from props and prdData
+  const allScenarios = [
+    ...(usageScenarios || []),
+    ...(prdData?.usageScenarios || []),
+    ...(prdData?.usageScenario ? [prdData.usageScenario] : []),
+  ].filter((v, i, a) => v && a.indexOf(v) === i); // Deduplicate
 
   // Poll for video status updates
   useEffect(() => {
@@ -109,6 +126,7 @@ export function VideoGenerationSection({
             parentImageId,
             parentImageUrl,
             duration: 6,
+            prdData, // Pass full PRD data
           }),
         }
       );
@@ -188,7 +206,7 @@ export function VideoGenerationSection({
 
   return (
     <Card className="glass border-border/50">
-      <CardHeader>
+      <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
           <Video className="w-5 h-5 text-stage-2" />
           视频生成
@@ -197,20 +215,20 @@ export function VideoGenerationSection({
           </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-5">
         {/* Scenario Selection */}
         <div className="space-y-4">
           <div>
-            <h4 className="font-medium mb-2 flex items-center gap-2">
+            <h4 className="font-medium mb-2 flex items-center gap-2 text-sm">
               选择使用场景
               <span className="text-xs text-muted-foreground font-normal">
                 (基于PRD中的场景定义)
               </span>
             </h4>
             
-            {usageScenarios.length > 0 ? (
+            {allScenarios.length > 0 ? (
               <div className="flex flex-wrap gap-2 mb-3">
-                {usageScenarios.map((scenario, index) => (
+                {allScenarios.map((scenario, index) => (
                   <Button
                     key={index}
                     variant={selectedScenario === scenario ? "default" : "outline"}
@@ -220,7 +238,7 @@ export function VideoGenerationSection({
                       setCustomScenario("");
                     }}
                     className={cn(
-                      "transition-all",
+                      "transition-all text-xs",
                       selectedScenario === scenario && "bg-stage-2 hover:bg-stage-2/90"
                     )}
                   >
@@ -236,7 +254,7 @@ export function VideoGenerationSection({
           </div>
 
           <div>
-            <h4 className="font-medium mb-2">或自定义场景描述</h4>
+            <h4 className="font-medium mb-2 text-sm">或自定义场景描述</h4>
             <Textarea
               placeholder="例如：展示用户在办公室使用产品的场景，产品放在桌面上，用户自然地与产品互动..."
               value={customScenario}
@@ -244,7 +262,8 @@ export function VideoGenerationSection({
                 setCustomScenario(e.target.value);
                 setSelectedScenario("");
               }}
-              rows={3}
+              rows={2}
+              className="text-sm"
             />
           </div>
 
@@ -278,10 +297,10 @@ export function VideoGenerationSection({
           )}
         </div>
 
-        {/* Generated Videos */}
+        {/* Generated Videos - Larger display */}
         {videos.length > 0 && (
           <div className="space-y-4">
-            <h4 className="font-medium flex items-center gap-2">
+            <h4 className="font-medium flex items-center gap-2 text-sm">
               已生成的视频
               <Badge variant="outline">{videos.length}</Badge>
             </h4>
@@ -298,61 +317,93 @@ export function VideoGenerationSection({
                   >
                     <Card className="overflow-hidden">
                       <CardContent className="p-4">
-                        <div className="flex items-start gap-4">
-                          {/* Video Preview / Placeholder */}
-                          <div className="w-40 aspect-video bg-muted rounded-lg overflow-hidden relative flex-shrink-0">
-                            {video.status === "completed" && video.video_url ? (
-                              <video
-                                src={video.video_url}
-                                className="w-full h-full object-cover"
-                                controls
-                              />
-                            ) : (
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                {video.status === "processing" ? (
-                                  <Loader2 className="w-8 h-8 text-stage-2 animate-spin" />
-                                ) : video.status === "pending" ? (
-                                  <Clock className="w-8 h-8 text-muted-foreground" />
-                                ) : (
-                                  <AlertCircle className="w-8 h-8 text-destructive" />
-                                )}
-                              </div>
-                            )}
+                        <div className="flex flex-col md:flex-row gap-4">
+                          {/* Video Preview - Larger and centered */}
+                          <div className="w-full md:w-80 flex-shrink-0">
+                            <AspectRatio ratio={16 / 9} className="bg-muted rounded-lg overflow-hidden">
+                              {video.status === "completed" && video.video_url ? (
+                                <video
+                                  src={video.video_url}
+                                  className="w-full h-full object-cover"
+                                  controls
+                                  preload="metadata"
+                                  playsInline
+                                >
+                                  您的浏览器不支持视频播放
+                                </video>
+                              ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                  {video.status === "processing" ? (
+                                    <>
+                                      <Loader2 className="w-10 h-10 text-stage-2 animate-spin" />
+                                      <p className="text-sm text-muted-foreground">生成中...</p>
+                                    </>
+                                  ) : video.status === "pending" ? (
+                                    <>
+                                      <Clock className="w-10 h-10 text-muted-foreground" />
+                                      <p className="text-sm text-muted-foreground">等待处理</p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <AlertCircle className="w-10 h-10 text-destructive" />
+                                      <p className="text-sm text-destructive">生成失败</p>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </AspectRatio>
                           </div>
 
                           {/* Video Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              {getStatusBadge(video.status)}
-                              <span className="text-sm text-muted-foreground">
-                                {video.duration_seconds}秒
-                              </span>
+                          <div className="flex-1 flex flex-col justify-between min-w-0">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                {getStatusBadge(video.status)}
+                                <span className="text-sm text-muted-foreground">
+                                  {video.duration_seconds}秒
+                                </span>
+                              </div>
+                              <p className="text-sm line-clamp-3">
+                                {video.scene_description || video.prompt}
+                              </p>
                             </div>
-                            <p className="text-sm line-clamp-2 mb-2">
-                              {video.scene_description || video.prompt}
-                            </p>
-                          </div>
 
-                          {/* Actions */}
-                          <div className="flex flex-col gap-2">
-                            {video.status === "completed" && video.video_url && (
+                            {/* Actions */}
+                            <div className="flex gap-2 mt-3">
+                              {video.status === "completed" && video.video_url && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => window.open(video.video_url!, "_blank")}
+                                  >
+                                    <Play className="w-4 h-4 mr-1" />
+                                    全屏播放
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const a = document.createElement('a');
+                                      a.href = video.video_url!;
+                                      a.download = `product-video-${video.id}.mp4`;
+                                      a.click();
+                                    }}
+                                  >
+                                    <Download className="w-4 h-4 mr-1" />
+                                    下载
+                                  </Button>
+                                </>
+                              )}
                               <Button
                                 size="sm"
-                                variant="outline"
-                                onClick={() => window.open(video.video_url!, "_blank")}
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => deleteVideo(video.id)}
                               >
-                                <Play className="w-4 h-4 mr-1" />
-                                播放
+                                <Trash2 className="w-4 h-4" />
                               </Button>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => deleteVideo(video.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -366,9 +417,9 @@ export function VideoGenerationSection({
 
         {/* Empty State */}
         {videos.length === 0 && !isGenerating && (
-          <div className="text-center py-8 text-muted-foreground">
-            <Video className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>选择场景后生成产品展示视频</p>
+          <div className="text-center py-6 text-muted-foreground">
+            <Video className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">选择场景后生成产品展示视频</p>
           </div>
         )}
       </CardContent>

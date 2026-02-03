@@ -195,6 +195,7 @@ export type Database = {
           image_type: string
           image_url: string
           is_selected: boolean
+          marketing_copy: string | null
           parent_image_id: string | null
           phase: number
           project_id: string
@@ -207,6 +208,7 @@ export type Database = {
           image_type?: string
           image_url: string
           is_selected?: boolean
+          marketing_copy?: string | null
           parent_image_id?: string | null
           phase?: number
           project_id: string
@@ -219,6 +221,7 @@ export type Database = {
           image_type?: string
           image_url?: string
           is_selected?: boolean
+          marketing_copy?: string | null
           parent_image_id?: string | null
           phase?: number
           project_id?: string

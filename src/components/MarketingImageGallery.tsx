@@ -10,13 +10,15 @@ import {
   Download,
   Trash2,
   ZoomIn,
-  ImagePlus
+  ImagePlus,
+  Copy
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImageLightbox } from "./ImageLightbox";
 import { ImageType, IMAGE_TYPES } from "./ImageTypeSelector";
 import { cn } from "@/lib/utils";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 interface GeneratedImage {
   id: string;
@@ -27,6 +29,16 @@ interface GeneratedImage {
   image_type?: string;
   phase?: number;
   parent_image_id?: string | null;
+  marketing_copy?: string | null;
+}
+
+interface PrdData {
+  usageScenario?: string;
+  usageScenarios?: string[];
+  targetAudience?: string;
+  coreFeatures?: string[];
+  designStyle?: string;
+  selectedDirection?: string;
 }
 
 interface MarketingImageGalleryProps {
@@ -37,6 +49,7 @@ interface MarketingImageGalleryProps {
   images: GeneratedImage[];
   onImagesChange: (images: GeneratedImage[]) => void;
   prdSummary?: string;
+  prdData?: PrdData;
 }
 
 export function MarketingImageGallery({
@@ -47,6 +60,7 @@ export function MarketingImageGallery({
   images,
   onImagesChange,
   prdSummary,
+  prdData,
 }: MarketingImageGalleryProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingTypes, setGeneratingTypes] = useState<string[]>([]);
@@ -67,8 +81,7 @@ export function MarketingImageGallery({
     setIsGenerating(true);
     setGeneratingTypes(selectedTypes.map(t => t.id));
 
-    const newImages: GeneratedImage[] = [];
-
+    // Generate images one by one and update UI immediately
     for (const type of selectedTypes) {
       try {
         const response = await fetch(
@@ -86,6 +99,7 @@ export function MarketingImageGallery({
               phase: 2,
               parentImageId,
               parentImageUrl,
+              prdData, // Pass full PRD data
             }),
           }
         );
@@ -97,7 +111,7 @@ export function MarketingImageGallery({
 
         const data = await response.json();
 
-        // Save to database
+        // Save to database with marketing copy
         const { data: savedImage, error } = await supabase
           .from("generated_images")
           .insert({
@@ -108,14 +122,20 @@ export function MarketingImageGallery({
             image_type: type.id,
             phase: 2,
             parent_image_id: parentImageId,
+            marketing_copy: data.marketingCopy || null,
           })
           .select()
           .single();
 
         if (error) throw error;
 
-        newImages.push(savedImage as GeneratedImage);
+        // Immediately update UI with the new image
+        onImagesChange([...images, savedImage as GeneratedImage]);
+        
+        // Update generating types to remove completed one
         setGeneratingTypes(prev => prev.filter(t => t !== type.id));
+        
+        toast.success(`${type.label}已生成`);
         
       } catch (error) {
         console.error(`Error generating ${type.id}:`, error);
@@ -124,12 +144,7 @@ export function MarketingImageGallery({
       }
     }
 
-    onImagesChange([...images, ...newImages]);
     setIsGenerating(false);
-
-    if (newImages.length > 0) {
-      toast.success(`成功生成 ${newImages.length} 张营销图片`);
-    }
   };
 
   const regenerateImage = async (image: GeneratedImage) => {
@@ -154,6 +169,7 @@ export function MarketingImageGallery({
             phase: 2,
             parentImageId,
             parentImageUrl,
+            prdData,
           }),
         }
       );
@@ -175,6 +191,7 @@ export function MarketingImageGallery({
           image_type: image.image_type,
           phase: 2,
           parent_image_id: parentImageId,
+          marketing_copy: data.marketingCopy || null,
         })
         .select()
         .single();
@@ -204,6 +221,11 @@ export function MarketingImageGallery({
     }
   };
 
+  const copyMarketingCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("文案已复制");
+  };
+
   const openLightbox = (index: number) => {
     setLightboxIndex(index);
     setLightboxOpen(true);
@@ -225,7 +247,7 @@ export function MarketingImageGallery({
     <div className="space-y-6">
       {/* Generate Button */}
       <Card className="glass border-border/50">
-        <CardContent className="p-6">
+        <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold flex items-center gap-2">
@@ -272,7 +294,7 @@ export function MarketingImageGallery({
         </CardContent>
       </Card>
 
-      {/* Grouped Image Display */}
+      {/* Grouped Image Display - Larger layout with marketing copy */}
       {Object.entries(groupedImages).map(([typeId, typeImages]) => (
         <Card key={typeId} className="glass border-border/50">
           <CardHeader className="pb-3">
@@ -284,74 +306,97 @@ export function MarketingImageGallery({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Larger grid: 1 column on mobile, 2 on larger screens */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <AnimatePresence mode="popLayout">
                 {typeImages.map((image, index) => (
                   <motion.div
                     key={image.id}
                     layout
-                    initial={{ opacity: 0, scale: 0.8 }}
+                    initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ type: "spring", stiffness: 300, damping: 25 }}
                   >
-                    <div className="group relative rounded-lg overflow-hidden border border-border bg-card">
-                      {/* Image */}
+                    <Card className="overflow-hidden border border-border bg-card">
+                      {/* Image - Larger aspect ratio */}
                       <div 
-                        className="aspect-square cursor-pointer"
+                        className="relative cursor-pointer group"
                         onClick={() => openLightbox(images.indexOf(image))}
                       >
-                        <img
-                          src={image.image_url}
-                          alt={`${getTypeLabel(typeId)} image`}
-                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
+                        <AspectRatio ratio={16 / 10}>
+                          <img
+                            src={image.image_url}
+                            alt={`${getTypeLabel(typeId)} image`}
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                        </AspectRatio>
                         
                         {/* Overlay */}
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                          <ZoomIn className="w-8 h-8 text-white" />
+                          <ZoomIn className="w-10 h-10 text-white" />
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="flex justify-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-white hover:bg-white/20"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              regenerateImage(image);
-                            }}
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-white hover:bg-white/20"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.open(image.image_url, "_blank");
-                            }}
-                          >
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-white hover:bg-red-500/50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteImage(image.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                      {/* Content area with type and marketing copy */}
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="secondary" className="text-xs">
+                            {getTypeLabel(typeId)}
+                          </Badge>
+                          <div className="flex gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => regenerateImage(image)}
+                              disabled={generatingTypes.includes(image.image_type || "")}
+                            >
+                              {generatingTypes.includes(image.image_type || "") ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-4 h-4" />
+                              )}
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => window.open(image.image_url, "_blank")}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
+                              onClick={() => deleteImage(image.id)}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+
+                        {/* Marketing Copy */}
+                        {image.marketing_copy && (
+                          <div className="bg-muted/50 rounded-lg p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm text-foreground leading-relaxed">
+                                {image.marketing_copy}
+                              </p>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 flex-shrink-0"
+                                onClick={() => copyMarketingCopy(image.marketing_copy!)}
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -363,9 +408,9 @@ export function MarketingImageGallery({
       {/* Empty State */}
       {images.length === 0 && !isGenerating && (
         <Card className="glass border-dashed border-border/50">
-          <CardContent className="p-12 text-center">
-            <ImagePlus className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <h4 className="font-medium mb-2">尚未生成营销图片</h4>
+          <CardContent className="p-10 text-center">
+            <ImagePlus className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+            <h4 className="font-medium mb-1">尚未生成营销图片</h4>
             <p className="text-sm text-muted-foreground">
               选择图片类型后点击"批量生成"按钮
             </p>

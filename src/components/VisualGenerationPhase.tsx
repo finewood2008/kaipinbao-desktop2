@@ -26,6 +26,7 @@ interface GeneratedImage {
   image_type?: string;
   phase?: number;
   parent_image_id?: string | null;
+  marketing_copy?: string | null;
 }
 
 interface GeneratedVideo {
@@ -46,6 +47,15 @@ interface CompetitorProduct {
   rating?: number;
 }
 
+interface PrdData {
+  usageScenario?: string;
+  usageScenarios?: string[];
+  targetAudience?: string;
+  coreFeatures?: string[];
+  designStyle?: string;
+  selectedDirection?: string;
+}
+
 interface VisualGenerationPhaseProps {
   projectId: string;
   productImages: GeneratedImage[];
@@ -56,13 +66,7 @@ interface VisualGenerationPhaseProps {
   onVideosChange: (videos: GeneratedVideo[]) => void;
   onConfirmAndProceed: () => void;
   prdSummary?: string;
-  prdData?: {
-    usageScenarios?: string[];
-    targetAudience?: string;
-    coreFeatures?: string[];
-    designStyle?: string;
-    selectedDirection?: string;
-  };
+  prdData?: PrdData;
   competitorProducts?: CompetitorProduct[];
 }
 
@@ -347,7 +351,7 @@ export function VisualGenerationPhase({
               onTypesChange={setSelectedImageTypes}
             />
 
-            {/* Marketing Image Gallery */}
+            {/* Marketing Image Gallery - Pass full prdData */}
             <MarketingImageGallery
               projectId={projectId}
               parentImageId={selectedProductImage?.id}
@@ -356,9 +360,10 @@ export function VisualGenerationPhase({
               images={marketingImages}
               onImagesChange={onMarketingImagesChange}
               prdSummary={prdSummary}
+              prdData={prdData}
             />
 
-            {/* Video Generation */}
+            {/* Video Generation - Pass full prdData */}
             <VideoGenerationSection
               projectId={projectId}
               parentImageId={selectedProductImage?.id}
@@ -366,6 +371,7 @@ export function VisualGenerationPhase({
               videos={videos}
               onVideosChange={onVideosChange}
               usageScenarios={prdData?.usageScenarios}
+              prdData={prdData}
             />
 
             {/* Proceed to Landing Page */}
