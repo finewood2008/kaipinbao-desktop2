@@ -1,245 +1,344 @@
 
-# 产品设计模块优化计划
+# 落地页生成模块优化计划
 
 ## 目标概述
 
-优化产品设计模块的三个核心问题：
-1. **营销图片生成**：参考产品定义设定，完成一张显示一张，增大图片尺寸，配上营销文案
-2. **视频生成**：参考产品定义场景，并正确显示生成后的视频
-3. **数据传递**：确保 PRD 数据（场景、功能、风格等）正确传递到生成引擎
+根据您的需求，优化落地页生成模块以达成以下目标：
+1. **读取产品定义文档**：充分利用 PRD 数据（使用场景、目标用户、核心功能、设计风格等）
+2. **融合视觉素材**：将产品设计阶段生成的营销图片和营销文案整合到落地页
+3. **视频作为 Hero 背景**：将生成的视频作为 Hero 区域的背景自动播放
+4. **电商测品标准**：打造符合电商测品标准的高转化落地页
+5. **UI 美观 + 内容丰富**：确保页面视觉效果专业，内容充实以验证市场接受度
 
 ---
 
-## 一、营销图片生成优化
+## 一、核心改进策略
 
-### 1.1 逐张实时显示（流式渲染）
+### 1.1 视频作为 Hero 背景
 
-**当前问题**：图片批量生成后一起显示，用户等待时间长
-
-**解决方案**：改为每完成一张立即显示，而不是等所有图片生成完毕
-
-**修改文件**：`src/components/MarketingImageGallery.tsx`
+将产品视频改为 Hero 区域的全屏背景视频，自动静音循环播放：
 
 ```text
-原逻辑：
-for (type in selectedTypes) → 生成 → 收集到 newImages[]
-循环结束后 → onImagesChange([...images, ...newImages])
-
-新逻辑：
-for (type in selectedTypes) {
-  生成完成 → 立即 onImagesChange([...images, newImage])
-  UI 即时更新显示新图片
-}
+┌─────────────────────────────────────────────────────────────┐
+│  [全屏视频背景 - 自动播放、静音、循环]                         │
+│                                                             │
+│     ┌─────────────────────────────────────────┐             │
+│     │    PRODUCT HEADLINE                     │             │
+│     │    Subheadline value proposition        │             │
+│     │                                         │             │
+│     │    [  Get Early Access  ]               │             │
+│     └─────────────────────────────────────────┘             │
+│                                                             │
+│   半透明叠加层确保文字可读性                                   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 增大图片尺寸
+### 1.2 营销图片 + 文案融合
 
-**当前布局**：`grid-cols-2 md:grid-cols-3 lg:grid-cols-4`，图片较小
-
-**新布局**：`grid-cols-1 md:grid-cols-2`，每张图片更大，配合营销文案
-
-### 1.3 添加营销文案
-
-**修改内容**：
-- Edge Function 返回时同时生成文案（利用 AI 生成）
-- 数据库表 `generated_images` 新增 `marketing_copy` 字段
-- UI 在图片下方展示营销文案
-
-**数据库更改**：
-```sql
-ALTER TABLE generated_images 
-ADD COLUMN marketing_copy TEXT;
-```
-
-### 1.4 传递 PRD 数据到图片生成
-
-**当前问题**：`MarketingImageGallery` 只接收 `prdSummary`，缺少详细场景信息
-
-**优化**：传递完整 `prdData` 到 `generate-image` Edge Function，包括：
-- `usageScenarios`：使用场景
-- `targetAudience`：目标用户
-- `coreFeatures`：核心功能
-- `designStyle`：设计风格
-
----
-
-## 二、视频生成优化
-
-### 2.1 传递 PRD 场景到视频生成
-
-**当前状态**：`VideoGenerationSection` 接收 `usageScenarios`，但需要更完整的场景描述
-
-**优化**：
-- 从 `prdData` 中提取使用场景 (`usageScenario`) 和其他相关设定
-- 将场景信息融入视频生成 prompt
-
-**修改文件**：
-- `src/components/VisualGenerationPhase.tsx`：传递完整场景数据
-- `src/components/VideoGenerationSection.tsx`：使用场景数据构建 prompt
-- `supabase/functions/generate-video/index.ts`：接收并应用 PRD 数据
-
-### 2.2 正确显示生成的视频
-
-**当前问题**：
-1. Edge Function 目前是模拟实现，没有实际生成视频
-2. 视频状态停留在 `pending` 无法正确显示
-
-**解决方案**：
-1. 使用 Lovable AI Gateway 的视频生成能力（如果支持）
-2. 如果暂不支持，则：
-   - 显示清晰的状态提示
-   - 完善 UI 以正确处理各种状态
-   - 当视频 URL 存在时正确渲染 `<video>` 元素
-
-**UI 优化**：
-- 视频预览区域放大
-- 添加视频播放控件
-- 显示生成进度和状态
-
----
-
-## 三、技术实现细节
-
-### 3.1 MarketingImageGallery 改造
-
-```tsx
-// 新的 props 接口
-interface MarketingImageGalleryProps {
-  // ...现有 props
-  prdData?: {
-    usageScenario?: string;
-    targetAudience?: string;
-    coreFeatures?: string[];
-    designStyle?: string;
-    selectedDirection?: string;
-  };
-}
-
-// 逐张生成逻辑
-const generateMarketingImages = async () => {
-  for (const type of selectedTypes) {
-    const response = await fetch(...);
-    const data = await response.json();
-    
-    // 立即保存并更新 UI
-    const { data: savedImage } = await supabase
-      .from("generated_images")
-      .insert({...})
-      .select()
-      .single();
-    
-    // 每张图片完成后立即更新
-    onImagesChange((prev) => [...prev, savedImage]);
-  }
-};
-```
-
-### 3.2 图片卡片新布局（含营销文案）
+将视觉生成阶段产出的营销图片及其配套文案整合为落地页的核心内容板块：
 
 ```text
-┌─────────────────────────────────────────────┐
-│  [营销图片 - 更大尺寸 aspect-[16/10]]        │
-│                                             │
-│                                             │
-├─────────────────────────────────────────────┤
-│  类型标签: 场景图                            │
-│                                             │
-│  营销文案:                                   │
-│  "在户外探险中，xxx产品为您提供可靠保障..."    │
-│                                             │
-│  [重新生成] [下载] [删除]                    │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  📸 产品特色展示                                             │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐   ┌──────────────────┐                │
+│  │  [场景图]         │   │  [使用图]         │                │
+│  │                  │   │                  │                │
+│  │  营销文案...      │   │  营销文案...      │                │
+│  └──────────────────┘   └──────────────────┘                │
+│                                                             │
+│  ┌──────────────────┐   ┌──────────────────┐                │
+│  │  [结构图]         │   │  [细节图]         │                │
+│  │                  │   │                  │                │
+│  │  营销文案...      │   │  营销文案...      │                │
+│  └──────────────────┘   └──────────────────┘                │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 Edge Function 增强
+### 1.3 新增内容板块（电商测品标准）
 
-**generate-image/index.ts**：
+按照高转化电商落地页最佳实践，新增以下板块：
+
+| 板块 | 目的 | 内容来源 |
+|------|------|----------|
+| **Hero 视频区** | 吸引注意力 | 生成的产品视频 |
+| **痛点共鸣** | 建立同理心 | PRD 痛点 + 竞品差评 |
+| **产品特色展示** | 展示差异化 | 营销图片 + 营销文案 |
+| **使用场景** | 帮助用户想象 | PRD 使用场景 + 场景图 |
+| **产品规格** | 建立信任 | PRD 核心功能 |
+| **社会证明** | 降低决策风险 | AI 生成的预期反馈 |
+| **FAQ 区** | 消除疑虑 | 基于 PRD 自动生成 |
+| **CTA 区** | 转化收集 | 邮箱订阅表单 |
+
+---
+
+## 二、技术实现细节
+
+### 2.1 数据流增强
+
+**Project.tsx 传递完整数据**：
+
 ```typescript
-// 新增参数
-const { 
-  prompt, 
-  projectId, 
-  imageType, 
-  phase,
-  parentImageId,
-  parentImageUrl,
-  prdData  // 新增：完整 PRD 数据
-} = await req.json();
+// 当前传递的数据
+prdData: {
+  usageScenarios, targetAudience, coreFeatures, designStyle, selectedDirection
+}
 
-// 生成营销文案
-const marketingCopy = await generateMarketingCopy(imageType, prdData);
-
-// 返回结果包含文案
-return { imageUrl, description, prompt, imageType, phase, marketingCopy };
-```
-
-### 3.4 VideoGenerationSection 优化
-
-**接收完整 PRD 数据**：
-```tsx
-interface VideoGenerationSectionProps {
-  // ...现有 props
-  prdData?: {
-    usageScenario?: string;
-    usageScenarios?: string[];
-    targetAudience?: string;
-    coreFeatures?: string[];
-    designStyle?: string;
-  };
+// 需要增强为
+prdData: {
+  ...现有字段,
+  painPoints: [],           // 用户痛点
+  sellingPoints: [],        // 卖点
+  pricingStrategy: "",      // 定价策略
+  competitorInsights: {},   // 竞品洞察
+  marketingAssets: {},      // 营销资产描述
 }
 ```
 
-**UI 改进**：
-- 视频预览区域从 `w-40` 放大到 `w-full max-w-md`
-- 添加 `<video>` 控件的正确样式
-- 处理视频加载失败情况
+**LandingPageBuilder 接收营销图片的 marketing_copy**：
 
----
+```typescript
+interface MarketingImage {
+  id: string;
+  image_url: string;
+  image_type: string;
+  marketing_copy?: string; // 新增：每张图的营销文案
+}
+```
 
-## 四、数据库修改
+### 2.2 LandingPage 页面组件重构
 
-```sql
--- 为营销图片添加文案字段
-ALTER TABLE generated_images 
-ADD COLUMN IF NOT EXISTS marketing_copy TEXT;
+**新的页面结构**：
+
+```text
+1. Hero Section (视频背景)
+   - 全屏视频背景，静音自动循环
+   - 半透明深色叠加层
+   - 产品标题 + 副标题
+   - 主 CTA 按钮
+
+2. Pain Points Section
+   - 3-4 个痛点卡片
+   - 从 PRD 或竞品差评提取
+
+3. Product Features Section (营销图片画廊)
+   - 网格展示营销图片
+   - 每张图配套营销文案
+   - 图片类型标签
+
+4. Usage Scenarios Section
+   - 场景图 + 场景描述
+   - 来自 PRD 的使用场景
+
+5. Specifications Section
+   - 核心功能列表
+   - 设计风格亮点
+
+6. Social Proof Section
+   - 预期用户反馈
+   - 信任徽章
+
+7. FAQ Section
+   - 常见问题自动生成
+   - 基于产品特点
+
+8. Final CTA Section
+   - 邮箱订阅表单
+   - 紧迫感文案
+```
+
+### 2.3 Edge Function 优化
+
+**generate-landing-page/index.ts 增强**：
+
+```typescript
+// 新增生成内容
+{
+  // 现有字段...
+  
+  // 新增字段
+  faqItems: [
+    { question: "...", answer: "..." }
+  ],
+  specificationHighlights: [...],
+  usageScenarioDescriptions: [...],
+  socialProofStatements: [...],
+  urgencyMessage: "...",
+}
+```
+
+### 2.4 视频背景 Hero 实现
+
+```tsx
+// Hero Section with Video Background
+<section className="relative h-screen overflow-hidden">
+  {/* Video Background */}
+  {videoUrl && (
+    <video
+      autoPlay
+      muted
+      loop
+      playsInline
+      className="absolute inset-0 w-full h-full object-cover"
+    >
+      <source src={videoUrl} type="video/mp4" />
+    </video>
+  )}
+  
+  {/* Dark Overlay */}
+  <div className="absolute inset-0 bg-black/50" />
+  
+  {/* Content */}
+  <div className="relative z-10 flex flex-col items-center justify-center h-full text-center text-white px-4">
+    <h1 className="text-5xl md:text-7xl font-bold mb-4">{headline}</h1>
+    <p className="text-xl md:text-2xl mb-8 max-w-2xl">{subheadline}</p>
+    <Button size="lg" className="px-8 py-6 text-lg">
+      {ctaText}
+    </Button>
+  </div>
+</section>
 ```
 
 ---
 
-## 五、修改文件清单
+## 三、修改文件清单
 
 | 文件 | 操作 | 修改内容 |
 |------|------|----------|
-| `src/components/MarketingImageGallery.tsx` | 修改 | 逐张显示、放大图片、显示营销文案 |
-| `src/components/VideoGenerationSection.tsx` | 修改 | 接收完整 PRD 数据、优化视频显示 |
-| `src/components/VisualGenerationPhase.tsx` | 修改 | 传递完整 prdData 到子组件 |
-| `supabase/functions/generate-image/index.ts` | 修改 | 接收 PRD 数据、生成营销文案 |
-| `supabase/functions/generate-video/index.ts` | 修改 | 接收 PRD 场景数据用于视频生成 |
-| 数据库迁移 | 新增 | 添加 `marketing_copy` 字段 |
+| `src/pages/Project.tsx` | 修改 | 传递完整 prdData 和带 marketing_copy 的营销图片 |
+| `src/components/LandingPageBuilder.tsx` | 修改 | 更新 props 接口，传递完整数据到 Edge Function |
+| `src/components/LandingPagePreview.tsx` | 重构 | 视频背景 Hero、营销图片画廊、新增 FAQ 等板块 |
+| `src/pages/LandingPage.tsx` | 重构 | 公开落地页同步更新，支持视频背景和新板块 |
+| `src/components/LandingPageTemplates.tsx` | 修改 | 新增视频背景相关样式配置 |
+| `supabase/functions/generate-landing-page/index.ts` | 修改 | 生成 FAQ、规格亮点、场景描述等新内容 |
+| 数据库迁移 | 新增 | landing_pages 表新增 faq_items、specifications 等字段 |
+
+---
+
+## 四、数据库更改
+
+```sql
+ALTER TABLE landing_pages 
+ADD COLUMN IF NOT EXISTS faq_items JSONB DEFAULT '[]',
+ADD COLUMN IF NOT EXISTS specifications JSONB DEFAULT '[]',
+ADD COLUMN IF NOT EXISTS usage_scenarios JSONB DEFAULT '[]',
+ADD COLUMN IF NOT EXISTS social_proof_items JSONB DEFAULT '[]',
+ADD COLUMN IF NOT EXISTS urgency_message TEXT,
+ADD COLUMN IF NOT EXISTS marketing_images_with_copy JSONB DEFAULT '[]';
+```
+
+---
+
+## 五、新的落地页视觉效果
+
+### 5.1 Hero 区域（视频背景）
+
+```text
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                                                             ┃
+┃   ▶️ [产品视频背景 - 自动播放 / 静音 / 循环]                  ┃
+┃                                                             ┃
+┃         ╔═══════════════════════════════════════╗           ┃
+┃         ║                                       ║           ┃
+┃         ║   REVOLUTIONARY PRODUCT               ║           ┃
+┃         ║   THAT CHANGES EVERYTHING             ║           ┃
+┃         ║                                       ║           ┃
+┃         ║   Experience the future of [category] ║           ┃
+┃         ║                                       ║           ┃
+┃         ║       [ GET EARLY ACCESS ]            ║           ┃
+┃         ║                                       ║           ┃
+┃         ╚═══════════════════════════════════════╝           ┃
+┃                                                             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+```
+
+### 5.2 产品特色展示（营销图片 + 文案）
+
+```text
+╭──────────────────────────────────────────────────────────────╮
+│                    ✨ Product Highlights                     │
+├──────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────┐    ┌─────────────────────┐          │
+│  │                     │    │                     │          │
+│  │    [场景图]          │    │    [使用图]          │          │
+│  │                     │    │                     │          │
+│  ├─────────────────────┤    ├─────────────────────┤          │
+│  │ 📍 SCENE            │    │ 👆 USAGE            │          │
+│  │                     │    │                     │          │
+│  │ "Perfect for your   │    │ "Intuitive design   │          │
+│  │ outdoor adventures, │    │ that requires no    │          │
+│  │ this product..."    │    │ learning curve..."  │          │
+│  └─────────────────────┘    └─────────────────────┘          │
+│                                                              │
+│  ┌─────────────────────┐    ┌─────────────────────┐          │
+│  │                     │    │                     │          │
+│  │    [结构图]          │    │    [细节图]          │          │
+│  │                     │    │                     │          │
+│  ├─────────────────────┤    ├─────────────────────┤          │
+│  │ 🔧 STRUCTURE        │    │ 🔍 DETAIL           │          │
+│  │                     │    │                     │          │
+│  │ "Built with premium │    │ "Every detail is    │          │
+│  │ materials for..."   │    │ carefully crafted..." │        │
+│  └─────────────────────┘    └─────────────────────┘          │
+╰──────────────────────────────────────────────────────────────╯
+```
+
+### 5.3 FAQ 区域
+
+```text
+╭──────────────────────────────────────────────────────────────╮
+│                    ❓ Frequently Asked                       │
+├──────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ ▸ What makes this product different?                  │  │
+│  │   Our product combines [feature1] with [feature2]...  │  │
+│  └────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ ▸ When will the product be available?                 │  │
+│  │   We're launching to early subscribers first...       │  │
+│  └────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │ ▸ Is there a money-back guarantee?                    │  │
+│  │   Yes! We offer a 30-day satisfaction guarantee...    │  │
+│  └────────────────────────────────────────────────────────┘  │
+╰──────────────────────────────────────────────────────────────╯
+```
 
 ---
 
 ## 六、用户体验流程
 
 ```text
-1. 用户进入产品设计阶段
-2. 选择要生成的营销图片类型
-3. 点击"批量生成"按钮
-4. 每张图片生成完成后：
-   - 立即显示在界面上（无需等待全部完成）
-   - 显示更大的图片
-   - 图片下方显示 AI 生成的营销文案
-5. 视频生成：
-   - 场景选择基于 PRD 中定义的使用场景
-   - 生成过程显示进度
-   - 完成后正确播放视频
+1. 用户完成产品设计阶段，生成了：
+   - 选定的产品造型图
+   - 多张营销图片（场景图、使用图、结构图等）+ 每张的营销文案
+   - 产品展示视频
+
+2. 用户进入落地页阶段
+
+3. 选择页面模板风格
+
+4. 点击"AI 生成落地页"
+
+5. 系统自动：
+   - 读取完整 PRD 数据
+   - 整合所有营销图片和文案
+   - 将视频设为 Hero 背景
+   - 生成 FAQ、规格亮点等补充内容
+   - 组装成完整的高转化落地页
+
+6. 预览并发布
+
+7. 收集邮箱验证市场兴趣
 ```
 
 ---
 
 ## 七、技术注意事项
 
-1. **并发控制**：图片生成改为串行处理，确保逐张显示的顺序
-2. **状态管理**：使用回调函数更新父组件状态，确保 UI 同步
-3. **错误处理**：单张图片失败不影响其他图片生成
-4. **视频 API 限制**：Lovable AI Gateway 目前可能不支持视频生成，需要优雅降级处理
+1. **视频加载优化**：视频背景使用 `preload="metadata"` 和渐进式加载，避免影响页面性能
+2. **移动端适配**：Hero 视频在移动端可降级为静态图片背景，减少流量消耗
+3. **无视频降级**：如果没有视频，Hero 区域使用产品主图 + 渐变背景
+4. **图片懒加载**：营销图片画廊使用 Intersection Observer 实现懒加载
+5. **SEO 考虑**：确保关键文案内容可被搜索引擎抓取
+
