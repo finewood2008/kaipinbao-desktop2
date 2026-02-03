@@ -6,6 +6,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Helper function to verify project ownership
+async function verifyProjectOwnership(
+  supabase: any,
+  projectId: string,
+  userId: string
+): Promise<{ error?: string }> {
+  const { data: project, error } = await supabase
+    .from("projects")
+    .select("user_id")
+    .eq("id", projectId)
+    .single();
+
+  if (error || !project) {
+    return { error: "Project not found" };
+  }
+
+  if (project.user_id !== userId) {
+    return { error: "Forbidden: You don't have access to this project" };
+  }
+
+  return {};
+}
+
 // PRD data structure for extraction - Enhanced with rich product details
 interface PrdData {
   // Core product definition
@@ -1011,27 +1034,70 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    
+    // Create client with user's auth token for verification
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Verify user token and get claims
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { projectId, messages, currentPrdData } = await req.json();
 
     if (!projectId) {
       throw new Error("Project ID is required");
     }
 
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Initialize Supabase client with service role
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch project data
+    // Fetch project data and verify ownership
     const { data: project, error: projectError } = await supabase
       .from("projects")
       .select("*")
       .eq("id", projectId)
       .single();
 
-    if (projectError) {
+    if (projectError || !project) {
       console.error("Project fetch error:", projectError);
       throw new Error("Project not found");
+    }
+
+    // Verify project ownership
+    if (project.user_id !== userId) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: You don't have access to this project" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Fetch competitor data
