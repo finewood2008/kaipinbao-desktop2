@@ -410,7 +410,7 @@ export function MarketResearchPhase({
       </AnimatePresence>
 
       {/* Phase Content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden w-full">
         <AnimatePresence mode="wait">
           {currentSubPhase === 1 && (
             <motion.div
@@ -419,7 +419,7 @@ export function MarketResearchPhase({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -30 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="h-full min-h-0"
+              className="h-full min-h-0 w-full"
             >
               <MarketAnalysisPhase
                 projectId={projectId}
@@ -436,7 +436,7 @@ export function MarketResearchPhase({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -30 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="h-full min-h-0"
+              className="h-full min-h-0 w-full"
             >
               <CompetitorResearch
                 projectId={projectId}
