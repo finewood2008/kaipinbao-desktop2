@@ -25,6 +25,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectCard } from "@/components/ProjectCard";
+import { PrdDocumentModal } from "@/components/PrdDocumentModal";
+import { PrdData } from "@/components/PrdExtractionSidebar";
+import { checkAllRequiredFilled } from "@/components/PrdPhase";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -53,6 +56,7 @@ interface Project {
   product_images: string[];
   landing_page: LandingPageData | null;
   email_count: number;
+  prd_data: PrdData | null;
 }
 
 type StageFilter = "all" | 1 | 2 | 3 | 4;
@@ -77,6 +81,13 @@ export default function Dashboard() {
   const [isBatchArchiving, setIsBatchArchiving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  
+  // PRD Document Modal state
+  const [selectedProjectPrd, setSelectedProjectPrd] = useState<{
+    projectId: string;
+    projectName: string;
+    prdData: PrdData;
+  } | null>(null);
 
   useEffect(() => {
     fetchProjects();
@@ -91,7 +102,7 @@ export default function Dashboard() {
       const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
         .select(
-          "id,name,description,current_stage,status,created_at,cover_image_url"
+          "id,name,description,current_stage,status,created_at,cover_image_url,prd_data"
         )
         .order("created_at", { ascending: false });
 
@@ -184,6 +195,7 @@ export default function Dashboard() {
           product_images: productImages,
           landing_page: activeLandingPage,
           email_count: activeLandingPage ? (emailCounts[activeLandingPage.id] || 0) : 0,
+          prd_data: p.prd_data as PrdData | null,
         };
       });
 
@@ -436,6 +448,22 @@ export default function Dashboard() {
       return project?.status !== "archived";
     });
   }, [selectedIds, projects]);
+
+  // Check if project has complete PRD document
+  const hasPrdDocument = useCallback((project: Project) => {
+    return project.prd_data && checkAllRequiredFilled(project.prd_data);
+  }, []);
+
+  // Handle opening PRD document
+  const handleOpenPrdDocument = useCallback((project: Project) => {
+    if (project.prd_data) {
+      setSelectedProjectPrd({
+        projectId: project.id,
+        projectName: project.name,
+        prdData: project.prd_data,
+      });
+    }
+  }, []);
 
   const stageFilters = [
     { value: "all" as const, label: "全部阶段" },
@@ -875,6 +903,7 @@ export default function Dashboard() {
                       viewCount: project.landing_page.view_count,
                       emailCount: project.email_count,
                     } : undefined}
+                    hasPrdDocument={hasPrdDocument(project)}
                     onClick={() => isBatchMode ? toggleSelectProject(project.id) : navigate(`/project/${project.id}`)}
                     onDelete={isBatchMode ? undefined : () => handleDeleteProject(project.id)}
                     onUpdate={isBatchMode ? undefined : (updates) => handleUpdateProject(project.id, updates)}
@@ -887,12 +916,25 @@ export default function Dashboard() {
                           )
                         : undefined
                     }
+                    onOpenPrdDocument={() => handleOpenPrdDocument(project)}
                     isSelected={selectedIds.has(project.id)}
                   />
                 </div>
               </motion.div>
             ))}
           </div>
+        )}
+
+        {/* PRD Document Modal for Dashboard - Read Only */}
+        {selectedProjectPrd && (
+          <PrdDocumentModal
+            isOpen={true}
+            onClose={() => setSelectedProjectPrd(null)}
+            prdData={selectedProjectPrd.prdData}
+            projectName={selectedProjectPrd.projectName}
+            projectId={selectedProjectPrd.projectId}
+            isReadOnly={true}
+          />
         )}
       </main>
     </div>

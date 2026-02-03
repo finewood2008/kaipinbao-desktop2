@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Check, ChevronRight, ArrowRight, Sparkles } from "lucide-react";
 import { AiProductManagerPanel } from "@/components/AiProductManagerPanel";
 import { PrdData, ReferenceImage } from "@/components/PrdExtractionSidebar";
+import { PrdDocumentModal } from "@/components/PrdDocumentModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -40,7 +41,7 @@ const REQUIRED_FIELDS = [
   'pricingRange'
 ] as const;
 
-function checkAllRequiredFilled(prdData: PrdData | null): boolean {
+export function checkAllRequiredFilled(prdData: PrdData | null): boolean {
   if (!prdData) return false;
   
   return REQUIRED_FIELDS.every(field => {
@@ -63,7 +64,9 @@ export function PrdPhase({
   const [prdData, setPrdData] = useState<PrdData | null>(null);
   const [competitorProducts, setCompetitorProducts] = useState<CompetitorProduct[]>([]);
   const [showDesignReadyPrompt, setShowDesignReadyPrompt] = useState(false);
+  const [showPrdDocumentModal, setShowPrdDocumentModal] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [projectName, setProjectName] = useState<string>("");
 
   const getUserAccessToken = async () => {
     const { data, error } = await supabase.auth.getSession();
@@ -93,12 +96,15 @@ export function PrdPhase({
   const loadProjectData = async () => {
     const { data } = await supabase
       .from("projects")
-      .select("prd_data")
+      .select("prd_data, name")
       .eq("id", projectId)
       .single();
 
-    if (data?.prd_data) {
-      setPrdData(data.prd_data as PrdData);
+    if (data) {
+      setProjectName(data.name || "");
+      if (data.prd_data) {
+        setPrdData(data.prd_data as PrdData);
+      }
     }
   };
 
@@ -258,10 +264,10 @@ export function PrdPhase({
         
         setPrdData(mergedPrdData as PrdData);
         
-        // Check if all required fields are filled
+        // Check if all required fields are filled - show document modal
         if (checkAllRequiredFilled(mergedPrdData as PrdData)) {
           setTimeout(() => {
-            setShowDesignReadyPrompt(true);
+            setShowPrdDocumentModal(true);
           }, 1000);
         }
       } catch (parseError) {
@@ -278,10 +284,10 @@ export function PrdPhase({
         const newPrdData = updatedProject.prd_data as PrdData;
         setPrdData(newPrdData);
         
-        // Check for DESIGN_READY signal or if all required fields are filled
+        // Check for DESIGN_READY signal or if all required fields are filled - show document modal
         if (content.includes("[DESIGN_READY]") || checkAllRequiredFilled(newPrdData)) {
           setTimeout(() => {
-            setShowDesignReadyPrompt(true);
+            setShowPrdDocumentModal(true);
           }, 1000);
         }
       }
@@ -290,7 +296,7 @@ export function PrdPhase({
     // Also check for DESIGN_READY signal directly
     if (content.includes("[DESIGN_READY]")) {
       setTimeout(() => {
-        setShowDesignReadyPrompt(true);
+        setShowPrdDocumentModal(true);
       }, 1000);
     }
   };
@@ -541,10 +547,10 @@ export function PrdPhase({
 
     toast.success("已保存修改");
     
-    // Check if all required fields are now filled
+    // Check if all required fields are now filled - show document modal
     if (checkAllRequiredFilled(updatedPrdData)) {
       setTimeout(() => {
-        setShowDesignReadyPrompt(true);
+        setShowPrdDocumentModal(true);
       }, 500);
     }
   };
@@ -620,9 +626,18 @@ export function PrdPhase({
     toast.success("参考图片已删除");
   };
 
-  // Handle proceed to design phase
-  const handleProceedToDesign = async () => {
+  // Handle proceed to design phase - called from document modal
+  const handleConfirmPrdDocument = async () => {
+    setShowPrdDocumentModal(false);
     setShowDesignReadyPrompt(false);
+    
+    // Sync product name to project name
+    if (prdData?.productName) {
+      await supabase
+        .from("projects")
+        .update({ name: prdData.productName })
+        .eq("id", projectId);
+    }
     
     await supabase
       .from("projects")
@@ -636,8 +651,30 @@ export function PrdPhase({
     onComplete();
   };
 
+  // Handle updating PRD data from document modal
+  const handlePrdDataUpdate = async (newData: PrdData) => {
+    setPrdData(newData);
+    
+    await supabase
+      .from("projects")
+      .update({ prd_data: JSON.parse(JSON.stringify(newData)) })
+      .eq("id", projectId);
+
+    toast.success("已保存修改");
+  };
+
+  // Handle proceed to design phase (old method, kept for compatibility)
+  const handleProceedToDesign = async () => {
+    setShowDesignReadyPrompt(false);
+    setShowPrdDocumentModal(true); // Show document modal instead of directly proceeding
+  };
+
   const handleDismissDesignPrompt = () => {
     setShowDesignReadyPrompt(false);
+  };
+
+  const handleOpenPrdDocument = () => {
+    setShowPrdDocumentModal(true);
   };
 
   return (
@@ -751,6 +788,18 @@ export function PrdPhase({
         )}
       </AnimatePresence>
 
+      {/* PRD Document Modal */}
+      <PrdDocumentModal
+        isOpen={showPrdDocumentModal}
+        onClose={() => setShowPrdDocumentModal(false)}
+        prdData={prdData}
+        projectName={projectName}
+        projectId={projectId}
+        isReadOnly={isReadOnly}
+        onConfirm={isReadOnly ? undefined : handleConfirmPrdDocument}
+        onDataUpdate={isReadOnly ? undefined : handlePrdDataUpdate}
+      />
+
       {/* Main Content - AI Product Manager Panel with Sidebar */}
       <div className="flex-1 min-h-0 overflow-hidden mt-4">
         <AiProductManagerPanel
@@ -772,7 +821,7 @@ export function PrdPhase({
           isReadOnly={isReadOnly}
           onFieldEdit={handleFieldEdit}
           onProceedToDesign={handleProceedToDesign}
-          onImageUpload={handleImageUpload}
+          onOpenPrdDocument={handleOpenPrdDocument}
           onImageRemove={handleImageRemove}
         />
       </div>

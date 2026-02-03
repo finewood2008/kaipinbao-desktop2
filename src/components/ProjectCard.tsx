@@ -33,7 +33,8 @@ import {
   Loader2,
   Pencil,
   X,
-  Camera
+  Camera,
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -60,10 +61,12 @@ interface ProjectCardProps {
   coverImage?: string;
   productImages?: string[];
   landingPage?: LandingPageInfo;
+  hasPrdDocument?: boolean;
   onClick: () => void;
   onDelete?: () => Promise<void>;
   onUpdate?: (updates: { name?: string; description?: string }) => Promise<void>;
   onCaptureScreenshot?: () => Promise<void>;
+  onOpenPrdDocument?: () => void;
   isSelected?: boolean;
 }
 
@@ -83,10 +86,12 @@ export function ProjectCard({
   coverImage,
   productImages = [],
   landingPage,
+  hasPrdDocument,
   onClick,
   onDelete,
   onUpdate,
   onCaptureScreenshot,
+  onOpenPrdDocument,
   isSelected = false,
 }: ProjectCardProps) {
   const [copied, setCopied] = useState(false);
@@ -400,29 +405,49 @@ export function ProjectCard({
               </div>
 
               {/* Landing Page Actions */}
-              {landingPage?.isPublished && landingPageUrl && !isEditing && (
-                <div className="flex gap-2 mt-auto">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={handleVisitPage}
-                  >
-                    <ExternalLink className="w-3 h-3 mr-1" />
-                    访问页面
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-3 text-xs"
-                    onClick={handleCopyLink}
-                  >
-                    {copied ? (
-                      <Check className="w-3 h-3 text-primary" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </Button>
+              {!isEditing && (
+                <div className="flex gap-2 mt-auto flex-wrap">
+                  {/* PRD Document Button */}
+                  {hasPrdDocument && onOpenPrdDocument && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPrdDocument();
+                      }}
+                    >
+                      <FileText className="w-3 h-3 mr-1" />
+                      产品文档
+                    </Button>
+                  )}
+                  
+                  {landingPage?.isPublished && landingPageUrl && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={handleVisitPage}
+                      >
+                        <ExternalLink className="w-3 h-3 mr-1" />
+                        访问页面
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={handleCopyLink}
+                      >
+                        {copied ? (
+                          <Check className="w-3 h-3 text-primary" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
 
