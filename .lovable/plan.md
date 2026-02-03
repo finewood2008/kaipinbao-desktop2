@@ -1,188 +1,384 @@
 
+# 升级图像生成模型与统一双备份机制
 
-# 项目卡片重新设计方案
+## 概述
 
-## 设计目标
+根据需求，将所有 AI 调用统一为：
+1. **优先调用 Google 直连 API**
+2. **被屏蔽时自动切换到 Lovable AI Gateway 备份**
+3. **图像生成统一使用 `google/gemini-3-pro-image-preview`（Google 直连）和 `google/gemini-3-pro-image-preview`（Lovable 备份）**
 
-重新设计工作台的项目卡片，使每个项目占据完整一行，展示更多图片和落地页信息，并支持删除项目功能。
+## 一、当前状态分析
 
-## 核心改进点
+| 边缘函数 | 当前主调用 | 状态 |
+|----------|----------|------|
+| `generate-image` | Google 直连 `google/gemini-3-pro-image-preview` | ⚠️ 无备份 |
+| `chat` | Lovable AI Gateway | ⚠️ 需改为 Google 优先 |
+| `market-analysis` | Google 直连 `gemini-2.5-flash` | ⚠️ 无备份 |
+| `generate-landing-page` | Lovable AI Gateway | ⚠️ 需改为 Google 优先 |
+| `analyze-reviews` | Lovable AI Gateway | ⚠️ 需改为 Google 优先 |
+| `initial-market-analysis` | Google 直连 | ⚠️ 无备份 |
+| `regenerate-prd-section` | Google 直连 | ⚠️ 无备份 |
+| `scrape-competitor` | Lovable AI Gateway（OCR） | ⚠️ 需改为 Google 优先 |
 
-### 1. 布局变更
+## 二、统一调用策略
 
-| 元素 | 当前实现 | 新实现 |
-|------|----------|--------|
-| 卡片排列 | 双列网格 (`grid-cols-2`) | 单列全宽 |
-| 图片展示 | 2张（产品图+落地页Hero图） | 4-5张（产品图+营销图+落地页全貌） |
-| 落地页预览 | 仅显示Hero图 | 显示整体缩略图（网页截图风格） |
-| 删除功能 | 无 | 支持删除项目（带确认弹窗） |
+### 2.1 文本生成模型
 
-### 2. 新卡片布局设计
+| 调用顺序 | API | 模型 |
+|----------|-----|------|
+| 主调用 | Google 直连 | `gemini-2.5-flash` |
+| 备份 | Lovable AI Gateway | `google/gemini-2.5-flash` |
 
-```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│  项目卡片（全宽）                                                            │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                            │
-│  ┌──────────┬──────────┬──────────┬──────────┐  ┌──────────────────────┐  │
-│  │ 产品图1  │ 产品图2  │ 产品图3  │ 产品图4  │  │                      │  │
-│  │          │          │          │          │  │    落地页缩略图      │  │
-│  │ (主图)   │ (可选)   │ (可选)   │ (可选)   │  │    (网页预览风格)    │  │
-│  └──────────┴──────────┴──────────┴──────────┘  │                      │  │
-│                                                  │  ┌──────────────┐    │  │
-│  ┌─────────────────────────────────────────┐    │  │  Hero 区域   │    │  │
-│  │ 项目名称              [状态] [删除按钮]  │    │  ├──────────────┤    │  │
-│  │ 项目描述文字...                          │    │  │  内容区域    │    │  │
-│  │                                         │    │  └──────────────┘    │  │
-│  │ ┌───────────────┐  ┌───────────────┐    │    └──────────────────────┘  │
-│  │ │ 阶段: 视觉生成 │  │ 创建: 2025-02 │    │                              │
-│  │ └───────────────┘  └───────────────┘    │    ┌──────────────────────┐  │
-│  │                                         │    │ 👁 1,234 · 📧 56     │  │
-│  │ [落地页状态: 已发布] [访问] [复制链接]   │    │ 转化率: 4.5%         │  │
-│  └─────────────────────────────────────────┘    └──────────────────────┘  │
-│                                                                            │
-└────────────────────────────────────────────────────────────────────────────┘
-```
+### 2.2 图像生成模型
 
-### 3. 功能增强
+| 调用顺序 | API | 模型 |
+|----------|-----|------|
+| 主调用 | Google 直连 | `google/gemini-3-pro-image-preview` |
+| 备份 | Lovable AI Gateway | `google/gemini-3-pro-image-preview` |
 
-**图片展示增强：**
-- 从 `generated_images` 表获取多张产品图（最多4张）
-- 支持图片类型：产品图、营销图、场景图
-- 无图时显示占位符
+### 2.3 视觉理解/OCR模型
 
-**落地页缩略图：**
-- 模拟网页预览风格（带浏览器边框效果）
-- 显示 Hero 图作为缩略图主体
-- 底部叠加半透明数据卡片
+| 调用顺序 | API | 模型 |
+|----------|-----|------|
+| 主调用 | Google 直连 | `gemini-2.5-pro`（支持视觉） |
+| 备份 | Lovable AI Gateway | `google/gemini-2.5-pro` |
 
-**删除项目功能：**
-- 卡片右上角添加删除按钮（悬浮显示）
-- 点击触发确认弹窗（AlertDialog）
-- 确认后删除项目及关联数据
-- 删除成功后刷新列表
+## 三、核心技术实现
 
-## 技术实现
+### 3.1 创建共享备份工具 `_shared/ai-fallback.ts`
 
-### Dashboard.tsx 修改
+创建统一的 AI 调用包装器，实现自动故障切换：
 
-1. **修改查询**：获取更多 generated_images 数据
-2. **修改布局**：从 `grid-cols-2` 改为 `grid-cols-1`
-3. **添加删除逻辑**：
-```tsx
-const handleDeleteProject = async (projectId: string) => {
-  const { error } = await supabase
-    .from("projects")
-    .delete()
-    .eq("id", projectId);
-  
-  if (error) {
-    toast.error("删除项目失败");
-  } else {
-    toast.success("项目已删除");
-    fetchProjects(); // 刷新列表
+```typescript
+// supabase/functions/_shared/ai-fallback.ts
+
+export interface CallAIOptions {
+  logPrefix?: string;
+  retryCount?: number;
+}
+
+// 判断是否应该切换到备份
+export function shouldFallback(error: unknown): boolean {
+  if (error instanceof Response) {
+    return [429, 402, 500, 502, 503, 504].includes(error.status);
   }
-};
-```
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return (
+      msg.includes("429") ||
+      msg.includes("rate limit") ||
+      msg.includes("blocked") ||
+      msg.includes("network") ||
+      msg.includes("timeout") ||
+      msg.includes("503") ||
+      msg.includes("502")
+    );
+  }
+  return true; // 默认切换备份
+}
 
-### ProjectCard.tsx 重构
-
-1. **新增 Props**：
-```tsx
-interface ProjectCardProps {
-  // ... 现有 props
-  productImages?: string[];           // 多张产品图
-  marketingImages?: string[];         // 营销图
-  onDelete?: () => void;              // 删除回调
+// 统一的双备份调用函数
+export async function callWithFallback<T>(
+  primaryCall: () => Promise<T>,
+  fallbackCall: () => Promise<T>,
+  options?: CallAIOptions
+): Promise<{ result: T; usedFallback: boolean }> {
+  const prefix = options?.logPrefix || "AI";
+  
+  try {
+    console.log(`${prefix}: Attempting primary call (Google Direct)...`);
+    const result = await primaryCall();
+    console.log(`${prefix}: Primary call succeeded`);
+    return { result, usedFallback: false };
+  } catch (primaryError) {
+    console.warn(`${prefix}: Primary call failed:`, primaryError);
+    
+    if (!shouldFallback(primaryError)) {
+      throw primaryError;
+    }
+    
+    console.log(`${prefix}: Switching to fallback (Lovable AI)...`);
+    try {
+      const result = await fallbackCall();
+      console.log(`${prefix}: Fallback succeeded`);
+      return { result, usedFallback: true };
+    } catch (fallbackError) {
+      console.error(`${prefix}: Both primary and fallback failed`);
+      throw fallbackError;
+    }
+  }
 }
 ```
 
-2. **新布局结构**：
-```tsx
-<Card className="flex flex-row">
-  {/* 左侧：图片网格 */}
-  <div className="w-1/3 grid grid-cols-2 gap-2">
-    {productImages.slice(0, 4).map(img => (
-      <div className="aspect-square rounded-lg overflow-hidden">
-        <img src={img} className="w-full h-full object-cover" />
-      </div>
-    ))}
-  </div>
+### 3.2 `generate-image/index.ts` 改造
+
+添加 Lovable AI 备份，使用 `google/gemini-3-pro-image-preview`：
+
+```typescript
+// 新增：通过 Lovable AI 生成图片（备份）
+async function generateImageViaLovable(
+  prompt: string,
+  parentImageUrl?: string
+): Promise<{ imageUrl: string; description?: string }> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+  const content: any[] = [{ type: "text", text: prompt }];
+  if (parentImageUrl) {
+    const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
+    content.push({
+      type: "image_url",
+      image_url: { url: `data:${mimeType};base64,${base64}` }
+    });
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-3-pro-image-preview",
+      messages: [{ role: "user", content }],
+      modalities: ["image", "text"],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Lovable AI failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  const description = data.choices?.[0]?.message?.content;
   
-  {/* 中间：项目信息 */}
-  <div className="flex-1 p-4">
-    <div className="flex justify-between">
-      <h3>{name}</h3>
-      <div className="flex gap-2">
-        <Badge>{status}</Badge>
-        <Button variant="ghost" size="icon" onClick={onDelete}>
-          <Trash2 className="w-4 h-4 text-destructive" />
-        </Button>
-      </div>
-    </div>
-    {/* ... 其他信息 */}
-  </div>
-  
-  {/* 右侧：落地页预览 */}
-  <div className="w-1/4 p-2">
-    <div className="browser-frame rounded-lg border shadow-lg">
-      <div className="browser-toolbar h-6 bg-muted rounded-t-lg flex items-center px-2 gap-1">
-        <div className="w-2 h-2 rounded-full bg-red-500" />
-        <div className="w-2 h-2 rounded-full bg-yellow-500" />
-        <div className="w-2 h-2 rounded-full bg-green-500" />
-      </div>
-      <div className="aspect-[9/16] overflow-hidden">
-        <img src={landingPage.heroImageUrl} className="w-full h-full object-cover object-top" />
-      </div>
-    </div>
-    {/* 数据指标 */}
-    <div className="mt-2 p-2 rounded-lg bg-muted/30">
-      <div className="flex items-center gap-4 text-sm">
-        <span><Eye /> {viewCount}</span>
-        <span><Mail /> {emailCount}</span>
-        <span><TrendingUp /> {conversionRate}%</span>
-      </div>
-    </div>
-  </div>
-</Card>
+  if (!imageData) throw new Error("No image in Lovable response");
+  return { imageUrl: imageData, description };
+}
+
+// 主流程使用双备份
+let imageResult: { imageUrl: string; description?: string };
+let usedFallback = false;
+
+try {
+  // 主调用：Google 直连
+  imageResult = await generateImageViaGoogle(enhancedPrompt, parentImageUrl);
+} catch (googleError) {
+  console.warn("Google API failed, switching to Lovable AI...", googleError);
+  usedFallback = true;
+  imageResult = await generateImageViaLovable(enhancedPrompt, parentImageUrl);
+}
 ```
 
-3. **删除确认弹窗**：
-```tsx
-<AlertDialog>
-  <AlertDialogTrigger asChild>
-    <Button variant="ghost" size="icon">
-      <Trash2 className="w-4 h-4 text-destructive" />
-    </Button>
-  </AlertDialogTrigger>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>确认删除项目？</AlertDialogTitle>
-      <AlertDialogDescription>
-        此操作将永久删除该项目及其所有相关数据（包括落地页、生成的图片等），且无法恢复。
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter>
-      <AlertDialogCancel>取消</AlertDialogCancel>
-      <AlertDialogAction onClick={handleDelete} className="bg-destructive">
-        确认删除
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+### 3.3 `chat/index.ts` 改造
+
+改为 Google 优先，Lovable 备份：
+
+```typescript
+// 主调用：Google 直连
+async function chatViaGoogle(contents: GeminiContent[], systemPrompt: string) {
+  const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
+  if (!GOOGLE_API_KEY) throw new Error("GOOGLE_API_KEY not configured");
+  
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GOOGLE_API_KEY,
+      },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+      }),
+    }
+  );
+  return response;
+}
+
+// 备份调用：Lovable AI
+async function chatViaLovable(messages: OpenAIMessage[]) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+  
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages,
+      stream: true,
+    }),
+  });
+  return response;
+}
 ```
 
-## 涉及文件修改
+### 3.4 其他边缘函数统一改造
 
-| 文件 | 修改内容 |
+所有边缘函数遵循相同模式：
+
+```typescript
+import { callWithFallback, shouldFallback } from "../_shared/ai-fallback.ts";
+
+// 每个函数内部：
+const { result, usedFallback } = await callWithFallback(
+  () => callGoogleDirect(prompt),
+  () => callLovableAI(prompt),
+  { logPrefix: "MarketAnalysis" }
+);
+```
+
+## 四、各边缘函数改造清单
+
+| 文件 | 改造内容 |
 |------|----------|
-| `src/components/ProjectCard.tsx` | 重构为全宽横向布局，增加图片展示，添加删除按钮 |
-| `src/pages/Dashboard.tsx` | 修改网格布局为单列，扩展数据查询，添加删除处理函数 |
+| `supabase/functions/_shared/ai-fallback.ts` | 新建共享备份工具 |
+| `supabase/functions/generate-image/index.ts` | 添加 `generateImageViaLovable()` 备份函数 |
+| `supabase/functions/chat/index.ts` | 改为 Google 优先，添加 `chatViaGoogle()` 主调用 |
+| `supabase/functions/market-analysis/index.ts` | 添加 Lovable 备份 |
+| `supabase/functions/generate-landing-page/index.ts` | 改为 Google 优先 |
+| `supabase/functions/analyze-reviews/index.ts` | 改为 Google 优先 |
+| `supabase/functions/initial-market-analysis/index.ts` | 添加 Lovable 备份 |
+| `supabase/functions/regenerate-prd-section/index.ts` | 添加 Lovable 备份 |
+| `supabase/functions/scrape-competitor/index.ts` | OCR 部分改为 Google 优先 |
 
-## 预期效果
+## 五、前端进度显示增强
 
-1. **信息密度提升**：每个项目展示更多内容，一目了然
-2. **视觉层次清晰**：左侧产品图、中间信息、右侧落地页预览
-3. **操作便捷**：直接在卡片上删除项目，减少跳转
-4. **数据可视化**：落地页关键指标直观展示
+### 5.1 新建进度组件 `ImageGenerationProgress.tsx`
 
+```typescript
+interface ImageGenerationProgressProps {
+  isGenerating: boolean;
+  currentType?: string;
+  currentStep?: string;
+  totalTypes: number;
+  completedCount: number;
+  estimatedTimeRemaining?: number;
+}
+
+export function ImageGenerationProgress({ ... }) {
+  const progress = (completedCount / totalTypes) * 100;
+
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardContent className="p-4">
+        {/* 整体进度条 */}
+        <Progress value={progress} />
+        
+        {/* 当前任务状态 */}
+        <div className="flex items-center gap-3">
+          <Loader2 className="animate-spin" />
+          <div>
+            <p>正在生成: {currentType}</p>
+            <p className="text-sm text-muted-foreground">{currentStep}</p>
+          </div>
+        </div>
+        
+        {/* 预估时间 */}
+        {estimatedTimeRemaining && (
+          <p>预计剩余时间: 约 {Math.ceil(estimatedTimeRemaining / 60)} 分钟</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+### 5.2 `ProductDesignGallery.tsx` 增强
+
+添加详细步骤显示：
+
+```typescript
+const [generationStep, setGenerationStep] = useState("");
+const [estimatedTime, setEstimatedTime] = useState(0);
+
+// 生成时更新步骤
+setGenerationStep("正在连接 AI 服务...");
+// 调用 API
+setGenerationStep("AI 正在绘制产品造型...");
+// 保存
+setGenerationStep("正在保存到数据库...");
+```
+
+### 5.3 `MarketingImageGallery.tsx` 增强
+
+批量生成详细进度：
+
+```typescript
+const [currentGeneratingType, setCurrentGeneratingType] = useState("");
+const [completedCount, setCompletedCount] = useState(0);
+
+// 生成循环中
+for (const type of selectedTypes) {
+  setCurrentGeneratingType(type.label);
+  // 生成逻辑...
+  setCompletedCount(prev => prev + 1);
+}
+```
+
+## 六、错误处理增强
+
+### 6.1 错误消息映射
+
+```typescript
+function getErrorMessage(status: number, source: "google" | "lovable"): string {
+  switch (status) {
+    case 429:
+      return source === "google" 
+        ? "Google API 请求频率过高，正在切换备用服务..."
+        : "AI 请求频率过高，请稍后再试";
+    case 402:
+      return "AI 额度已用完，请充值后再试";
+    case 503:
+    case 502:
+      return source === "google"
+        ? "Google 服务暂时不可用，正在切换备用服务..."
+        : "AI 服务暂时不可用";
+    default:
+      return "AI 服务出错，请重试";
+  }
+}
+```
+
+### 6.2 前端错误提示
+
+在边缘函数返回中添加 `usedFallback` 标记，前端可显示：
+
+```typescript
+if (data.usedFallback) {
+  toast.info("已使用备用 AI 服务");
+}
+```
+
+## 七、涉及文件清单
+
+| 文件路径 | 修改类型 | 说明 |
+|----------|----------|------|
+| `supabase/functions/_shared/ai-fallback.ts` | 新建 | 统一双备份工具函数 |
+| `supabase/functions/generate-image/index.ts` | 修改 | 添加 Lovable 备份 |
+| `supabase/functions/chat/index.ts` | 修改 | 改为 Google 优先 + Lovable 备份 |
+| `supabase/functions/market-analysis/index.ts` | 修改 | 添加 Lovable 备份 |
+| `supabase/functions/generate-landing-page/index.ts` | 修改 | 改为 Google 优先 |
+| `supabase/functions/analyze-reviews/index.ts` | 修改 | 改为 Google 优先 |
+| `supabase/functions/initial-market-analysis/index.ts` | 修改 | 添加 Lovable 备份 |
+| `supabase/functions/regenerate-prd-section/index.ts` | 修改 | 添加 Lovable 备份 |
+| `supabase/functions/scrape-competitor/index.ts` | 修改 | OCR 改为 Google 优先 |
+| `src/components/ImageGenerationProgress.tsx` | 新建 | 进度显示组件 |
+| `src/components/ProductDesignGallery.tsx` | 修改 | 添加详细进度 |
+| `src/components/MarketingImageGallery.tsx` | 修改 | 添加详细进度 |
+| `src/components/InlineAssetGenerator.tsx` | 修改 | 增强进度显示 |
+
+## 八、预期效果
+
+1. **服务稳定性提升**：双备份确保 99%+ 可用性
+2. **用户体验优化**：生成过程透明化，进度可视
+3. **统一架构**：所有 AI 调用遵循相同模式，便于维护
+4. **自动故障转移**：网络屏蔽或限流时无感切换
