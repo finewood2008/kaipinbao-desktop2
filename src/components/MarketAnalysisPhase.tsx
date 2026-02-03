@@ -196,57 +196,50 @@ export function MarketAnalysisPhase({ projectId, onComplete, onSkip }: MarketAna
       animate={{ opacity: 1 }}
       className="h-full overflow-y-auto"
     >
-      <div className="max-w-5xl mx-auto p-6 pb-24 space-y-8">
-        {/* Hero Header */}
+      <div className="max-w-4xl mx-auto px-6 py-8 pb-32 space-y-10">
+        {/* Compact Hero Header */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4"
+          className="flex items-center gap-5"
         >
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            className="w-20 h-20 mx-auto bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl flex items-center justify-center border border-primary/20 shadow-lg shadow-primary/10"
+            className="w-14 h-14 bg-gradient-to-br from-primary/20 to-accent/20 rounded-xl flex items-center justify-center border border-primary/20 shadow-md flex-shrink-0"
           >
-            <TrendingUp className="w-10 h-10 text-primary" />
+            <TrendingUp className="w-7 h-7 text-primary" />
           </motion.div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-gradient">AI 市场分析</h2>
-            <p className="text-muted-foreground mt-2 max-w-lg mx-auto">
-              基于您的产品描述，AI 市场专家将分析市场格局、目标用户和差异化机会
+            <h2 className="text-xl md:text-2xl font-bold text-gradient">AI 市场分析</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              分析市场格局、目标用户和差异化机会
             </p>
           </div>
         </motion.div>
 
-        {/* Project Info Card - Modern Style */}
+        {/* Project Info - Compact */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="bg-gradient-to-br from-card to-muted/30 border-border/50 overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Rocket className="w-4 h-4 text-primary" />
+          <Card className="border-border/40">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <Rocket className="w-5 h-5 text-primary" />
                 </div>
-                项目信息
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 relative">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-background/50 border border-border/30">
-                  <span className="text-xs text-muted-foreground uppercase tracking-wider">项目名称</span>
-                  <p className="text-lg font-semibold mt-1">{projectName}</p>
-                </div>
-                {projectDescription && (
-                  <div className="p-4 rounded-xl bg-background/50 border border-border/30 md:col-span-2">
-                    <span className="text-xs text-muted-foreground uppercase tracking-wider">项目描述</span>
-                    <p className="text-sm mt-1 text-foreground/80 leading-relaxed">{projectDescription}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-xs text-muted-foreground">项目：</span>
+                    <span className="font-semibold">{projectName}</span>
                   </div>
-                )}
+                  {projectDescription && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{projectDescription}</p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -350,8 +343,8 @@ export function MarketAnalysisPhase({ projectId, onComplete, onSkip }: MarketAna
               animate={{ opacity: 1 }}
               className="space-y-6"
             >
-              {/* Charts Grid - 2x2 Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Charts Grid - 2x2 Layout with more spacing */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Market Size Chart */}
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
@@ -572,7 +565,7 @@ export function MarketAnalysisPhase({ projectId, onComplete, onSkip }: MarketAna
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
-                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                className="grid grid-cols-1 md:grid-cols-2 gap-6"
               >
                 {/* Market Size Text */}
                 <Card className="group hover:border-primary/30 transition-all hover:shadow-lg hover:shadow-primary/5">

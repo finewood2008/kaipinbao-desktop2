@@ -230,75 +230,72 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
       animate={{ opacity: 1 }}
       className="h-full overflow-y-auto"
     >
-      <div className="max-w-4xl mx-auto p-6 pb-24 space-y-8">
-        {/* Hero Header */}
+      <div className="max-w-3xl mx-auto px-6 py-8 pb-32 space-y-8">
+        {/* Compact Hero Header */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center space-y-4"
+          className="flex items-center gap-5"
         >
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            className="w-20 h-20 mx-auto bg-gradient-to-br from-accent/20 to-primary/20 rounded-2xl flex items-center justify-center border border-accent/20 shadow-lg shadow-accent/10"
+            className="w-14 h-14 bg-gradient-to-br from-accent/20 to-primary/20 rounded-xl flex items-center justify-center border border-accent/20 shadow-md flex-shrink-0"
           >
-            <Search className="w-10 h-10 text-accent" />
+            <Search className="w-7 h-7 text-accent" />
           </motion.div>
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">
+            <h2 className="text-xl md:text-2xl font-bold">
               <span className="text-gradient">竞品分析</span>
-              <span className="text-muted-foreground text-lg font-normal ml-2">(可选)</span>
+              <span className="text-muted-foreground text-base font-normal ml-2">(可选)</span>
             </h2>
-            <p className="text-muted-foreground mt-2 max-w-lg mx-auto">
-              添加 Amazon 竞品链接，获取真实产品信息和用户评论数据，助力产品差异化定位
+            <p className="text-muted-foreground text-sm mt-1">
+              添加 Amazon 竞品链接，获取产品信息和用户评论
             </p>
           </div>
         </motion.div>
 
-        {/* URL Input Card */}
+        {/* URL Input Card - Simplified */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card className="border-dashed border-2 border-accent/30 bg-accent/5 hover:border-accent/50 transition-colors">
-            <CardContent className="p-6">
+          <Card className="border-dashed border-2 border-accent/30 bg-accent/5">
+            <CardContent className="p-5">
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1 relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
                     <Link className="w-4 h-4 text-accent" />
                   </div>
                   <Input
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
-                    placeholder="粘贴 Amazon 产品链接 (例如: amazon.com/dp/...)"
-                    className="pl-14 h-12 bg-background/50 border-border/50 focus:border-accent"
+                    placeholder="粘贴 Amazon 产品链接"
+                    className="pl-14 h-11 bg-background/50 border-border/50 focus:border-accent"
                     onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
                   />
                 </div>
                 <Button 
                   onClick={handleAddUrl} 
                   disabled={isAdding || !urlInput.trim()}
-                  className="h-12 px-6 bg-gradient-to-r from-accent to-primary hover:opacity-90"
+                  className="h-11 px-5 bg-gradient-to-r from-accent to-primary hover:opacity-90"
                 >
                   {isAdding ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <Plus className="w-4 h-4" />
                   )}
-                  <span className="ml-2">添加竞品</span>
+                  <span className="ml-2">添加</span>
                 </Button>
               </div>
               
-              {/* Supported platforms hint */}
-              <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-border/30">
-                <span className="text-xs text-muted-foreground">支持的平台：</span>
-                <div className="flex items-center gap-2">
-                  <div className="px-3 py-1 rounded-full bg-orange-500/10 text-orange-500 text-xs font-medium">
-                    Amazon
-                  </div>
-                  <span className="text-xs text-muted-foreground">更多平台即将支持...</span>
+              {/* Supported platforms hint - Compact */}
+              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/30">
+                <span className="text-xs text-muted-foreground">支持：</span>
+                <div className="px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-500 text-xs font-medium">
+                  Amazon
                 </div>
               </div>
             </CardContent>
@@ -374,19 +371,18 @@ export function CompetitorResearch({ projectId, onComplete, onSkip }: Competitor
           )}
         </AnimatePresence>
 
-        {/* Empty State */}
+        {/* Empty State - Compact */}
         {products.length === 0 && !isScraping && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="text-center py-12"
+            className="text-center py-8"
           >
-            <div className="w-24 h-24 mx-auto mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
-              <Package className="w-12 h-12 text-muted-foreground/50" />
+            <div className="w-16 h-16 mx-auto mb-3 rounded-xl bg-muted/50 flex items-center justify-center">
+              <Package className="w-8 h-8 text-muted-foreground/50" />
             </div>
-            <h3 className="text-lg font-medium text-muted-foreground mb-2">暂无竞品数据</h3>
-            <p className="text-sm text-muted-foreground/70">添加 Amazon 竞品链接开始分析</p>
+            <p className="text-sm text-muted-foreground">添加 Amazon 竞品链接开始分析</p>
           </motion.div>
         )}
 
