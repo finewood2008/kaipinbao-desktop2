@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Bot, ChevronDown, Sparkles } from "lucide-react";
+import { Send, Bot, ChevronDown, Sparkles, ImagePlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "@/components/ChatMessage";
-import { PrdExtractionSidebar, PrdData } from "@/components/PrdExtractionSidebar";
+import { PrdExtractionSidebar, PrdData, ReferenceImage } from "@/components/PrdExtractionSidebar";
 import { PrdCompletionCard } from "@/components/PrdCompletionCard";
 import { AiThinkingIndicator } from "@/components/AiThinkingIndicator";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,8 @@ interface AiProductManagerPanelProps {
   inputValue: string;
   prdData: PrdData | null;
   competitorProducts?: CompetitorProduct[];
+  referenceImages?: ReferenceImage[];
+  isUploadingImage?: boolean;
   onInputChange: (value: string) => void;
   onSend: () => void;
   onSendDirect: (message: string) => void;
@@ -43,6 +45,8 @@ interface AiProductManagerPanelProps {
   isReadOnly?: boolean;
   onFieldEdit?: (field: string, value: unknown) => void;
   onProceedToDesign?: () => void;
+  onImageUpload?: (file: File) => Promise<void>;
+  onImageRemove?: (imageId: string) => void;
 }
 
 export function AiProductManagerPanel({
@@ -53,6 +57,8 @@ export function AiProductManagerPanel({
   inputValue,
   prdData,
   competitorProducts = [],
+  referenceImages = [],
+  isUploadingImage = false,
   onInputChange,
   onSend,
   onSendDirect,
@@ -62,6 +68,8 @@ export function AiProductManagerPanel({
   isReadOnly = false,
   onFieldEdit,
   onProceedToDesign,
+  onImageUpload,
+  onImageRemove,
 }: AiProductManagerPanelProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -130,16 +138,31 @@ export function AiProductManagerPanel({
     return [];
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onImageUpload) {
+      await onImageUpload(file);
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="h-full grid grid-cols-1 md:grid-cols-[260px_1fr] overflow-hidden">
       {/* Left Sidebar - PRD Extraction */}
       <PrdExtractionSidebar
         prdData={prdData}
         competitorProducts={competitorProducts}
+        referenceImages={referenceImages}
         className="hidden md:flex"
         isEditable={!isReadOnly}
         onFieldEdit={onFieldEdit}
         onProceedToDesign={onProceedToDesign}
+        onImageRemove={onImageRemove}
       />
 
       {/* Right - Chat Area */}
@@ -258,6 +281,38 @@ export function AiProductManagerPanel({
           <div className="flex-shrink-0 border-t border-border/50 bg-background/50 backdrop-blur-sm p-3">
             <div className="max-w-2xl mx-auto">
               <Card className="flex items-center gap-2 p-1.5 bg-card/50 border-border/50">
+                {/* Image Upload Button */}
+                {onImageUpload && (
+                  <label className="cursor-pointer flex-shrink-0">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleFileChange}
+                      disabled={isSending || isUploadingImage}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-8 w-8 hover:bg-primary/10",
+                        isUploadingImage && "animate-pulse"
+                      )}
+                      asChild
+                      disabled={isUploadingImage}
+                    >
+                      <span>
+                        {isUploadingImage ? (
+                          <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                        ) : (
+                          <ImagePlus className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        )}
+                      </span>
+                    </Button>
+                  </label>
+                )}
                 <Input
                   placeholder="输入您的想法..."
                   value={inputValue}
@@ -275,6 +330,9 @@ export function AiProductManagerPanel({
                   <Send className="w-3.5 h-3.5" />
                 </Button>
               </Card>
+              <p className="text-[10px] text-muted-foreground text-center mt-1.5">
+                按 Enter 发送 · 点击图片图标上传参考图
+              </p>
             </div>
           </div>
         ) : (

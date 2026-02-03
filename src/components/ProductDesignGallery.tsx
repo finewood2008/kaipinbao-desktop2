@@ -40,6 +40,13 @@ interface CompetitorProduct {
   rating?: number;
 }
 
+interface ReferenceImage {
+  id: string;
+  url: string;
+  description?: string;
+  uploadedAt: string;
+}
+
 interface ProductDesignGalleryProps {
   projectId: string;
   images: GeneratedImage[];
@@ -55,6 +62,7 @@ interface ProductDesignGalleryProps {
     selectedDirection?: string;
   };
   competitorProducts?: CompetitorProduct[];
+  referenceImages?: ReferenceImage[];
 }
 
 export function ProductDesignGallery({
@@ -66,6 +74,7 @@ export function ProductDesignGallery({
   prdSummary,
   prdData,
   competitorProducts = [],
+  referenceImages = [],
 }: ProductDesignGalleryProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState("");
@@ -81,6 +90,10 @@ export function ProductDesignGallery({
     setGenerationStep("正在连接 AI 服务...");
     try {
       setGenerationStep("AI 正在绘制产品造型...");
+      
+      // Prepare reference image URLs
+      const referenceImageUrls = referenceImages.map(img => img.url);
+      
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`,
         {
@@ -94,6 +107,8 @@ export function ProductDesignGallery({
             projectId,
             imageType: "product",
             phase: 1,
+            prdData,
+            referenceImageUrls: referenceImageUrls.length > 0 ? referenceImageUrls : undefined,
           }),
         }
       );

@@ -16,6 +16,15 @@ interface PrdData {
   coreFeatures?: string[];
   designStyle?: string;
   selectedDirection?: string;
+  designStyleDetails?: {
+    overallStyle?: string;
+    colorTone?: string;
+    surfaceTexture?: string;
+    shapeLanguage?: string;
+    inspirationKeywords?: string[];
+    materialPreference?: string[];
+    avoidElements?: string[];
+  };
 }
 
 // Build context from PRD data
@@ -41,6 +50,32 @@ function buildPrdContext(prdData?: PrdData): string {
   }
   if (prdData.designStyle) {
     parts.push(`设计风格：${prdData.designStyle}`);
+  }
+  
+  // Enhanced design style details
+  if (prdData.designStyleDetails) {
+    const details = prdData.designStyleDetails;
+    if (details.overallStyle) {
+      parts.push(`整体风格：${details.overallStyle}`);
+    }
+    if (details.colorTone) {
+      parts.push(`色彩基调：${details.colorTone}`);
+    }
+    if (details.surfaceTexture) {
+      parts.push(`表面质感：${details.surfaceTexture}`);
+    }
+    if (details.shapeLanguage) {
+      parts.push(`造型语言：${details.shapeLanguage}`);
+    }
+    if (details.materialPreference?.length) {
+      parts.push(`材质偏好：${details.materialPreference.join("、")}`);
+    }
+    if (details.inspirationKeywords?.length) {
+      parts.push(`设计灵感：${details.inspirationKeywords.join("、")}`);
+    }
+    if (details.avoidElements?.length) {
+      parts.push(`避免元素：${details.avoidElements.join("、")}`);
+    }
   }
   
   return parts.length > 0 ? `\n\n产品定义：\n${parts.join("\n")}` : "";
@@ -461,7 +496,8 @@ serve(async (req) => {
       phase = 1,
       parentImageId,
       parentImageUrl,
-      prdData
+      prdData,
+      referenceImageUrls
     } = await req.json();
     
     const GOOGLE_API_KEY = Deno.env.get("GOOGLE_API_KEY");
@@ -478,7 +514,12 @@ serve(async (req) => {
     const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
     // Build prompt based on image type, phase, and PRD data
-    const enhancedPrompt = buildPromptForImageType(prompt, imageType, phase, prdData);
+    let enhancedPrompt = buildPromptForImageType(prompt, imageType, phase, prdData);
+    
+    // Add reference image context if available
+    if (referenceImageUrls && referenceImageUrls.length > 0) {
+      enhancedPrompt += `\n\n【用户参考图片】用户提供了 ${referenceImageUrls.length} 张参考图片作为设计灵感。请参考这些图片的风格、配色、造型语言来生成产品设计。`;
+    }
 
     // Determine if we should use image editing mode (phase 2 with parent image)
     const useImageEditing = phase === 2 && parentImageUrl && imageType !== "product";

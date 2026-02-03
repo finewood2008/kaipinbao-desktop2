@@ -59,6 +59,12 @@ interface PrdData {
   coreFeatures?: string[];
   designStyle?: string;
   selectedDirection?: string;
+  referenceImages?: {
+    id: string;
+    url: string;
+    description?: string;
+    uploadedAt: string;
+  }[];
 }
 
 interface VisualGenerationPhaseProps {
@@ -376,6 +382,7 @@ export function VisualGenerationPhase({
               prdSummary={prdSummary}
               prdData={prdData}
               competitorProducts={competitorProducts}
+              referenceImages={prdData?.referenceImages}
             />
           </motion.div>
         ) : (
