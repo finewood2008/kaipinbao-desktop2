@@ -200,6 +200,33 @@ const progressItems = [
   { key: "pricingRange", label: "定价策略", icon: DollarSign, placeholder: "例如：中高端 ¥299-399" },
 ] as const;
 
+// Helper to safely convert any value to a displayable string
+function safeStringify(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    return value.map(safeStringify).filter(Boolean).join("、");
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    // Handle known user profile fields
+    const parts: string[] = [];
+    if (obj.age) parts.push(String(obj.age));
+    if (obj.occupation) parts.push(String(obj.occupation));
+    if (obj.income) parts.push(String(obj.income));
+    if (obj.lifestyle) parts.push(String(obj.lifestyle));
+    if (parts.length > 0) return parts.join("、");
+    
+    // Fallback: join all string values
+    return Object.values(obj)
+      .filter(v => typeof v === "string" || typeof v === "number")
+      .map(String)
+      .join("、");
+  }
+  return String(value);
+}
+
 // Helper function to get display value for progress item
 function getDisplayValue(prdData: PrdData | null, key: string): string | null {
   if (!prdData) return null;
@@ -211,7 +238,7 @@ function getDisplayValue(prdData: PrdData | null, key: string): string | null {
       return prdData.selectedDirection || null;
     default:
       const value = prdData[key as keyof PrdData];
-      return typeof value === "string" ? value : null;
+      return safeStringify(value) || null;
   }
 }
 

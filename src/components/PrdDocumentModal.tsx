@@ -257,30 +257,106 @@ export function PrdDocumentModal({
     }
   };
 
+  // Helper to safely convert any value to a displayable string
+  const safeStringify = (value: unknown): string => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) {
+      return value.map(safeStringify).filter(Boolean).join("、");
+    }
+    if (typeof value === "object") {
+      // Handle object with known user profile fields
+      const obj = value as Record<string, unknown>;
+      const parts: string[] = [];
+      if (obj.age) parts.push(`年龄: ${obj.age}`);
+      if (obj.occupation) parts.push(`职业: ${obj.occupation}`);
+      if (obj.income) parts.push(`收入: ${obj.income}`);
+      if (obj.lifestyle) parts.push(`生活方式: ${obj.lifestyle}`);
+      if (obj.purchaseMotivation) parts.push(`购买动机: ${obj.purchaseMotivation}`);
+      if (obj.decisionFactors) parts.push(`决策因素: ${obj.decisionFactors}`);
+      
+      // If we got known fields, return formatted
+      if (parts.length > 0) return parts.join("；");
+      
+      // Otherwise try to stringify all values
+      return Object.entries(obj)
+        .map(([k, v]) => `${k}: ${safeStringify(v)}`)
+        .join("；");
+    }
+    return String(value);
+  };
+
+  // Render target audience - handles both string and object formats
+  const renderTargetAudience = () => {
+    const audience = prdData?.targetAudience;
+    
+    if (!audience) {
+      return <p className="text-muted-foreground">待补充</p>;
+    }
+    
+    // If it's already a string, render directly
+    if (typeof audience === "string") {
+      return <p className="text-foreground">{audience}</p>;
+    }
+    
+    // If it's an object (AI returned detailed user profile)
+    if (typeof audience === "object") {
+      const obj = audience as Record<string, unknown>;
+      const items = [
+        { label: "年龄", value: safeStringify(obj.age) },
+        { label: "职业", value: safeStringify(obj.occupation) },
+        { label: "收入", value: safeStringify(obj.income) },
+        { label: "生活方式", value: safeStringify(obj.lifestyle) },
+        { label: "购买动机", value: safeStringify(obj.purchaseMotivation) },
+        { label: "决策因素", value: safeStringify(obj.decisionFactors) },
+      ].filter((i) => i.value);
+      
+      if (items.length === 0) {
+        return <p className="text-foreground">{safeStringify(audience)}</p>;
+      }
+      
+      return (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div key={item.label} className="flex gap-2 text-sm">
+              <span className="text-muted-foreground flex-shrink-0">{item.label}:</span>
+              <span className="text-foreground">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    return <p className="text-foreground">{safeStringify(audience)}</p>;
+  };
+
   // Render design style details
   const renderDesignStyleDetails = () => {
     const details = prdData?.designStyleDetails;
+    const styleValue = safeStringify(prdData?.designStyle);
+    
     if (!details) {
-      return <p className="text-foreground">{prdData?.designStyle || "待补充"}</p>;
+      return <p className="text-foreground">{styleValue || "待补充"}</p>;
     }
 
     const items = [
-      { label: "整体风格", value: details.overallStyle },
-      { label: "色彩基调", value: details.colorTone },
-      { label: "表面质感", value: details.surfaceTexture },
-      { label: "造型语言", value: details.shapeLanguage },
+      { label: "整体风格", value: safeStringify(details.overallStyle) },
+      { label: "色彩基调", value: safeStringify(details.colorTone) },
+      { label: "表面质感", value: safeStringify(details.surfaceTexture) },
+      { label: "造型语言", value: safeStringify(details.shapeLanguage) },
       { label: "材质偏好", value: details.materialPreference?.join("、") },
       { label: "避免元素", value: details.avoidElements?.join("、") },
     ].filter((i) => i.value);
 
     if (items.length === 0) {
-      return <p className="text-foreground">{prdData?.designStyle || "待补充"}</p>;
+      return <p className="text-foreground">{styleValue || "待补充"}</p>;
     }
 
     return (
       <div className="space-y-2">
-        {prdData?.designStyle && (
-          <p className="text-foreground mb-3">{prdData.designStyle}</p>
+        {styleValue && (
+          <p className="text-foreground mb-3">{styleValue}</p>
         )}
         <div className="grid grid-cols-2 gap-2">
           {items.map((item) => (
@@ -471,9 +547,7 @@ export function PrdDocumentModal({
                   isSaving={isSaving}
                 />
               ) : (
-                <p className="text-foreground">
-                  {prdData?.targetAudience || "待补充"}
-                </p>
+                renderTargetAudience()
               )}
             </DocumentSection>
 
