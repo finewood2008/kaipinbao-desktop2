@@ -191,6 +191,10 @@ export function getTemplateStyles(style: TemplateStyle) {
           gradient: "from-white to-gray-50",
           titleGradient: "from-gray-900 to-gray-700",
           subtitleColor: "text-gray-500",
+          // New immersive hero styles
+          blurOverlay: "from-white/40 via-white/60 to-white/80",
+          glowColor: "from-gray-300/30 to-transparent",
+          glassCard: "bg-white/60 border-gray-200/50",
         },
         painPoints: {
           bg: "bg-gray-100",
@@ -226,6 +230,10 @@ export function getTemplateStyles(style: TemplateStyle) {
           gradient: "from-orange-50 to-rose-50",
           titleGradient: "from-orange-600 to-rose-600",
           subtitleColor: "text-rose-600",
+          // New immersive hero styles
+          blurOverlay: "from-rose-900/30 via-orange-900/50 to-rose-950/70",
+          glowColor: "from-orange-500/40 to-transparent",
+          glassCard: "bg-white/10 border-white/20",
         },
         painPoints: {
           bg: "bg-rose-100",
@@ -261,6 +269,10 @@ export function getTemplateStyles(style: TemplateStyle) {
           gradient: "from-stone-100 to-amber-50",
           titleGradient: "from-stone-800 to-amber-700",
           subtitleColor: "text-amber-700",
+          // New immersive hero styles
+          blurOverlay: "from-stone-900/30 via-amber-900/50 to-stone-950/70",
+          glowColor: "from-amber-500/40 to-transparent",
+          glassCard: "bg-white/10 border-amber-200/30",
         },
         painPoints: {
           bg: "bg-stone-100",
@@ -297,6 +309,10 @@ export function getTemplateStyles(style: TemplateStyle) {
           titleGradient: "from-cyan-400 to-violet-400",
           subtitleColor: "text-cyan-300",
           isDark: true,
+          // New immersive hero styles
+          blurOverlay: "from-slate-950/40 via-indigo-950/60 to-slate-950/80",
+          glowColor: "from-cyan-500/40 to-transparent",
+          glassCard: "bg-slate-900/40 border-cyan-500/30",
         },
         painPoints: {
           bg: "bg-slate-800",
@@ -334,6 +350,10 @@ export function getTemplateStyles(style: TemplateStyle) {
           gradient: "from-slate-50 to-slate-100",
           titleGradient: "from-slate-900 to-slate-700",
           subtitleColor: "text-gray-600",
+          // New immersive hero styles
+          blurOverlay: "from-slate-900/30 via-slate-900/50 to-slate-950/70",
+          glowColor: "from-blue-500/40 to-transparent",
+          glassCard: "bg-white/10 border-white/20",
         },
         painPoints: {
           bg: "bg-red-50",

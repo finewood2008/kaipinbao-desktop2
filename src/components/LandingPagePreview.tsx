@@ -135,8 +135,19 @@ export function LandingPagePreview({
 
   return (
     <div className={cn("overflow-hidden rounded-lg", isDarkTheme ? "bg-slate-900 text-white" : "bg-white text-gray-900")}>
-      {/* Hero Section with Video Background */}
-      <section className="relative min-h-[80vh] overflow-hidden">
+      {/* Immersive Hero Section */}
+      <section className="relative min-h-[90vh] overflow-hidden">
+        {/* Layer 1: Blurred Product Image Background */}
+        {heroImageUrl && !videoUrl && (
+          <div className="absolute inset-0 overflow-hidden">
+            <img 
+              src={heroImageUrl}
+              alt=""
+              className="absolute w-[150%] h-[150%] -top-[25%] -left-[25%] object-cover blur-3xl opacity-60 scale-110"
+            />
+          </div>
+        )}
+        
         {/* Video Background */}
         {videoUrl && (
           <video
@@ -151,96 +162,149 @@ export function LandingPagePreview({
           </video>
         )}
         
-        {/* Gradient Background (fallback or overlay) */}
+        {/* Layer 2: Gradient Overlay */}
         <div className={cn(
           "absolute inset-0",
           videoUrl 
             ? "bg-black/60" 
-            : `bg-gradient-to-br ${styles.hero.gradient}`
+            : heroImageUrl 
+              ? `bg-gradient-to-b ${styles.hero.blurOverlay || 'from-black/30 via-black/50 to-black/70'}`
+              : `bg-gradient-to-br ${styles.hero.gradient}`
         )} />
         
-        {/* Hero Content */}
-        <div className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] px-8 py-16 text-center">
-          {heroImageUrl && !videoUrl && (
+        {/* Layer 3: Hero Content - Split Layout */}
+        <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between min-h-[90vh] px-6 lg:px-16 py-16 gap-8 lg:gap-12">
+          
+          {/* Left: Text Content with Glass Card */}
+          <div className="lg:w-1/2 text-center lg:text-left order-2 lg:order-1">
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-8"
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6 }}
+              className={cn(
+                "backdrop-blur-xl rounded-3xl p-8 lg:p-10 border shadow-2xl",
+                heroImageUrl && !videoUrl 
+                  ? styles.hero.glassCard || "bg-white/10 border-white/20"
+                  : "bg-transparent border-transparent p-0"
+              )}
             >
-              <img
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className={cn(
+                  "text-3xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight",
+                  heroImageUrl && !videoUrl
+                    ? "text-white drop-shadow-lg"
+                    : videoUrl 
+                      ? "text-white" 
+                      : `bg-gradient-to-r bg-clip-text text-transparent ${styles.hero.titleGradient}`
+                )}
+              >
+                {title}
+              </motion.h1>
+              
+              {subheadline && (
+                <motion.p
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className={cn(
+                    "text-lg md:text-xl mb-8 leading-relaxed",
+                    heroImageUrl && !videoUrl
+                      ? "text-white/90 drop-shadow"
+                      : videoUrl 
+                        ? "text-white/90" 
+                        : styles.hero.subtitleColor
+                  )}
+                >
+                  {subheadline}
+                </motion.p>
+              )}
+
+              {/* Urgency Message */}
+              {urgencyMessage && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.35 }}
+                  className="mb-6 inline-block px-4 py-2 bg-red-500/90 text-white rounded-full text-sm font-medium shadow-lg"
+                >
+                  🔥 {urgencyMessage}
+                </motion.div>
+              )}
+              
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Button 
+                  size="lg" 
+                  className={cn(
+                    "px-10 py-7 text-lg font-semibold bg-gradient-to-r hover:opacity-90 text-white shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105",
+                    styles.cta.gradient
+                  )}
+                >
+                  {ctaText}
+                </Button>
+              </motion.div>
+            </motion.div>
+          </div>
+          
+          {/* Right: Product Image with Glow Effect */}
+          {heroImageUrl && !videoUrl && (
+            <div className="lg:w-1/2 relative order-1 lg:order-2 flex items-center justify-center">
+              {/* Glow Effect */}
+              <motion.div 
+                className={cn(
+                  "absolute inset-0 bg-gradient-radial blur-3xl opacity-60",
+                  styles.hero.glowColor || "from-blue-500/30 to-transparent"
+                )}
+                animate={{ 
+                  scale: [1, 1.1, 1], 
+                  opacity: [0.4, 0.6, 0.4] 
+                }}
+                transition={{ 
+                  duration: 4, 
+                  repeat: Infinity, 
+                  ease: "easeInOut" 
+                }}
+              />
+              
+              {/* Product Image with Float Animation */}
+              <motion.img
                 src={heroImageUrl}
                 alt={title}
-                className="max-w-md mx-auto rounded-2xl shadow-2xl"
+                className="relative z-10 max-w-xs md:max-w-sm lg:max-w-md w-full rounded-2xl shadow-2xl"
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                animate={{ 
+                  opacity: 1, 
+                  y: [0, -12, 0], 
+                  scale: [1, 1.02, 1] 
+                }}
+                transition={{ 
+                  opacity: { duration: 0.6 },
+                  y: { duration: 5, repeat: Infinity, ease: "easeInOut" },
+                  scale: { duration: 5, repeat: Infinity, ease: "easeInOut" }
+                }}
               />
-            </motion.div>
+            </div>
           )}
-          
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className={cn(
-              "text-4xl md:text-6xl lg:text-7xl font-bold mb-6 max-w-4xl",
-              videoUrl 
-                ? "text-white" 
-                : `bg-gradient-to-r bg-clip-text text-transparent ${styles.hero.titleGradient}`
-            )}
-          >
-            {title}
-          </motion.h1>
-          
-          {subheadline && (
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={cn(
-                "text-xl md:text-2xl mb-8 max-w-2xl",
-                videoUrl ? "text-white/90" : styles.hero.subtitleColor
-              )}
-            >
-              {subheadline}
-            </motion.p>
-          )}
-
-          {/* Urgency Message */}
-          {urgencyMessage && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.25 }}
-              className="mb-6 px-4 py-2 bg-red-500/90 text-white rounded-full text-sm font-medium"
-            >
-              🔥 {urgencyMessage}
-            </motion.div>
-          )}
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Button 
-              size="lg" 
-              className={cn(
-                "px-10 py-7 text-lg font-semibold bg-gradient-to-r hover:opacity-90 text-white shadow-xl",
-                styles.cta.gradient
-              )}
-            >
-              {ctaText}
-            </Button>
-          </motion.div>
-
-          {/* Scroll Indicator */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1, y: [0, 10, 0] }}
-            transition={{ delay: 1, duration: 2, repeat: Infinity }}
-            className="absolute bottom-8"
-          >
-            <ChevronDown className={cn("w-8 h-8", videoUrl ? "text-white/60" : "text-gray-400")} />
-          </motion.div>
         </div>
+
+        {/* Scroll Indicator */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, y: [0, 10, 0] }}
+          transition={{ delay: 1, duration: 2, repeat: Infinity }}
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20"
+        >
+          <ChevronDown className={cn(
+            "w-8 h-8",
+            heroImageUrl || videoUrl ? "text-white/60" : "text-gray-400"
+          )} />
+        </motion.div>
       </section>
 
       {/* Pain Points Section */}
