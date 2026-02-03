@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -90,8 +90,18 @@ export function VisualGenerationPhase({
   prdData,
   competitorProducts = [],
 }: VisualGenerationPhaseProps) {
-  const [currentPhase, setCurrentPhase] = useState<1 | 2>(1);
-  const [selectedProductImage, setSelectedProductImage] = useState<GeneratedImage | null>(null);
+  // 基于已有数据推断初始 phase 状态，确保导航后正确恢复
+  const [currentPhase, setCurrentPhase] = useState<1 | 2>(() => {
+    const hasSelectedProduct = productImages.some(img => img.is_selected);
+    // 有已选产品造型时直接进入 phase 2
+    return hasSelectedProduct ? 2 : 1;
+  });
+  
+  const [selectedProductImage, setSelectedProductImage] = useState<GeneratedImage | null>(() => {
+    // 初始化时直接找到已选中的产品图
+    return productImages.find(img => img.is_selected) || null;
+  });
+  
   const [showPhaseTransition, setShowPhaseTransition] = useState(false);
   const [selectedImageTypes, setSelectedImageTypes] = useState<ImageType[]>([]);
   
@@ -103,17 +113,31 @@ export function VisualGenerationPhase({
     resolve: (value: boolean) => void;
   } | null>(null);
 
-  // Check for existing selected product image
+  // 追踪是否已经初始化过 phase
+  const hasInitializedRef = useRef(false);
+
+  // 监听 productImages 变化，更新 selectedProductImage
   useEffect(() => {
     const selected = productImages.find(img => img.is_selected);
     if (selected) {
       setSelectedProductImage(selected);
-      // If we have a selected product and marketing images, we're in phase 2
-      if (marketingImages.length > 0) {
+      
+      // 仅在首次检测到选中图片时自动切换到 phase 2
+      // 避免每次 productImages 变化都重置 phase
+      if (!hasInitializedRef.current && currentPhase === 1) {
         setCurrentPhase(2);
+        hasInitializedRef.current = true;
       }
     }
-  }, [productImages, marketingImages]);
+  }, [productImages]); // 移除 currentPhase 依赖，避免循环
+
+  // 当 marketingImages 变化时，如果有数据且有选中产品，确保在 phase 2
+  useEffect(() => {
+    const hasSelectedProduct = productImages.some(img => img.is_selected);
+    if (hasSelectedProduct && marketingImages.length > 0 && currentPhase === 1) {
+      setCurrentPhase(2);
+    }
+  }, [marketingImages.length, productImages, currentPhase]);
 
   const handleProductSelection = (image: GeneratedImage) => {
     setSelectedProductImage(image);
