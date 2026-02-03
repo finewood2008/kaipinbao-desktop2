@@ -303,21 +303,27 @@ export type Database = {
           color_scheme: Json | null
           created_at: string
           cta_text: string | null
+          faq_items: Json
           generated_images: Json | null
           hero_image_url: string | null
           id: string
           is_published: boolean
           marketing_images: Json | null
+          marketing_images_with_copy: Json
           pain_points: Json | null
           product_images: Json | null
           project_id: string
           selling_points: Json | null
           slug: string
+          social_proof_items: Json
+          specifications: Json
           subheadline: string | null
           template_style: string | null
           title: string
           trust_badges: Json | null
           updated_at: string
+          urgency_message: string | null
+          usage_scenarios: Json
           video_url: string | null
           view_count: number
         }
@@ -325,21 +331,27 @@ export type Database = {
           color_scheme?: Json | null
           created_at?: string
           cta_text?: string | null
+          faq_items?: Json
           generated_images?: Json | null
           hero_image_url?: string | null
           id?: string
           is_published?: boolean
           marketing_images?: Json | null
+          marketing_images_with_copy?: Json
           pain_points?: Json | null
           product_images?: Json | null
           project_id: string
           selling_points?: Json | null
           slug: string
+          social_proof_items?: Json
+          specifications?: Json
           subheadline?: string | null
           template_style?: string | null
           title: string
           trust_badges?: Json | null
           updated_at?: string
+          urgency_message?: string | null
+          usage_scenarios?: Json
           video_url?: string | null
           view_count?: number
         }
@@ -347,21 +359,27 @@ export type Database = {
           color_scheme?: Json | null
           created_at?: string
           cta_text?: string | null
+          faq_items?: Json
           generated_images?: Json | null
           hero_image_url?: string | null
           id?: string
           is_published?: boolean
           marketing_images?: Json | null
+          marketing_images_with_copy?: Json
           pain_points?: Json | null
           product_images?: Json | null
           project_id?: string
           selling_points?: Json | null
           slug?: string
+          social_proof_items?: Json
+          specifications?: Json
           subheadline?: string | null
           template_style?: string | null
           title?: string
           trust_badges?: Json | null
           updated_at?: string
+          urgency_message?: string | null
+          usage_scenarios?: Json
           video_url?: string | null
           view_count?: number
         }
