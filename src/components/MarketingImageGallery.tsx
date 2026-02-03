@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,28 @@ export function MarketingImageGallery({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
+  // 使用 ref 追踪最新的 images 状态，避免闭包陷阱
+  const imagesRef = useRef<GeneratedImage[]>(images);
+  
+  // 同步 ref 与 props
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  // 安全的图片更新函数，使用 ref 确保基于最新状态
+  const addImage = useCallback((newImage: GeneratedImage) => {
+    const updatedImages = [...imagesRef.current, newImage];
+    imagesRef.current = updatedImages;
+    onImagesChange(updatedImages);
+  }, [onImagesChange]);
+
+  // 安全的图片删除函数
+  const removeImage = useCallback((imageId: string) => {
+    const updatedImages = imagesRef.current.filter(img => img.id !== imageId);
+    imagesRef.current = updatedImages;
+    onImagesChange(updatedImages);
+  }, [onImagesChange]);
+
   const generateMarketingImages = async () => {
     if (selectedTypes.length === 0) {
       toast.error("请先选择至少一种图片类型");
@@ -134,8 +156,8 @@ export function MarketingImageGallery({
 
         if (error) throw error;
 
-        // Immediately update UI with the new image
-        onImagesChange([...images, savedImage as GeneratedImage]);
+        // 使用安全的 addImage 函数，基于 ref 确保最新状态
+        addImage(savedImage as GeneratedImage);
         
         // Update progress
         setCompletedCount(prev => prev + 1);
@@ -205,7 +227,8 @@ export function MarketingImageGallery({
 
       if (error) throw error;
 
-      onImagesChange([...images, savedImage as GeneratedImage]);
+      // 使用安全的 addImage 函数
+      addImage(savedImage as GeneratedImage);
       toast.success(`${type.label}已重新生成`);
     } catch (error) {
       toast.error("重新生成失败");
@@ -223,7 +246,8 @@ export function MarketingImageGallery({
     if (error) {
       toast.error("删除失败");
     } else {
-      onImagesChange(images.filter(img => img.id !== imageId));
+      // 使用安全的 removeImage 函数
+      removeImage(imageId);
       toast.success("已删除");
     }
   };
