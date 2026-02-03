@@ -206,7 +206,7 @@ export default function ProjectPage() {
       .from("landing_pages")
       .select("*")
       .eq("project_id", id)
-      .single();
+      .maybeSingle();
 
     if (!error && data) {
       setLandingPage(data as unknown as LandingPageData);
