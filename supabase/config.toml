@@ -1,1 +1,31 @@
 project_id = "iugfublztamayujmnpuw"
+
+[functions.analyze-landing-page]
+verify_jwt = false
+
+[functions.analyze-reviews]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = false
+
+[functions.generate-image]
+verify_jwt = false
+
+[functions.generate-landing-page]
+verify_jwt = false
+
+[functions.generate-video]
+verify_jwt = false
+
+[functions.initial-market-analysis]
+verify_jwt = false
+
+[functions.market-analysis]
+verify_jwt = false
+
+[functions.regenerate-prd-section]
+verify_jwt = false
+
+[functions.scrape-competitor]
+verify_jwt = false
