@@ -335,10 +335,25 @@ export default function ProjectPage() {
   };
 
   const advanceStage = async (targetStage?: number) => {
-    if (!project) return;
+    if (!project) {
+      const errorMsg = "项目数据未加载，无法切换阶段";
+      console.error("[Stage Switch Error]", errorMsg, { projectId: id });
+      toast.error(errorMsg);
+      return;
+    }
     
     const newStage = targetStage || project.current_stage + 1;
-    if (newStage > 4) return;
+    if (newStage > 4) {
+      const errorMsg = "已是最后阶段，无法继续前进";
+      console.warn("[Stage Switch]", errorMsg, { currentStage: project.current_stage, targetStage: newStage });
+      return;
+    }
+    
+    console.log("[Stage Switch] Attempting to advance", { 
+      from: project.current_stage, 
+      to: newStage, 
+      projectId: id 
+    });
     
     const { error } = await supabase
       .from("projects")
@@ -346,8 +361,20 @@ export default function ProjectPage() {
       .eq("id", id);
 
     if (error) {
-      toast.error("阶段更新失败");
+      const errorDetails = `阶段更新失败: ${error.message || "未知错误"}`;
+      console.error("[Stage Switch Error]", errorDetails, { 
+        code: error.code, 
+        details: error.details, 
+        hint: error.hint,
+        projectId: id,
+        targetStage: newStage
+      });
+      toast.error(errorDetails, {
+        description: error.hint || `错误代码: ${error.code || "UNKNOWN"}`,
+        duration: 5000,
+      });
     } else {
+      console.log("[Stage Switch Success]", { from: project.current_stage, to: newStage });
       setProject((prev) => prev ? { ...prev, current_stage: newStage } : null);
       setShowTransitionPrompt(false);
       toast.success(`🎉 进入阶段 ${newStage}`);
