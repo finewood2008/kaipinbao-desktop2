@@ -1,8 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.93.3";
-import {
-  GoogleGenAI,
-} from "https://esm.sh/@google/genai@0.14.1";
+import { GoogleGenAI } from "https://esm.sh/@google/genai@0.14.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,6 +41,7 @@ interface PrdData {
 
 // Fetch image and convert to base64
 async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; mimeType: string }> {
+  console.log("Fetching image from:", imageUrl);
   const response = await fetch(imageUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status}`);
@@ -50,8 +49,18 @@ async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; m
   
   const contentType = response.headers.get("content-type") || "image/png";
   const arrayBuffer = await response.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+  const uint8Array = new Uint8Array(arrayBuffer);
   
+  // Convert to base64 in chunks to avoid stack overflow for large images
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  const base64 = btoa(binary);
+  
+  console.log("Image fetched successfully, mimeType:", contentType, "base64 length:", base64.length);
   return { base64, mimeType: contentType };
 }
 
@@ -84,24 +93,18 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // Verify user token and get claims
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    // Verify user token and get user
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     
-    if (claimsError || !claimsData?.claims) {
+    if (userError || !user) {
+      console.error("Auth error:", userError);
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const userId = claimsData.claims.sub;
-    if (!userId) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const userId = user.id;
 
     const { 
       projectId, 
@@ -111,6 +114,8 @@ serve(async (req) => {
       duration = 6,
       prdData 
     } = await req.json();
+
+    console.log("Generate video request:", { projectId, sceneDescription, parentImageId, hasParentImageUrl: !!parentImageUrl, duration });
 
     if (!projectId || !sceneDescription) {
       throw new Error("Project ID and scene description are required");
@@ -130,6 +135,7 @@ serve(async (req) => {
 
     // Build enhanced video prompt with PRD context
     const videoPrompt = buildVideoPrompt(sceneDescription, prdData);
+    console.log("Video prompt built:", videoPrompt.substring(0, 200) + "...");
 
     // Create video record with pending status
     const { data: videoRecord, error: insertError } = await supabase
@@ -150,6 +156,8 @@ serve(async (req) => {
       throw new Error("Failed to create video record");
     }
 
+    console.log("Video record created:", videoRecord.id);
+
     // Initialize Google GenAI
     const ai = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
@@ -159,21 +167,22 @@ serve(async (req) => {
       
       if (parentImageUrl) {
         // Image-to-video generation - maintain product consistency
-        console.log("Using image-to-video mode with parent image:", parentImageUrl);
+        console.log("Using image-to-video mode with parent image");
         
         const { base64, mimeType } = await fetchImageAsBase64(parentImageUrl);
         
-        const imageToVideoPrompt = `基于这个产品图片生成6秒的产品展示视频。
+        const imageToVideoPrompt = `Generate a 6-second professional product showcase video based on this product image.
 
 ${videoPrompt}
 
-【最重要的要求】
-这是产品营销视频。产品的外观必须与图片中100%一致：
-- 产品形状、颜色、材质不能有任何改变
-- 产品设计细节必须完全保留
-- 只添加轻微的相机运动和环境光线变化
-- 产品始终是画面焦点`;
+CRITICAL REQUIREMENTS:
+- The product appearance MUST match the image exactly (shape, color, texture, design details)
+- Only add subtle camera movements and lighting changes
+- Keep the product as the focal point throughout
+- Create smooth, professional cinematic motion`;
 
+        console.log("Calling Google Veo API with image...");
+        
         operation = await ai.models.generateVideos({
           model: "veo-2.0-generate-001",
           prompt: imageToVideoPrompt,
@@ -189,6 +198,8 @@ ${videoPrompt}
         });
       } else {
         // Text-to-video generation
+        console.log("Using text-to-video mode");
+        
         operation = await ai.models.generateVideos({
           model: "veo-2.0-generate-001",
           prompt: videoPrompt,
@@ -200,6 +211,8 @@ ${videoPrompt}
         });
       }
 
+      console.log("Initial operation response received, starting polling...");
+
       // Poll for video generation completion
       let attempts = 0;
       const maxAttempts = 60; // Max 5 minutes (5s interval)
@@ -210,14 +223,24 @@ ${videoPrompt}
           operation: operation,
         });
         attempts++;
-        console.log(`Video generation attempt ${attempts}/${maxAttempts}, done: ${operation.done}`);
+        console.log(`Video generation polling attempt ${attempts}/${maxAttempts}, done: ${operation.done}`);
       }
+
+      console.log("Polling completed. Operation done:", operation.done);
 
       if (operation.done && operation.response?.generatedVideos?.[0]) {
         const video = operation.response.generatedVideos[0];
-        const videoUrl = video.video?.uri;
+        let videoUrl = video.video?.uri;
+
+        console.log("Generated video URI:", videoUrl);
 
         if (videoUrl) {
+          // Append API key if needed for access
+          if (!videoUrl.includes("key=")) {
+            const separator = videoUrl.includes("?") ? "&" : "?";
+            videoUrl = `${videoUrl}${separator}key=${GOOGLE_API_KEY}`;
+          }
+
           // Update video record with completed status and URL
           await supabase
             .from("generated_videos")
@@ -247,35 +270,67 @@ ${videoPrompt}
         }
       }
 
-      // If video generation didn't complete, mark as pending
+      // Check for error in operation
+      if (operation.error) {
+        console.error("Video generation operation error:", operation.error);
+        await supabase
+          .from("generated_videos")
+          .update({ status: "failed" })
+          .eq("id", videoRecord.id);
+
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Video generation failed: ${operation.error.message || JSON.stringify(operation.error)}`,
+            video: videoRecord,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // If video generation didn't complete within time, mark as pending
       await supabase
         .from("generated_videos")
         .update({ status: "pending" })
         .eq("id", videoRecord.id);
 
-      console.log(`Video generation pending for project ${projectId}, video ${videoRecord.id}`);
+      console.log(`Video generation pending (timeout) for project ${projectId}, video ${videoRecord.id}`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          video: { ...videoRecord, status: "pending" },
+          message: "Video generation in progress. Check status for updates.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
 
     } catch (genError) {
       console.error("Video generation error:", genError);
       
-      // Mark as pending instead of failed for graceful degradation
+      // Mark as failed
       await supabase
         .from("generated_videos")
-        .update({ status: "pending" })
+        .update({ status: "failed" })
         .eq("id", videoRecord.id);
-    }
 
-    // Return the video record (client will poll for status updates)
-    return new Response(
-      JSON.stringify({
-        success: true,
-        video: videoRecord,
-        message: "Video generation task created. Check status for updates.",
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: genError instanceof Error ? genError.message : "Video generation failed",
+          video: videoRecord,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
   } catch (error) {
     console.error("Generate video error:", error);
@@ -296,50 +351,49 @@ function buildVideoPrompt(
   // Build PRD context
   const prdParts: string[] = [];
   if (prdData?.selectedDirection) {
-    prdParts.push(`产品：${prdData.selectedDirection}`);
+    prdParts.push(`Product: ${prdData.selectedDirection}`);
   }
   if (prdData?.targetAudience) {
-    prdParts.push(`目标用户：${prdData.targetAudience}`);
+    prdParts.push(`Target Audience: ${prdData.targetAudience}`);
   }
   if (prdData?.designStyle) {
-    prdParts.push(`设计风格：${prdData.designStyle}`);
+    prdParts.push(`Design Style: ${prdData.designStyle}`);
   }
   if (prdData?.coreFeatures?.length) {
-    prdParts.push(`核心功能：${prdData.coreFeatures.join("、")}`);
+    prdParts.push(`Core Features: ${prdData.coreFeatures.join(", ")}`);
   }
   
   const prdContext = prdParts.length > 0 
-    ? `\n\n产品信息：\n${prdParts.join("\n")}` 
+    ? `\n\nProduct Context:\n${prdParts.join("\n")}` 
     : "";
 
-  return `创建一个6秒的专业产品展示视频：
+  return `Create a 6-second professional product showcase video:
 
-场景描述：${sceneDescription}${prdContext}
+Scene Description: ${sceneDescription}${prdContext}
 
-【视频规格】
-- 时长：6秒
-- 分辨率：720p或更高
-- 帧率：24fps
-- 风格：电影级产品展示
+VIDEO SPECIFICATIONS:
+- Duration: 6 seconds
+- Resolution: 720p or higher
+- Frame rate: 24fps
+- Style: Cinematic product showcase
 
-【摄影要求】
-- 流畅的相机运动（慢速平移、轻柔旋转或微妙变焦）
-- 专业灯光配合柔和阴影
-- 干净整洁的背景，与场景相协调
-- 聚焦产品细节和可用性
+CINEMATOGRAPHY:
+- Smooth camera movements (slow pan, gentle rotation, or subtle zoom)
+- Professional lighting with soft shadows
+- Clean background that complements the scene
+- Focus on product details and usability
 
-【氛围与基调】
-- 专业高端感
-- 自然真实的呈现
-- 温暖舒适的色彩调性
-- 适度景深营造电影质感
+MOOD & TONE:
+- Professional and premium feel
+- Natural and authentic presentation
+- Warm and inviting color palette
+- Shallow depth of field for cinematic quality
 
-【关键约束 - 产品一致性】
-如果基于产品图片生成，必须：
-- 产品外观、颜色、形状必须与原图100%一致
-- 不得改变产品任何设计细节
-- 产品始终是画面焦点
-- 只添加相机运动和环境变化
+PRODUCT CONSISTENCY (if based on product image):
+- Product appearance MUST match exactly - shape, color, texture
+- Do NOT alter any design details
+- Product remains the focal point throughout
+- Only add camera movement and environmental changes
 
-输出：一个流畅的、适合循环播放的产品视频，可用于营销和电商展示。`;
+OUTPUT: A smooth, loopable product video suitable for marketing and e-commerce.`;
 }
