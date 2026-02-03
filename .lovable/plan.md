@@ -1,160 +1,159 @@
 
-# 产品造型更换时重置营销素材的实现方案
 
-## 需求理解
+# 独立站 UI 重新设计方案
 
-当用户在产品设计阶段**更换选定的产品造型**时，所有基于该造型生成的营销图片和视频都需要被重置并重新加载，因为这些素材是配套生成的。
+## 设计目标
 
-## 当前架构分析
+重新设计落地页 UI，尤其是 Hero 区域，使产品图片与背景更好地融合，打造更具视觉冲击力和现代感的页面。
 
-| 组件 | 职责 |
-|------|------|
-| `VisualGenerationPhase.tsx` | 管理两个阶段的切换和状态 |
-| `ProductDesignGallery.tsx` | 产品造型的生成和选择 |
-| `MarketingImageGallery.tsx` | 营销图片的生成和展示 |
-| `VideoGenerationSection.tsx` | 视频的生成和展示 |
-| `Project.tsx` | 顶层状态管理，持有 `productImages`、`marketingImages`、`videos` |
+## 设计理念
 
-**数据关联**：
-- `generated_images` 表有 `parent_image_id` 字段，关联父产品图片
-- `generated_videos` 表也有 `parent_image_id` 字段
-
-## 实现方案
-
-### 1. 修改 VisualGenerationPhase.tsx
-
-当用户选择新的产品造型时，需要检测是否是**更换造型**（而非首次选择），如果是更换：
-
-- 清除前端状态中与旧造型关联的营销图片和视频
-- 调用父组件提供的清除回调
-- 可选：从数据库删除旧素材
+采用"沉浸式产品展示"设计理念，让产品图片成为背景的一部分，通过模糊、渐变、光效等技术手段实现无缝融合。
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                    产品造型更换流程                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│   用户点击"选择此造型"                                       │
-│            │                                                 │
-│            ▼                                                 │
-│   ┌─────────────────────┐                                   │
-│   │ 检测是否已有选定造型  │                                   │
-│   └─────────────────────┘                                   │
-│            │                                                 │
-│     ┌──────┴──────┐                                         │
-│     │             │                                         │
-│     ▼             ▼                                         │
-│  [首次选择]    [更换造型]                                    │
-│     │             │                                         │
-│     │             ▼                                         │
-│     │    ┌────────────────────┐                             │
-│     │    │ 删除旧的营销图片    │                             │
-│     │    │ 删除旧的视频        │                             │
-│     │    │ 清空前端状态        │                             │
-│     │    └────────────────────┘                             │
-│     │             │                                         │
-│     └──────┬──────┘                                         │
-│            ▼                                                 │
-│   ┌─────────────────────┐                                   │
-│   │ 设置新的选定造型     │                                   │
-│   │ 显示阶段过渡提示     │                                   │
-│   └─────────────────────┘                                   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         当前 Hero 布局                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│    ┌─────────────────────────────────────────────────────────┐     │
+│    │                    渐变背景                               │     │
+│    │                                                         │     │
+│    │              ┌─────────────┐                           │     │
+│    │              │  产品图片   │                           │     │
+│    │              │  (独立展示) │                           │     │
+│    │              └─────────────┘                           │     │
+│    │                                                         │     │
+│    │                   标题文案                               │     │
+│    │                   副标题                                 │     │
+│    │                  [CTA 按钮]                             │     │
+│    │                                                         │     │
+│    └─────────────────────────────────────────────────────────┘     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                         新 Hero 布局                                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│    ┌─────────────────────────────────────────────────────────┐     │
+│    │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│     │
+│    │░░░░░░░░░░ 产品图片作为模糊背景 (blur) ░░░░░░░░░░░░░░░░░░│     │
+│    │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│     │
+│    │                     ┌───────────────┐                   │     │
+│    │     文案区域        │   清晰产品图   │                   │     │
+│    │     ────────        │   (浮动动效)   │                   │     │
+│    │     标题            │   光晕环绕     │                   │     │
+│    │     副标题          └───────────────┘                   │     │
+│    │    [CTA 按钮]                                           │     │
+│    │                                                         │     │
+│    │░░░░░░░░░░░░░░░ 渐变遮罩层 ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│     │
+│    └─────────────────────────────────────────────────────────┘     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2. 修改 ProductDesignGallery.tsx
+## 核心改进点
 
-增强 `handleSelectImage` 函数，添加回调通知父组件需要重置素材：
+### 1. Hero 区域 - 产品图片与背景融合
 
-- 新增 `onDesignChange` prop，当选择新造型时调用
-- 传递旧的选定图片 ID，以便父组件知道需要清除哪些关联素材
+| 元素 | 当前实现 | 新实现 |
+|------|----------|--------|
+| 产品图片 | 独立展示，圆角卡片 | 作为背景模糊层 + 前景清晰展示 |
+| 背景 | 纯渐变色 | 产品图模糊放大 + 渐变叠加 |
+| 布局 | 垂直居中堆叠 | 左右分栏（桌面）/ 堆叠（移动端） |
+| 动效 | 简单淡入 | 浮动呼吸动效 + 光晕脉冲 |
 
-### 3. 修改 Project.tsx
+### 2. 视觉效果增强
 
-在顶层添加重置逻辑：
+- **模糊背景层**：产品图片放大 150% 并添加 `blur(60px)` 作为背景
+- **渐变遮罩**：深色渐变叠加确保文字可读性
+- **光晕效果**：产品图片周围添加动态光晕环
+- **浮动动效**：产品图片持续微微浮动（scale + translateY）
+- **玻璃拟态卡片**：文案区域使用 `backdrop-blur` 效果
 
-- 新增 `handleProductDesignChange` 函数
-- 当收到造型更换通知时，删除数据库中关联的营销图片和视频
-- 清空前端状态
+### 3. 其他区块优化
 
-## 详细技术实现
+- **产品亮点区**：采用交错布局（图左文右、图右文左）
+- **痛点/卖点区**：增加图标动画和悬浮效果
+- **CTA 区域**：渐变边框 + 呼吸脉冲动画
+- **整体间距**：优化各区块间的视觉节奏
 
-### 步骤一：ProductDesignGallery 增加回调
+## 技术实现
+
+### Hero 区域核心代码结构
 
 ```tsx
-// ProductDesignGallery.tsx
-interface ProductDesignGalleryProps {
-  // ...existing props
-  onDesignChange?: (oldImageId: string | null, newImageId: string) => void;
-}
-
-const handleSelectImage = async (image: GeneratedImage) => {
-  // 找到当前已选择的造型
-  const currentSelected = images.find(img => img.is_selected);
+<section className="relative min-h-screen overflow-hidden">
+  {/* 层级 1: 模糊产品图背景 */}
+  {heroImageUrl && (
+    <div className="absolute inset-0 overflow-hidden">
+      <img 
+        src={heroImageUrl}
+        className="absolute w-[150%] h-[150%] -top-[25%] -left-[25%] object-cover blur-3xl opacity-60"
+      />
+    </div>
+  )}
   
-  // 如果已有选择且不是同一个，通知父组件
-  if (currentSelected && currentSelected.id !== image.id) {
-    onDesignChange?.(currentSelected.id, image.id);
-  }
+  {/* 层级 2: 渐变遮罩 */}
+  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/80" />
   
-  // ...existing selection logic
-};
+  {/* 层级 3: 内容区 - 左右分栏 */}
+  <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between min-h-screen px-8 py-16">
+    
+    {/* 左侧文案区 - 玻璃卡片 */}
+    <div className="lg:w-1/2 text-center lg:text-left">
+      <div className="backdrop-blur-xl bg-white/10 rounded-3xl p-8 border border-white/20">
+        <h1>...</h1>
+        <p>...</p>
+        <Button>...</Button>
+      </div>
+    </div>
+    
+    {/* 右侧产品展示区 */}
+    <div className="lg:w-1/2 relative">
+      {/* 光晕效果 */}
+      <motion.div 
+        className="absolute inset-0 bg-gradient-radial from-primary/30 to-transparent blur-2xl"
+        animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
+      />
+      
+      {/* 产品图片 - 浮动动效 */}
+      <motion.img
+        src={heroImageUrl}
+        className="relative z-10 max-w-md mx-auto rounded-2xl shadow-2xl"
+        animate={{ y: [0, -15, 0], scale: [1, 1.02, 1] }}
+        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  </div>
+</section>
 ```
 
-### 步骤二：VisualGenerationPhase 处理造型更换
+### 模板样式增强
 
-```tsx
-// VisualGenerationPhase.tsx
-const handleDesignChange = async (oldImageId: string | null, newImageId: string) => {
-  if (oldImageId) {
-    // 删除数据库中与旧造型关联的营销图片
-    await supabase
-      .from("generated_images")
-      .delete()
-      .eq("parent_image_id", oldImageId);
-    
-    // 删除数据库中与旧造型关联的视频
-    await supabase
-      .from("generated_videos")
-      .delete()
-      .eq("parent_image_id", oldImageId);
-    
-    // 清空前端状态
-    onMarketingImagesChange([]);
-    onVideosChange([]);
-    
-    // 重置图片类型选择
-    setSelectedImageTypes([]);
-    
-    toast.info("已清除旧造型的营销素材，请重新生成");
-  }
-};
-```
+为每个模板风格添加对应的 Hero 融合效果：
 
-### 步骤三：返回 Phase 1 时的处理
-
-当用户在 Phase 2 点击"更换造型"返回 Phase 1 时，如果选择了新造型，也需要触发重置逻辑。
-
-## 用户体验优化
-
-1. **确认对话框**：在用户更换造型时，显示确认提示："更换产品造型将清除已生成的 X 张营销图片和 Y 个视频，确定继续？"
-
-2. **清除动画**：使用 Framer Motion 添加平滑的淡出动画
-
-3. **Toast 通知**：通知用户素材已重置
+| 模板 | 背景处理 | 光晕颜色 | 遮罩风格 |
+|------|----------|----------|----------|
+| modern | 蓝紫渐变模糊 | 蓝色光晕 | 底部渐变 |
+| minimal | 低饱和度模糊 | 白色微光 | 轻度遮罩 |
+| bold | 高饱和度模糊 | 橙红光晕 | 对角渐变 |
+| elegant | 暖色调模糊 | 金色光晕 | 径向渐变 |
+| tech | 深色模糊 | 青色霓虹 | 网格叠加 |
 
 ## 涉及文件修改
 
 | 文件 | 修改内容 |
 |------|----------|
-| `src/components/ProductDesignGallery.tsx` | 添加 `onDesignChange` prop 和更换检测逻辑 |
-| `src/components/VisualGenerationPhase.tsx` | 添加 `handleDesignChange` 处理函数，传递给子组件 |
-| `src/pages/Project.tsx` | 无需修改，状态通过现有回调更新 |
+| `src/components/LandingPagePreview.tsx` | 重构 Hero 区域布局和样式，添加融合效果 |
+| `src/pages/LandingPage.tsx` | 同步更新公开落地页的 Hero 实现 |
+| `src/components/LandingPageTemplates.tsx` | 为每个模板添加 Hero 融合相关样式配置 |
 
-## 边界情况处理
+## 预期效果
 
-1. **首次选择造型**：不触发重置，直接进入 Phase 2
-2. **选择相同造型**：不触发重置
-3. **删除操作失败**：捕获错误并显示提示，前端状态仍然清空
-4. **用户取消更换**：在确认对话框中取消，不做任何操作
+1. **视觉冲击力**：产品图片成为整个 Hero 的视觉焦点
+2. **品牌一致性**：产品色调自动渗透到背景中
+3. **专业感**：玻璃拟态和动效提升高端质感
+4. **可读性**：文字区域有足够对比度
+5. **响应式**：移动端自动切换为堆叠布局
+
