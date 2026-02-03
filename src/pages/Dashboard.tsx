@@ -110,9 +110,15 @@ export default function Dashboard() {
     }
 
     // Fetch email counts for all landing pages
+    // landing_pages is now an array (one-to-many), extract active version's ID
     const landingPageIds = (data || [])
-      .filter((p: any) => p.landing_pages)
-      .map((p: any) => p.landing_pages.id);
+      .filter((p: any) => p.landing_pages && p.landing_pages.length > 0)
+      .map((p: any) => {
+        const lpArray = p.landing_pages;
+        const activeLp = lpArray.find((lp: any) => lp.is_active) || lpArray[0];
+        return activeLp?.id;
+      })
+      .filter(Boolean);
 
     let emailCounts: Record<string, number> = {};
     if (landingPageIds.length > 0) {
@@ -141,6 +147,12 @@ export default function Dashboard() {
         .map((img: any) => img.image_url);
       const productImages = [...selectedImages, ...otherImages].slice(0, 4);
 
+      // landing_pages is now an array - get the active version
+      const landingPagesArray = p.landing_pages || [];
+      const activeLandingPage = landingPagesArray.find((lp: any) => lp.is_active) 
+        || landingPagesArray[0] 
+        || null;
+
       return {
         id: p.id,
         name: p.name,
@@ -150,8 +162,8 @@ export default function Dashboard() {
         created_at: p.created_at,
         cover_image_url: p.cover_image_url || productImages[0] || null,
         product_images: productImages,
-        landing_page: p.landing_pages || null,
-        email_count: p.landing_pages ? (emailCounts[p.landing_pages.id] || 0) : 0,
+        landing_page: activeLandingPage,
+        email_count: activeLandingPage ? (emailCounts[activeLandingPage.id] || 0) : 0,
       };
     });
 
