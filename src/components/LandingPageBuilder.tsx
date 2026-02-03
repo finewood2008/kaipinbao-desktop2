@@ -38,6 +38,7 @@ import { LandingPagePreview } from "./LandingPagePreview";
 import { TemplateSelect, type TemplateStyle } from "./LandingPageTemplates";
 import { LandingPageAnalytics } from "./LandingPageAnalytics";
 import { InlineAssetGenerator } from "./InlineAssetGenerator";
+import { LandingPageEmptyState } from "./LandingPageEmptyState";
 import { cn } from "@/lib/utils";
 
 interface FaqItem {
@@ -185,7 +186,6 @@ export function LandingPageBuilder({
   const [generatedMarketingImages, setGeneratedMarketingImages] = useState<Record<string, string | string[]>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateStyle>("modern");
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(true);
 
   // Auto-show analytics if page is already published
   const shouldShowAnalytics = showAnalytics || (landingPage?.is_published && !isRegenerating);
@@ -368,84 +368,14 @@ export function LandingPageBuilder({
   if (!landingPage) {
     return (
       <div className="space-y-6">
-        {/* Onboarding Guide */}
-        <AnimatePresence>
-          {showOnboarding && (
-            <motion.div
-              initial={{ opacity: 0, y: -20, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: -20, height: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Card className="glass border-primary/30 bg-primary/5 overflow-hidden">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-primary" />
-                      <h4 className="font-semibold">落地页阶段流程</h4>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => setShowOnboarding(false)}
-                      className="text-muted-foreground hover:text-foreground -mt-1 -mr-2"
-                    >
-                      知道了
-                    </Button>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[
-                      { 
-                        step: 1, 
-                        title: "选择模板", 
-                        desc: "挑选适合产品的页面风格",
-                        icon: Palette,
-                        color: "text-stage-1"
-                      },
-                      { 
-                        step: 2, 
-                        title: "AI 生成页面", 
-                        desc: "结合 PRD 与素材自动生成",
-                        icon: Wand2,
-                        color: "text-stage-2"
-                      },
-                      { 
-                        step: 3, 
-                        title: "发布 & 看数据", 
-                        desc: "一键发布并追踪转化效果",
-                        icon: BarChart3,
-                        color: "text-stage-3"
-                      },
-                    ].map((item, index) => (
-                      <motion.div
-                        key={item.step}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="flex items-start gap-3 p-3 rounded-lg bg-background/50"
-                      >
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                          "bg-gradient-to-br from-primary/20 to-accent/20"
-                        )}>
-                          <item.icon className={cn("w-4 h-4", item.color)} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">步骤 {item.step}</span>
-                          </div>
-                          <p className="font-medium text-sm">{item.title}</p>
-                          <p className="text-xs text-muted-foreground">{item.desc}</p>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Enhanced Empty State with 3-step guide */}
+        <LandingPageEmptyState
+          hasProductImage={!!selectedImageUrl}
+          hasMarketingImages={marketingImages.length > 0}
+          hasVideo={!!videoUrl}
+          hasPrdData={!!(prdData?.pain_points?.length || prdData?.selling_points?.length)}
+          onBackToVisual={onBackToVisual}
+        />
 
         <Card className="glass border-border/50 overflow-hidden">
           <CardContent className="p-8">
@@ -522,44 +452,6 @@ export function LandingPageBuilder({
                     )}
                   </div>
                 </div>
-
-                {/* Missing assets warning */}
-                {(marketingImages.length === 0 || !videoUrl) && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mb-8 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg max-w-md mx-auto"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <ImageIcon className="w-4 h-4 text-amber-500" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="text-sm font-medium text-amber-600 dark:text-amber-400 mb-1">
-                          素材不完整
-                        </p>
-                        <p className="text-xs text-muted-foreground mb-3">
-                          {marketingImages.length === 0 && !videoUrl 
-                            ? "缺少营销图片和视频，落地页效果可能受限" 
-                            : marketingImages.length === 0 
-                            ? "缺少营销图片，建议先生成场景图、结构图等" 
-                            : "缺少视频，建议先生成产品视频提升转化率"}
-                        </p>
-                        {onBackToVisual && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={onBackToVisual}
-                            className="text-xs border-amber-500/30 hover:bg-amber-500/10"
-                          >
-                            <ImageIcon className="w-3 h-3 mr-1" />
-                            返回生成素材
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
 
                 {/* Inline Asset Generator */}
                 {(marketingImages.length === 0 || !videoUrl) && onMarketingImagesChange && onVideosChange && (
@@ -688,7 +580,7 @@ export function LandingPageBuilder({
       {/* Status Card */}
       <Card className={cn(
         "glass transition-all",
-        landingPage.is_published ? "border-green-500/50" : "border-stage-3/50"
+        landingPage.is_published ? "border-accent/50" : "border-stage-3/50"
       )}>
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
@@ -696,7 +588,7 @@ export function LandingPageBuilder({
               <motion.div 
                 className={cn(
                   "w-3 h-3 rounded-full",
-                  landingPage.is_published ? "bg-green-500" : "bg-yellow-500"
+                  landingPage.is_published ? "bg-accent" : "bg-primary"
                 )}
                 animate={landingPage.is_published ? {} : { scale: [1, 1.2, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
@@ -792,7 +684,7 @@ export function LandingPageBuilder({
             <Button
               onClick={handlePublish}
               disabled={isPublishing}
-              className="w-full bg-gradient-to-r from-stage-3 to-green-500 hover:opacity-90"
+              className="w-full bg-gradient-to-r from-stage-3 to-accent hover:opacity-90"
             >
               {isPublishing ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
