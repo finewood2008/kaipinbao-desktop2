@@ -21,7 +21,21 @@ interface PRDData {
   features?: string[];
   usageScenario?: string;
   designStyle?: string;
+  designStyleDetails?: {
+    overallStyle?: string;
+    colorTone?: string;
+    surfaceTexture?: string;
+    formLanguage?: string;
+    materialPreference?: string;
+    avoidElements?: string;
+  };
   coreFeatures?: string[];
+  coreFeaturesDetails?: Array<{
+    feature: string;
+    benefit?: string;
+    implementation?: string;
+    priority?: string;
+  }>;
   pricingStrategy?: string;
   marketingAssets?: {
     sceneDescription?: string;
@@ -48,32 +62,44 @@ interface VisualAssets {
   videoUrl?: string;
 }
 
-// AI Advertising Expert System Prompt
-const SYSTEM_PROMPT = `You are a world-class AI Advertising Expert with 15 years of experience in cross-border e-commerce and DTC brand advertising.
+// AI Brand Strategy Expert System Prompt
+const SYSTEM_PROMPT = `You are a world-class Brand Strategy Expert with 15 years of experience in cross-border e-commerce, DTC brand building, and luxury product marketing.
 
 ## Your Professional Background
-- Former core member of advertising teams at Meta, Google, and TikTok
-- Managed over $50 million in advertising budgets
-- Specialized in new product market validation and cold-start strategies
-- Deep expertise in Facebook/Instagram/Google Ads best practices
+- Former brand director at leading global agencies (IDEO, Pentagram, R/GA)
+- Built and launched 50+ successful consumer brands
+- Specialized in premium product positioning and visual identity
+- Deep expertise in conversion-focused landing page design
+- Master of color psychology and visual storytelling
 
 ## Core Mission
-You are designing an advertising landing page for a BRAND NEW PRODUCT. The core purpose of this landing page is:
-**To validate market interest and acceptance of this new product through email subscription collection**
+Based on the complete product definition provided, craft a compelling BRAND LANDING PAGE that:
+1. Establishes strong brand identity and positioning
+2. Creates emotional connection with target audience
+3. Showcases product value through visual storytelling
+4. Optimizes for email subscription conversion
 
-## Design Principles
-1. **AIDA Model**: Attention → Interest → Desire → Action
-2. **Pain Point Resonance**: Use real user pain points from competitor reviews to build empathy
-3. **Differentiated Value**: Highlight core differences from competitors
-4. **Urgency Creation**: Use "limited", "early access", "exclusive" to boost conversions
-5. **Trust Building**: Show social proof and professional endorsements
-6. **Single Clear CTA**: One page, one core action - email subscription
+## Brand Design Philosophy
+1. **Hero Impact**: Full-screen hero with product as the visual anchor
+2. **Brand Story Arc**: Pain → Solution → Deep Product Introduction → Trust → Action
+3. **Visual Selling Points**: Every core feature paired with compelling imagery
+4. **Scenario Immersion**: Help users visualize themselves using the product
+5. **Trust Architecture**: Technical specs, social proof, FAQ to build confidence
+6. **Single CTA Focus**: Email collection as the sole conversion goal
 
-## Copywriting Style
-- Target international markets, ALL content MUST be in ENGLISH
-- Concise and powerful, every sentence has a clear purpose
-- Action-oriented language, create visual imagery
-- Data-driven, use specific numbers to enhance persuasion`;
+## Visual Style Decision Framework
+Analyze the product category and target audience to determine:
+- Color Mode: Light (premium, clean) vs Dark (tech, luxury, bold)
+- Primary Color: Reflects brand personality and product category
+- Accent Color: High-contrast CTA color for conversion
+- Visual Tone: Minimalist, Bold, Elegant, Tech, Organic
+
+## Copywriting Excellence
+- ALL content MUST be in ENGLISH for international markets
+- Headlines: Powerful, benefit-driven, max 8 words
+- Subheadlines: Address primary pain point directly
+- Body: Action-oriented, visual imagery, specific data points
+- CTAs: Clear, urgent, value-focused`;
 
 // Call Google Gemini API directly (Primary)
 async function callGoogleDirect(strategyPrompt: string): Promise<string> {
@@ -162,19 +188,18 @@ serve(async (req) => {
   }
 
   try {
-    const { prdData, selectedImageUrl, targetMarket, visualAssets, templateStyle } = await req.json() as {
+    const { prdData, selectedImageUrl, targetMarket, visualAssets } = await req.json() as {
       prdData: PRDData;
       selectedImageUrl?: string;
       targetMarket?: string;
       visualAssets?: VisualAssets;
-      templateStyle?: string;
     };
 
     // Get marketing images with their copy
     const marketingImagesWithCopy: MarketingImageWithCopy[] = visualAssets?.marketingImages || [];
 
-    // Build comprehensive prompt with professional advertising strategy analysis
-    const strategyPrompt = `Based on the following product intelligence, design a high-converting landing page strategy.
+    // Build comprehensive brand strategy prompt
+    const strategyPrompt = `Based on the following complete product definition, create a compelling brand landing page strategy.
 
 ## PRODUCT INTELLIGENCE
 Product Name: ${prdData.name}
@@ -182,11 +207,30 @@ Product Description: ${prdData.description || "N/A"}
 Target Market: ${targetMarket || "International"}
 Target Audience: ${prdData.target_audience || "General consumers"}
 Usage Scenario: ${prdData.usageScenario || "N/A"}
-Design Style: ${prdData.designStyle || "Modern minimalist"}
-Core Features: ${prdData.coreFeatures?.join(", ") || prdData.features?.join(", ") || "N/A"}
-Pain Points (from PRD): ${prdData.pain_points?.join(", ") || "N/A"}
-Selling Points: ${prdData.selling_points?.join(", ") || "N/A"}
-Pricing Strategy: ${prdData.pricingStrategy || "N/A"}
+
+## DESIGN DIRECTION (from PRD)
+Overall Design Style: ${prdData.designStyle || "Modern minimalist"}
+${prdData.designStyleDetails ? `
+Detailed Style Preferences:
+- Overall Style: ${prdData.designStyleDetails.overallStyle || "N/A"}
+- Color Tone: ${prdData.designStyleDetails.colorTone || "N/A"}
+- Surface Texture: ${prdData.designStyleDetails.surfaceTexture || "N/A"}
+- Form Language: ${prdData.designStyleDetails.formLanguage || "N/A"}
+- Material Preference: ${prdData.designStyleDetails.materialPreference || "N/A"}
+- Elements to Avoid: ${prdData.designStyleDetails.avoidElements || "N/A"}
+` : ""}
+
+## CORE FEATURES
+${prdData.coreFeaturesDetails?.map(f => `- ${f.feature}: ${f.benefit || ""} (Priority: ${f.priority || "medium"})`).join("\n") || prdData.coreFeatures?.join(", ") || prdData.features?.join(", ") || "N/A"}
+
+## PAIN POINTS (from market research)
+${prdData.pain_points?.join("\n- ") || "N/A"}
+
+## SELLING POINTS
+${prdData.selling_points?.join("\n- ") || "N/A"}
+
+## PRICING STRATEGY
+${prdData.pricingStrategy || "N/A"}
 
 ${prdData.competitorInsights ? `
 ## COMPETITOR INTELLIGENCE
@@ -196,7 +240,7 @@ Differentiation Strategy: ${prdData.competitorInsights.differentiationStrategy |
 ` : ""}
 
 ${prdData.marketingAssets ? `
-## VISUAL CONTEXT
+## VISUAL CONTEXT (for copywriting reference)
 Scene Description: ${prdData.marketingAssets.sceneDescription || "N/A"}
 Structure Highlights: ${prdData.marketingAssets.structureHighlights?.join(", ") || "N/A"}
 Lifestyle Context: ${prdData.marketingAssets.lifestyleContext || "N/A"}
@@ -204,13 +248,20 @@ Usage Scenarios: ${prdData.marketingAssets.usageScenarios?.join(", ") || "N/A"}
 ` : ""}
 
 ## AVAILABLE VISUAL ASSETS
-- Product Hero Image: ${selectedImageUrl ? "Available" : "Not available"}
-- Video for Hero Background: ${visualAssets?.videoUrl ? "Available" : "Not available"}
+- Product Hero Image: ${selectedImageUrl ? "Available ✓" : "Not available"}
+- Video for Hero Background: ${visualAssets?.videoUrl ? "Available ✓" : "Not available"}
 - Marketing Images with Copy: ${marketingImagesWithCopy.length} images available
+  ${marketingImagesWithCopy.map(img => `  - ${img.image_type}: "${img.marketing_copy || 'no copy'}"`).join("\n")}
 
 ## YOUR TASK
-Design a comprehensive landing page strategy optimized for EMAIL COLLECTION as the primary conversion goal.
-This is for MARKET VALIDATION - we want to test if there's genuine interest in this product before full launch.
+Create a comprehensive brand landing page strategy. Based on the product category, target audience, and design preferences above, AUTOMATICALLY SELECT the most appropriate visual style.
+
+### Visual Style Decision:
+1. Analyze the product category (tech/lifestyle/luxury/wellness/etc.)
+2. Consider the target audience demographics and preferences
+3. Reference the design style preferences from PRD
+4. Select appropriate color mode (light for premium/clean, dark for tech/luxury/bold)
+5. Choose primary and accent colors that reflect brand personality
 
 Return a JSON object with these fields:
 {
@@ -221,8 +272,19 @@ Return a JSON object with these fields:
   "trustBadges": ["✓ Trust signal 1", "✓ Trust signal 2", "✓ Trust signal 3"],
   "ctaText": "Action-oriented CTA (e.g., 'Get Early Access', 'Join Waitlist')",
   "urgencyMessage": "Scarcity/urgency message (e.g., 'Limited spots for beta testers')",
+  "colorScheme": {
+    "primary": "#HEX - Primary brand color matching product personality",
+    "accent": "#HEX - High-contrast CTA color for conversions",
+    "background": "#HEX - Page background color",
+    "mode": "light" or "dark" - based on product category and audience
+  },
+  "visualStyle": {
+    "heroLayout": "split" or "centered" or "fullscreen",
+    "cardStyle": "glass" or "solid" or "minimal",
+    "animationLevel": "minimal" or "moderate" or "rich"
+  },
   "faqItems": [
-    {"question": "What makes this product different?", "answer": "Detailed answer..."},
+    {"question": "What makes this product different?", "answer": "Detailed answer (2-3 sentences)..."},
     {"question": "When will the product be available?", "answer": "Detailed answer..."},
     {"question": "Is there a money-back guarantee?", "answer": "Detailed answer..."},
     {"question": "How can I contact support?", "answer": "Detailed answer..."}
@@ -230,27 +292,26 @@ Return a JSON object with these fields:
   "specifications": ["Feature 1", "Feature 2", "Feature 3", "Feature 4", "Feature 5", "Feature 6"],
   "usageScenarios": ["Scenario 1 description", "Scenario 2 description", "Scenario 3 description", "Scenario 4 description"],
   "socialProofItems": [
-    {"name": "John D.", "role": "Early Adopter", "content": "This product changed how I..."},
-    {"name": "Sarah M.", "role": "Tech Enthusiast", "content": "Finally, something that actually..."},
-    {"name": "Mike R.", "role": "Professional User", "content": "I've tried many alternatives but..."}
-  ],
-  "colorScheme": {
-    "primary": "Primary brand color hex",
-    "accent": "CTA button color hex (high contrast)",
-    "background": "Background color hex"
-  }
+    {"name": "John D.", "role": "Early Adopter", "content": "Authentic testimonial (2-3 sentences)..."},
+    {"name": "Sarah M.", "role": "Tech Enthusiast", "content": "Authentic testimonial..."},
+    {"name": "Mike R.", "role": "Professional User", "content": "Authentic testimonial..."}
+  ]
 }
 
-CRITICAL: 
+CRITICAL REQUIREMENTS:
 - All text content MUST be in English
-- Focus on conversion, not description
-- Make FAQ answers detailed and helpful (2-3 sentences each)
+- colorScheme MUST be determined based on product category and design preferences
+- For tech products: consider dark mode with cyan/blue accents
+- For lifestyle/wellness products: consider light mode with warm/organic tones
+- For luxury products: consider elegant dark or neutral tones with gold/amber accents
+- For bold/youth brands: consider vibrant colors and high contrast
+- FAQ answers should be detailed and helpful (2-3 sentences each)
 - Social proof should sound authentic and specific
 - Specifications should highlight technical advantages
-- Usage scenarios should help users visualize themselves using the product
+
 Only return the JSON object, no other text.`;
 
-    console.log("GenerateLandingPage: Attempting Google Direct API...");
+    console.log("GenerateLandingPage: Attempting Google Direct API (Brand Strategy Expert)...");
 
     // Primary: Google Direct API
     let content: string;
@@ -274,7 +335,11 @@ Only return the JSON object, no other text.`;
       strategy = JSON.parse(jsonMatch[1] || content);
     } catch (e) {
       console.error("Failed to parse strategy:", e);
-      // Fallback strategy
+      // Fallback strategy with smart defaults based on design style
+      const isDarkProduct = prdData.designStyle?.toLowerCase().includes("tech") || 
+                           prdData.designStyle?.toLowerCase().includes("科技") ||
+                           prdData.designStyle?.toLowerCase().includes("dark");
+      
       strategy = {
         headline: `Discover ${prdData.name}`,
         subheadline: prdData.description || "Revolutionary innovation that changes everything",
@@ -283,6 +348,17 @@ Only return the JSON object, no other text.`;
         trustBadges: ["✓ 30-Day Money Back", "✓ Expert Designed", "✓ Trusted Worldwide"],
         ctaText: "Get Early Access",
         urgencyMessage: "Limited spots for beta testers",
+        colorScheme: {
+          primary: isDarkProduct ? "#06B6D4" : "#3B82F6",
+          accent: isDarkProduct ? "#8B5CF6" : "#EC4899",
+          background: isDarkProduct ? "#0F172A" : "#FFFFFF",
+          mode: isDarkProduct ? "dark" : "light"
+        },
+        visualStyle: {
+          heroLayout: "split",
+          cardStyle: "glass",
+          animationLevel: "moderate"
+        },
         faqItems: [
           { question: "What makes this product different?", answer: "Our product combines innovative design with premium materials to deliver an unmatched experience. We've addressed common complaints found in competitor products." },
           { question: "When will the product be available?", answer: "We're launching to early subscribers first. Sign up now to be among the first to experience it and receive exclusive early-bird pricing." },
@@ -301,11 +377,6 @@ Only return the JSON object, no other text.`;
           { name: "Sarah M.", role: "Tech Enthusiast", content: "Finally, something that actually works as advertised. Highly recommended." },
           { name: "Mike R.", role: "Professional User", content: "I've tried many alternatives but this is by far the best solution I've found." }
         ],
-        colorScheme: {
-          primary: "#3B82F6",
-          accent: "#8B5CF6",
-          background: "#F8FAFC",
-        },
       };
     }
 

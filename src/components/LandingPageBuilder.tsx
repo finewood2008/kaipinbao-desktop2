@@ -38,7 +38,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LandingPagePreview } from "./LandingPagePreview";
-import { TemplateSelect, type TemplateStyle } from "./LandingPageTemplates";
+// Template selection removed - AI now generates unique brand-specific styles
 import { InlineAssetGenerator } from "./InlineAssetGenerator";
 import { LandingPageEmptyState } from "./LandingPageEmptyState";
 import { cn } from "@/lib/utils";
@@ -78,6 +78,12 @@ interface LandingPageData {
   marketing_images_with_copy?: MarketingImageWithCopy[] | null;
   product_images?: string[] | null;
   template_style?: string | null;
+  color_scheme?: {
+    primary: string;
+    accent: string;
+    background: string;
+    mode?: string;
+  } | null;
   faq_items?: FaqItem[] | null;
   specifications?: string[] | null;
   usage_scenarios?: string[] | null;
@@ -192,7 +198,7 @@ export function LandingPageBuilder({
   const [isPublishing, setIsPublishing] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [generatedMarketingImages, setGeneratedMarketingImages] = useState<Record<string, string | string[]>>({});
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateStyle>("modern");
+  // Template selection removed - AI generates brand-specific styles dynamically
   const [allVersions, setAllVersions] = useState<LandingPageData[]>([]);
   const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
 
@@ -245,7 +251,7 @@ export function LandingPageBuilder({
             },
             selectedImageUrl,
             targetMarket: "国际市场",
-            templateStyle: selectedTemplate,
+            // Template removed - AI generates brand-specific styles
             visualAssets: {
               selectedProductImage: selectedImageUrl,
               marketingImages: marketingImages,
@@ -304,7 +310,7 @@ export function LandingPageBuilder({
           video_url: respVideoUrl || videoUrl || null,
           generated_images: newlyGenerated || {},
           color_scheme: strategy?.colorScheme || null,
-          template_style: selectedTemplate,
+          // template_style removed - using AI-generated colorScheme instead
           faq_items: data.faqItems || [],
           specifications: data.specifications || [],
           usage_scenarios: data.usageScenarios || [],
@@ -466,19 +472,11 @@ export function LandingPageBuilder({
                   <Wand2 className="w-10 h-10 text-white" />
                 </motion.div>
                 
-                <h3 className="text-2xl font-bold mb-2">AI 广告投放专家</h3>
+                <h3 className="text-2xl font-bold mb-2">AI 品牌策划专家</h3>
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  专业广告投放 AI 为您生成高转化率落地页，
-                  通过邮件收集验证市场对新产品的接受度
+                  资深品牌策划 AI 为您打造专属品牌落地页，
+                  根据产品定义智能选择最佳视觉风格
                 </p>
-
-                {/* Template Selection */}
-                <div className="mb-8 text-left max-w-3xl mx-auto">
-                  <TemplateSelect 
-                    selectedTemplate={selectedTemplate}
-                    onSelect={setSelectedTemplate}
-                  />
-                </div>
 
                 <div className="flex items-center justify-center gap-6 mb-8 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
@@ -811,7 +809,7 @@ export function LandingPageBuilder({
             ctaText={landingPage.cta_text}
             landingPageId={landingPage.id}
             isInteractive={false}
-            templateStyle={(landingPage.template_style as TemplateStyle) || selectedTemplate}
+            colorScheme={landingPage.color_scheme as { primary: string; accent: string; background: string; mode?: string } | undefined}
             faqItems={landingPage.faq_items}
             specifications={landingPage.specifications}
             usageScenarios={landingPage.usage_scenarios}
