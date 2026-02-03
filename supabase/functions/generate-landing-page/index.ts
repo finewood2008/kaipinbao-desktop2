@@ -5,6 +5,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface MarketingImageWithCopy {
+  id: string;
+  image_url: string;
+  image_type: string;
+  marketing_copy?: string;
+}
+
 interface PRDData {
   name: string;
   description?: string;
@@ -15,6 +22,7 @@ interface PRDData {
   usageScenario?: string;
   designStyle?: string;
   coreFeatures?: string[];
+  pricingStrategy?: string;
   marketingAssets?: {
     sceneDescription?: string;
     structureHighlights?: string[];
@@ -36,11 +44,7 @@ interface PRDData {
 
 interface VisualAssets {
   selectedProductImage?: string;
-  marketingImages?: Array<{
-    id: string;
-    image_url: string;
-    image_type: string;
-  }>;
+  marketingImages?: MarketingImageWithCopy[];
   videoUrl?: string;
 }
 
@@ -77,17 +81,21 @@ serve(async (req) => {
   }
 
   try {
-    const { prdData, selectedImageUrl, targetMarket, visualAssets } = await req.json() as {
+    const { prdData, selectedImageUrl, targetMarket, visualAssets, templateStyle } = await req.json() as {
       prdData: PRDData;
       selectedImageUrl?: string;
       targetMarket?: string;
       visualAssets?: VisualAssets;
+      templateStyle?: string;
     };
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+
+    // Get marketing images with their copy
+    const marketingImagesWithCopy: MarketingImageWithCopy[] = visualAssets?.marketingImages || [];
 
     // Build comprehensive prompt with professional advertising strategy analysis
     const strategyPrompt = `Based on the following product intelligence, design a high-converting landing page strategy.
@@ -102,6 +110,7 @@ Design Style: ${prdData.designStyle || "Modern minimalist"}
 Core Features: ${prdData.coreFeatures?.join(", ") || prdData.features?.join(", ") || "N/A"}
 Pain Points (from PRD): ${prdData.pain_points?.join(", ") || "N/A"}
 Selling Points: ${prdData.selling_points?.join(", ") || "N/A"}
+Pricing Strategy: ${prdData.pricingStrategy || "N/A"}
 
 ${prdData.competitorInsights ? `
 ## COMPETITOR INTELLIGENCE
@@ -115,44 +124,54 @@ ${prdData.marketingAssets ? `
 Scene Description: ${prdData.marketingAssets.sceneDescription || "N/A"}
 Structure Highlights: ${prdData.marketingAssets.structureHighlights?.join(", ") || "N/A"}
 Lifestyle Context: ${prdData.marketingAssets.lifestyleContext || "N/A"}
+Usage Scenarios: ${prdData.marketingAssets.usageScenarios?.join(", ") || "N/A"}
 ` : ""}
 
+## AVAILABLE VISUAL ASSETS
+- Product Hero Image: ${selectedImageUrl ? "Available" : "Not available"}
+- Video for Hero Background: ${visualAssets?.videoUrl ? "Available" : "Not available"}
+- Marketing Images with Copy: ${marketingImagesWithCopy.length} images available
+
 ## YOUR TASK
-Design a landing page strategy optimized for EMAIL COLLECTION as the primary conversion goal.
+Design a comprehensive landing page strategy optimized for EMAIL COLLECTION as the primary conversion goal.
 This is for MARKET VALIDATION - we want to test if there's genuine interest in this product before full launch.
 
 Return a JSON object with these fields:
 {
   "headline": "Compelling headline (max 8 words) - use power words, create curiosity",
-  "subheadline": "Value proposition that addresses the #1 pain point",
-  "painPoints": ["3 customer pain points - from competitor reviews, real user language"],
-  "sellingPoints": ["3 key differentiators - specific, measurable benefits"],
+  "subheadline": "Value proposition that addresses the #1 pain point (one sentence)",
+  "painPoints": ["3-4 customer pain points - from competitor reviews, real user language"],
+  "sellingPoints": ["3-4 key differentiators - specific, measurable benefits"],
   "trustBadges": ["✓ Trust signal 1", "✓ Trust signal 2", "✓ Trust signal 3"],
   "ctaText": "Action-oriented CTA (e.g., 'Get Early Access', 'Join Waitlist')",
   "urgencyMessage": "Scarcity/urgency message (e.g., 'Limited spots for beta testers')",
-  "socialProof": "Social proof statement (e.g., 'Join 1,000+ who signed up this week')",
-  "benefitStatement": "One-liner benefit that removes friction for signing up",
-  "imagePrompts": {
-    "hero": "Hero image prompt - lifestyle setting showing product in use",
-    "lifestyle": "Secondary lifestyle image prompt",
-    "detail": "Product detail close-up prompt"
-  },
+  "faqItems": [
+    {"question": "What makes this product different?", "answer": "Detailed answer..."},
+    {"question": "When will the product be available?", "answer": "Detailed answer..."},
+    {"question": "Is there a money-back guarantee?", "answer": "Detailed answer..."},
+    {"question": "How can I contact support?", "answer": "Detailed answer..."}
+  ],
+  "specifications": ["Feature 1", "Feature 2", "Feature 3", "Feature 4", "Feature 5", "Feature 6"],
+  "usageScenarios": ["Scenario 1 description", "Scenario 2 description", "Scenario 3 description", "Scenario 4 description"],
+  "socialProofItems": [
+    {"name": "John D.", "role": "Early Adopter", "content": "This product changed how I..."},
+    {"name": "Sarah M.", "role": "Tech Enthusiast", "content": "Finally, something that actually..."},
+    {"name": "Mike R.", "role": "Professional User", "content": "I've tried many alternatives but..."}
+  ],
   "colorScheme": {
     "primary": "Primary brand color hex",
     "accent": "CTA button color hex (high contrast)",
     "background": "Background color hex"
-  },
-  "pageFlow": [
-    {"section": "hero", "purpose": "Grab attention, state value prop"},
-    {"section": "pain_points", "purpose": "Build empathy"},
-    {"section": "solution", "purpose": "Present product as answer"},
-    {"section": "benefits", "purpose": "Highlight key features"},
-    {"section": "social_proof", "purpose": "Build trust"},
-    {"section": "cta", "purpose": "Drive email signup"}
-  ]
+  }
 }
 
-CRITICAL: All text content MUST be in English. Focus on conversion, not description.
+CRITICAL: 
+- All text content MUST be in English
+- Focus on conversion, not description
+- Make FAQ answers detailed and helpful (2-3 sentences each)
+- Social proof should sound authentic and specific
+- Specifications should highlight technical advantages
+- Usage scenarios should help users visualize themselves using the product
 Only return the JSON object, no other text.`;
 
     const strategyResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -198,6 +217,7 @@ Only return the JSON object, no other text.`;
       strategy = JSON.parse(jsonMatch[1] || content);
     } catch (e) {
       console.error("Failed to parse strategy:", e);
+      // Fallback strategy
       strategy = {
         headline: `Discover ${prdData.name}`,
         subheadline: prdData.description || "Revolutionary innovation that changes everything",
@@ -206,13 +226,24 @@ Only return the JSON object, no other text.`;
         trustBadges: ["✓ 30-Day Money Back", "✓ Expert Designed", "✓ Trusted Worldwide"],
         ctaText: "Get Early Access",
         urgencyMessage: "Limited spots for beta testers",
-        socialProof: "Join early adopters shaping the future",
-        benefitStatement: "Be the first to experience the difference",
-        imagePrompts: {
-          hero: `${prdData.name} being used in a modern lifestyle setting`,
-          lifestyle: `hands demonstrating ${prdData.name} usage`,
-          detail: `${prdData.name} close-up detail shot`,
-        },
+        faqItems: [
+          { question: "What makes this product different?", answer: "Our product combines innovative design with premium materials to deliver an unmatched experience. We've addressed common complaints found in competitor products." },
+          { question: "When will the product be available?", answer: "We're launching to early subscribers first. Sign up now to be among the first to experience it and receive exclusive early-bird pricing." },
+          { question: "Is there a money-back guarantee?", answer: "Yes! We offer a 30-day satisfaction guarantee. If you're not completely satisfied, we'll refund your purchase, no questions asked." },
+          { question: "How can I contact support?", answer: "Our dedicated support team is available 24/7 via email. We typically respond within 2 hours during business hours." }
+        ],
+        specifications: prdData.coreFeatures || ["Premium Materials", "Ergonomic Design", "Long-lasting Battery", "Smart Connectivity", "Compact Size", "Easy Maintenance"],
+        usageScenarios: prdData.marketingAssets?.usageScenarios || [
+          "Perfect for daily commute and travel",
+          "Ideal for home office setup",
+          "Great for outdoor activities",
+          "Essential for busy professionals"
+        ],
+        socialProofItems: [
+          { name: "John D.", role: "Early Adopter", content: "This product exceeded my expectations. The quality is outstanding!" },
+          { name: "Sarah M.", role: "Tech Enthusiast", content: "Finally, something that actually works as advertised. Highly recommended." },
+          { name: "Mike R.", role: "Professional User", content: "I've tried many alternatives but this is by far the best solution I've found." }
+        ],
         colorScheme: {
           primary: "#3B82F6",
           accent: "#8B5CF6",
@@ -221,115 +252,44 @@ Only return the JSON object, no other text.`;
       };
     }
 
-    // Determine which images need to be generated
-    const existingImages = visualAssets?.marketingImages || [];
-    const hasLifestyle = existingImages.some(img => img.image_type === "lifestyle");
-    const hasUsage = existingImages.some(img => img.image_type === "usage");
-    const hasDetail = existingImages.some(img => img.image_type === "detail");
-
-    // Generate missing images
-    const generateImage = async (prompt: string, imageType: string): Promise<{ type: string; url: string } | null> => {
-      try {
-        const imagePrompt = `Professional marketing product photography:
-
-${prompt}
-
-STYLE REQUIREMENTS:
-- Clean, modern aesthetic with soft natural lighting
-- Lifestyle photography style suitable for advertising landing page
-- High-end e-commerce quality
-- Warm, inviting atmosphere
-- 16:9 aspect ratio for hero sections
-- No text overlays on the image`;
-
-        const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-3-pro-image-preview",
-            messages: [
-              { role: "user", content: imagePrompt },
-            ],
-            modalities: ["image", "text"],
-          }),
-        });
-
-        if (!imageResponse.ok) {
-          console.error("Image generation failed:", await imageResponse.text());
-          return null;
-        }
-
-        const imageData = await imageResponse.json();
-        const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-        return imageUrl ? { type: imageType, url: imageUrl } : null;
-      } catch (error) {
-        console.error("Image generation error:", error);
-        return null;
-      }
-    };
-
-    // Generate images in parallel (only missing ones)
-    const imagePromises = [];
-    
-    if (!hasLifestyle && strategy.imagePrompts?.lifestyle) {
-      imagePromises.push(generateImage(strategy.imagePrompts.lifestyle, "lifestyle"));
-    }
-
-    if (!hasUsage && strategy.imagePrompts?.usage) {
-      imagePromises.push(generateImage(strategy.imagePrompts.usage, "usage"));
-    }
-
-    if (!hasDetail && strategy.imagePrompts?.detail) {
-      imagePromises.push(generateImage(strategy.imagePrompts.detail, "detail"));
-    }
-
-    const imageResults = await Promise.all(imagePromises);
-    
-    const generatedImages: Record<string, string> = {};
-    for (const result of imageResults) {
-      if (result?.url) {
-        generatedImages[result.type] = result.url;
-      }
-    }
-
-    // Compile all marketing images
+    // Compile marketing images
     const allMarketingImages: Record<string, string | string[]> = {
       multiAngle: [],
     };
 
     // Add existing images
-    for (const img of existingImages) {
+    for (const img of marketingImagesWithCopy) {
       if (img.image_type === "lifestyle") {
         allMarketingImages.lifestyle = img.image_url;
       } else if (img.image_type === "usage") {
         allMarketingImages.usage = img.image_url;
       } else if (img.image_type === "multi_angle") {
         (allMarketingImages.multiAngle as string[]).push(img.image_url);
+      } else if (img.image_type === "detail") {
+        allMarketingImages.detail = img.image_url;
       }
-    }
-
-    // Add generated images
-    for (const [type, url] of Object.entries(generatedImages)) {
-      allMarketingImages[type] = url;
     }
 
     return new Response(
       JSON.stringify({
         strategy,
         marketingImages: allMarketingImages,
-        generatedImages,
+        marketingImagesWithCopy,
         heroImageUrl: selectedImageUrl || visualAssets?.selectedProductImage,
         videoUrl: visualAssets?.videoUrl,
-        productImages: existingImages.filter(img => img.image_type === "product").map(img => img.image_url),
+        productImages: marketingImagesWithCopy.filter(img => img.image_type === "product").map(img => img.image_url),
+        // New structured content
+        faqItems: strategy?.faqItems || [],
+        specifications: strategy?.specifications || [],
+        usageScenarios: strategy?.usageScenarios || [],
+        socialProofItems: strategy?.socialProofItems || [],
+        urgencyMessage: strategy?.urgencyMessage || "",
         // Conversion optimization fields for frontend
         conversionOptimization: {
           primaryCta: strategy?.ctaText || "Get Early Access",
           urgencyMessage: strategy?.urgencyMessage || "Limited spots available",
-          socialProof: strategy?.socialProof || "",
-          benefitStatement: strategy?.benefitStatement || "",
+          socialProof: strategy?.socialProofItems?.[0]?.content || "",
+          benefitStatement: strategy?.subheadline || "",
         },
       }),
       {

@@ -1,11 +1,49 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Mail, CheckCircle, Star, Shield, Truck, Play, Pause } from "lucide-react";
+import { 
+  Mail, 
+  CheckCircle, 
+  Star, 
+  Shield, 
+  Truck, 
+  Play, 
+  Pause, 
+  ChevronDown,
+  Sparkles,
+  Zap,
+  Target,
+  Award
+} from "lucide-react";
 import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getTemplateStyles, type TemplateStyle } from "./LandingPageTemplates";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+
+interface MarketingImageWithCopy {
+  id: string;
+  image_url: string;
+  image_type: string;
+  marketing_copy?: string;
+}
+
+interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+interface SocialProofItem {
+  name: string;
+  role: string;
+  content: string;
+  avatar?: string;
+}
 
 interface LandingPagePreviewProps {
   title: string;
@@ -15,12 +53,18 @@ interface LandingPagePreviewProps {
   sellingPoints?: string[] | null;
   trustBadges?: string[] | null;
   marketingImages?: Record<string, string | string[]> | null;
+  marketingImagesWithCopy?: MarketingImageWithCopy[] | null;
   videoUrl?: string | null;
   ctaText?: string | null;
   targetAudience?: string;
   landingPageId?: string;
   isInteractive?: boolean;
   templateStyle?: TemplateStyle;
+  faqItems?: FaqItem[] | null;
+  specifications?: string[] | null;
+  usageScenarios?: string[] | null;
+  socialProofItems?: SocialProofItem[] | null;
+  urgencyMessage?: string | null;
 }
 
 export function LandingPagePreview({
@@ -31,17 +75,22 @@ export function LandingPagePreview({
   sellingPoints,
   trustBadges,
   marketingImages,
+  marketingImagesWithCopy,
   videoUrl,
-  ctaText = "立即订阅",
+  ctaText = "Get Early Access",
   targetAudience,
   landingPageId,
   isInteractive = false,
   templateStyle = "modern",
+  faqItems,
+  specifications,
+  usageScenarios,
+  socialProofItems,
+  urgencyMessage,
 }: LandingPagePreviewProps) {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const styles = getTemplateStyles(templateStyle);
@@ -69,31 +118,50 @@ export function LandingPagePreview({
     }
   };
 
-  const toggleVideo = () => {
-    if (videoRef.current) {
-      if (isVideoPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsVideoPlaying(!isVideoPlaying);
-    }
-  };
-
-  // Get marketing images
-  const lifestyleImage = typeof marketingImages?.lifestyle === 'string' ? marketingImages.lifestyle : null;
-  const usageImage = typeof marketingImages?.usage === 'string' ? marketingImages.usage : null;
-  const multiAngleImages = Array.isArray(marketingImages?.multiAngle) ? marketingImages.multiAngle : [];
-  const detailImage = typeof marketingImages?.detail === 'string' ? marketingImages.detail : null;
-
   const isDarkTheme = styles.hero.isDark;
+
+  // Get image type label
+  const getImageTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      scene: "📍 Scene",
+      usage: "👆 Usage",
+      structure: "🔧 Structure",
+      detail: "🔍 Detail",
+      lifestyle: "🌟 Lifestyle",
+      multi_angle: "📐 Multi-Angle",
+    };
+    return labels[type] || "📸 Product";
+  };
 
   return (
     <div className={cn("overflow-hidden rounded-lg", isDarkTheme ? "bg-slate-900 text-white" : "bg-white text-gray-900")}>
-      {/* Hero Section */}
-      <section className={cn("relative py-16 px-8 bg-gradient-to-br", styles.hero.gradient)}>
-        <div className="max-w-4xl mx-auto text-center">
-          {heroImageUrl && (
+      {/* Hero Section with Video Background */}
+      <section className="relative min-h-[80vh] overflow-hidden">
+        {/* Video Background */}
+        {videoUrl && (
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          >
+            <source src={videoUrl} type="video/mp4" />
+          </video>
+        )}
+        
+        {/* Gradient Background (fallback or overlay) */}
+        <div className={cn(
+          "absolute inset-0",
+          videoUrl 
+            ? "bg-black/60" 
+            : `bg-gradient-to-br ${styles.hero.gradient}`
+        )} />
+        
+        {/* Hero Content */}
+        <div className="relative z-10 flex flex-col items-center justify-center min-h-[80vh] px-8 py-16 text-center">
+          {heroImageUrl && !videoUrl && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -102,80 +170,110 @@ export function LandingPagePreview({
               <img
                 src={heroImageUrl}
                 alt={title}
-                className="max-w-sm mx-auto rounded-2xl shadow-2xl"
+                className="max-w-md mx-auto rounded-2xl shadow-2xl"
               />
             </motion.div>
           )}
+          
           <motion.h1
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className={cn(
-              "text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r bg-clip-text text-transparent",
-              styles.hero.titleGradient
+              "text-4xl md:text-6xl lg:text-7xl font-bold mb-6 max-w-4xl",
+              videoUrl 
+                ? "text-white" 
+                : `bg-gradient-to-r bg-clip-text text-transparent ${styles.hero.titleGradient}`
             )}
           >
             {title}
           </motion.h1>
+          
           {subheadline && (
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-              className={cn("text-xl mb-6 max-w-2xl mx-auto", styles.hero.subtitleColor)}
+              transition={{ delay: 0.2 }}
+              className={cn(
+                "text-xl md:text-2xl mb-8 max-w-2xl",
+                videoUrl ? "text-white/90" : styles.hero.subtitleColor
+              )}
             >
               {subheadline}
             </motion.p>
           )}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={cn("text-lg max-w-2xl mx-auto", isDarkTheme ? "text-gray-400" : "text-gray-500")}
-          >
-            {targetAudience || "创新设计，为您带来全新体验"}
-          </motion.p>
+
+          {/* Urgency Message */}
+          {urgencyMessage && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.25 }}
+              className="mb-6 px-4 py-2 bg-red-500/90 text-white rounded-full text-sm font-medium"
+            >
+              🔥 {urgencyMessage}
+            </motion.div>
+          )}
           
-          {/* Hero CTA */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="mt-8"
           >
             <Button 
               size="lg" 
               className={cn(
-                "px-8 py-6 text-lg bg-gradient-to-r hover:opacity-90 text-white",
+                "px-10 py-7 text-lg font-semibold bg-gradient-to-r hover:opacity-90 text-white shadow-xl",
                 styles.cta.gradient
               )}
             >
               {ctaText}
             </Button>
           </motion.div>
+
+          {/* Scroll Indicator */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, y: [0, 10, 0] }}
+            transition={{ delay: 1, duration: 2, repeat: Infinity }}
+            className="absolute bottom-8"
+          >
+            <ChevronDown className={cn("w-8 h-8", videoUrl ? "text-white/60" : "text-gray-400")} />
+          </motion.div>
         </div>
       </section>
 
       {/* Pain Points Section */}
       {painPoints && painPoints.length > 0 && (
-        <section className={cn("py-16 px-8", styles.painPoints.bg)}>
-          <div className="max-w-4xl mx-auto">
-            <h2 className={cn("text-2xl font-bold text-center mb-8", styles.painPoints.isDark ? "text-white" : "text-gray-800")}>
-              😤 Sound Familiar?
-            </h2>
-            <div className="grid md:grid-cols-3 gap-6">
+        <section className={cn("py-20 px-8", styles.painPoints.bg)}>
+          <div className="max-w-5xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", styles.painPoints.isDark ? "text-white" : "text-gray-800")}>
+                😤 Sound Familiar?
+              </h2>
+              <p className={cn("text-lg", isDarkTheme ? "text-gray-400" : "text-gray-600")}>
+                We understand your frustrations
+              </p>
+            </motion.div>
+            <div className="grid md:grid-cols-3 gap-8">
               {painPoints.map((point, i) => (
                 <motion.div
                   key={i}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
-                  className={cn("p-6 rounded-xl shadow-sm border", styles.painPoints.cardBg, styles.painPoints.cardBorder)}
+                  className={cn("p-8 rounded-2xl shadow-lg border", styles.painPoints.cardBg, styles.painPoints.cardBorder)}
                 >
-                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center mb-4", styles.painPoints.iconBg)}>
-                    <span className={cn("text-xl", styles.painPoints.iconColor)}>✕</span>
+                  <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mb-6", styles.painPoints.iconBg)}>
+                    <span className={cn("text-2xl", styles.painPoints.iconColor)}>✕</span>
                   </div>
-                  <p className={styles.painPoints.isDark ? "text-gray-200" : "text-gray-700"}>{point}</p>
+                  <p className={cn("text-lg", styles.painPoints.isDark ? "text-gray-200" : "text-gray-700")}>{point}</p>
                 </motion.div>
               ))}
             </div>
@@ -183,39 +281,97 @@ export function LandingPagePreview({
         </section>
       )}
 
-      {/* Lifestyle Image */}
-      {lifestyleImage && (
-        <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-800" : "bg-white")}>
-          <div className="max-w-4xl mx-auto">
-            <img
-              src={lifestyleImage}
-              alt="产品使用场景"
-              className="w-full rounded-2xl shadow-lg"
-            />
+      {/* Marketing Images with Copy Section */}
+      {marketingImagesWithCopy && marketingImagesWithCopy.length > 0 && (
+        <section className={cn("py-20 px-8", isDarkTheme ? "bg-slate-800" : "bg-white")}>
+          <div className="max-w-6xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", isDarkTheme ? "text-white" : "text-gray-800")}>
+                ✨ Product Highlights
+              </h2>
+              <p className={cn("text-lg", isDarkTheme ? "text-gray-400" : "text-gray-600")}>
+                Discover what makes us different
+              </p>
+            </motion.div>
+            <div className="grid md:grid-cols-2 gap-8">
+              {marketingImagesWithCopy.map((item, i) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className={cn(
+                    "rounded-2xl overflow-hidden shadow-xl border",
+                    isDarkTheme ? "bg-slate-700/50 border-slate-600" : "bg-white border-gray-100"
+                  )}
+                >
+                  <div className="aspect-[16/10] relative overflow-hidden">
+                    <img
+                      src={item.image_url}
+                      alt={item.image_type}
+                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                    />
+                  </div>
+                  <div className="p-6">
+                    <span className={cn(
+                      "inline-block px-3 py-1 rounded-full text-xs font-medium mb-3",
+                      isDarkTheme ? "bg-slate-600 text-gray-300" : "bg-gray-100 text-gray-600"
+                    )}>
+                      {getImageTypeLabel(item.image_type)}
+                    </span>
+                    {item.marketing_copy && (
+                      <p className={cn(
+                        "text-lg leading-relaxed",
+                        isDarkTheme ? "text-gray-200" : "text-gray-700"
+                      )}>
+                        "{item.marketing_copy}"
+                      </p>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </section>
       )}
 
-      {/* Selling Points Section */}
+      {/* Selling Points / Solution Section */}
       {sellingPoints && sellingPoints.length > 0 && (
-        <section className={cn("py-16 px-8", styles.solutions.bg)}>
-          <div className="max-w-4xl mx-auto">
-            <h2 className={cn("text-2xl font-bold text-center mb-8", styles.solutions.isDark ? "text-white" : "text-gray-800")}>
-              ✨ Our Solution
-            </h2>
-            <div className="grid md:grid-cols-3 gap-6">
+        <section className={cn("py-20 px-8", styles.solutions.bg)}>
+          <div className="max-w-5xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", styles.solutions.isDark ? "text-white" : "text-gray-800")}>
+                ✨ The Solution You've Been Waiting For
+              </h2>
+              <p className={cn("text-lg", isDarkTheme ? "text-gray-400" : "text-gray-600")}>
+                Built to address your real needs
+              </p>
+            </motion.div>
+            <div className="grid md:grid-cols-3 gap-8">
               {sellingPoints.map((point, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
-                  className={cn("p-6 rounded-xl shadow-sm border", styles.solutions.cardBg, styles.solutions.cardBorder)}
+                  className={cn("p-8 rounded-2xl shadow-lg border", styles.solutions.cardBg, styles.solutions.cardBorder)}
                 >
-                  <div className={cn("w-10 h-10 rounded-full flex items-center justify-center mb-4", styles.solutions.iconBg)}>
-                    <CheckCircle className={cn("w-5 h-5", styles.solutions.iconColor)} />
+                  <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center mb-6", styles.solutions.iconBg)}>
+                    <CheckCircle className={cn("w-7 h-7", styles.solutions.iconColor)} />
                   </div>
-                  <p className={styles.solutions.isDark ? "text-gray-200" : "text-gray-700"}>{point}</p>
+                  <p className={cn("text-lg", styles.solutions.isDark ? "text-gray-200" : "text-gray-700")}>{point}</p>
                 </motion.div>
               ))}
             </div>
@@ -223,83 +379,180 @@ export function LandingPagePreview({
         </section>
       )}
 
-      {/* Usage Image */}
-      {usageImage && (
-        <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-900" : "bg-slate-50")}>
-          <div className="max-w-4xl mx-auto">
-            <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>
-              🎯 Simple & Intuitive
-            </h2>
-            <img
-              src={usageImage}
-              alt="产品使用演示"
-              className="w-full rounded-2xl shadow-lg"
-            />
-          </div>
-        </section>
-      )}
-
-      {/* Video Section */}
-      {videoUrl && (
-        <section className={cn("py-16 px-8", styles.video.bg)}>
-          <div className="max-w-4xl mx-auto">
-            <h2 className={cn("text-2xl font-bold text-center mb-8", styles.video.titleColor)}>
-              🎬 See It In Action
-            </h2>
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl">
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                className="w-full"
-                loop
-                playsInline
-                onPlay={() => setIsVideoPlaying(true)}
-                onPause={() => setIsVideoPlaying(false)}
-              />
-              <button
-                onClick={toggleVideo}
-                className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors"
-              >
-                {isVideoPlaying ? (
-                  <Pause className="w-16 h-16 text-white" />
-                ) : (
-                  <Play className="w-16 h-16 text-white" />
-                )}
-              </button>
+      {/* Usage Scenarios Section */}
+      {usageScenarios && usageScenarios.length > 0 && (
+        <section className={cn("py-20 px-8", isDarkTheme ? "bg-slate-900" : "bg-gray-50")}>
+          <div className="max-w-5xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", isDarkTheme ? "text-white" : "text-gray-800")}>
+                🎯 Perfect For Every Scenario
+              </h2>
+            </motion.div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {usageScenarios.map((scenario, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: i % 2 === 0 ? -20 : 20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className={cn(
+                    "flex items-center gap-4 p-6 rounded-xl",
+                    isDarkTheme ? "bg-slate-800" : "bg-white shadow-md"
+                  )}
+                >
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
+                    isDarkTheme ? "bg-cyan-500/20" : "bg-blue-100"
+                  )}>
+                    <Target className={cn("w-6 h-6", isDarkTheme ? "text-cyan-400" : "text-blue-600")} />
+                  </div>
+                  <p className={isDarkTheme ? "text-gray-200" : "text-gray-700"}>{scenario}</p>
+                </motion.div>
+              ))}
             </div>
           </div>
         </section>
       )}
 
-      {/* Multi-angle Gallery */}
-      {(multiAngleImages.length > 0 || detailImage) && (
-        <section className={cn("py-16 px-8", isDarkTheme ? "bg-slate-800" : "bg-slate-50")}>
+      {/* Specifications Section */}
+      {specifications && specifications.length > 0 && (
+        <section className={cn("py-20 px-8", isDarkTheme ? "bg-slate-800" : "bg-white")}>
           <div className="max-w-4xl mx-auto">
-            <h2 className={cn("text-2xl font-bold text-center mb-8", isDarkTheme ? "text-white" : "text-gray-800")}>
-              📸 Every Detail Matters
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {detailImage && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="aspect-square rounded-xl overflow-hidden shadow-md col-span-2"
-                >
-                  <img src={detailImage} alt="产品细节" className="w-full h-full object-cover" />
-                </motion.div>
-              )}
-              {multiAngleImages.map((img, i) => (
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", isDarkTheme ? "text-white" : "text-gray-800")}>
+                ⚡ Key Features
+              </h2>
+            </motion.div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {specifications.map((spec, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="aspect-square rounded-xl overflow-hidden shadow-md"
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05 }}
+                  className={cn(
+                    "flex items-center gap-3 p-4 rounded-lg",
+                    isDarkTheme ? "bg-slate-700" : "bg-gray-50"
+                  )}
                 >
-                  <img src={img} alt={`产品角度 ${i + 1}`} className="w-full h-full object-cover" />
+                  <Zap className={cn("w-5 h-5 flex-shrink-0", isDarkTheme ? "text-cyan-400" : "text-blue-600")} />
+                  <span className={isDarkTheme ? "text-gray-200" : "text-gray-700"}>{spec}</span>
                 </motion.div>
               ))}
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* Social Proof Section */}
+      {socialProofItems && socialProofItems.length > 0 && (
+        <section className={cn("py-20 px-8", isDarkTheme ? "bg-slate-900" : "bg-gray-50")}>
+          <div className="max-w-5xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", isDarkTheme ? "text-white" : "text-gray-800")}>
+                ⭐ What Early Adopters Say
+              </h2>
+            </motion.div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {socialProofItems.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className={cn(
+                    "p-6 rounded-2xl",
+                    isDarkTheme ? "bg-slate-800" : "bg-white shadow-lg"
+                  )}
+                >
+                  <div className="flex items-center gap-1 mb-4">
+                    {[...Array(5)].map((_, j) => (
+                      <Star key={j} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    ))}
+                  </div>
+                  <p className={cn("mb-4 italic", isDarkTheme ? "text-gray-300" : "text-gray-600")}>
+                    "{item.content}"
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center font-semibold",
+                      isDarkTheme ? "bg-slate-700 text-gray-300" : "bg-gray-200 text-gray-600"
+                    )}>
+                      {item.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className={cn("font-medium", isDarkTheme ? "text-white" : "text-gray-800")}>{item.name}</p>
+                      <p className={cn("text-sm", isDarkTheme ? "text-gray-400" : "text-gray-500")}>{item.role}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* FAQ Section */}
+      {faqItems && faqItems.length > 0 && (
+        <section className={cn("py-20 px-8", isDarkTheme ? "bg-slate-800" : "bg-white")}>
+          <div className="max-w-3xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-center mb-12"
+            >
+              <h2 className={cn("text-3xl md:text-4xl font-bold mb-4", isDarkTheme ? "text-white" : "text-gray-800")}>
+                ❓ Frequently Asked Questions
+              </h2>
+            </motion.div>
+            <Accordion type="single" collapsible className="space-y-4">
+              {faqItems.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <AccordionItem
+                    value={`item-${i}`}
+                    className={cn(
+                      "rounded-xl px-6 border",
+                      isDarkTheme ? "bg-slate-700 border-slate-600" : "bg-gray-50 border-gray-200"
+                    )}
+                  >
+                    <AccordionTrigger className={cn(
+                      "text-left font-medium",
+                      isDarkTheme ? "text-white" : "text-gray-800"
+                    )}>
+                      {item.question}
+                    </AccordionTrigger>
+                    <AccordionContent className={isDarkTheme ? "text-gray-300" : "text-gray-600"}>
+                      {item.answer}
+                    </AccordionContent>
+                  </AccordionItem>
+                </motion.div>
+              ))}
+            </Accordion>
           </div>
         </section>
       )}
@@ -308,61 +561,82 @@ export function LandingPagePreview({
       {trustBadges && trustBadges.length > 0 && (
         <section className={cn("py-12 px-8 border-t border-b", isDarkTheme ? "border-slate-700" : "border-gray-100")}>
           <div className="max-w-4xl mx-auto">
-            <div className="flex flex-wrap justify-center gap-6">
+            <div className="flex flex-wrap justify-center gap-8">
               {trustBadges.map((badge, i) => (
-                <div key={i} className={cn("flex items-center gap-2", isDarkTheme ? "text-gray-300" : "text-gray-600")}>
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className={cn("flex items-center gap-2", isDarkTheme ? "text-gray-300" : "text-gray-600")}
+                >
                   {i === 0 && <Shield className="w-5 h-5 text-blue-500" />}
-                  {i === 1 && <Star className="w-5 h-5 text-yellow-500" />}
+                  {i === 1 && <Award className="w-5 h-5 text-yellow-500" />}
                   {i === 2 && <Truck className="w-5 h-5 text-green-500" />}
-                  <span className="text-sm">{badge}</span>
-                </div>
+                  <span className="text-sm font-medium">{badge}</span>
+                </motion.div>
               ))}
             </div>
           </div>
         </section>
       )}
 
-      {/* CTA Section */}
-      <section className={cn("py-16 px-8 bg-gradient-to-r text-white", styles.cta.gradient)}>
+      {/* Final CTA Section */}
+      <section className={cn("py-24 px-8 bg-gradient-to-r text-white", styles.cta.gradient)}>
         <div className="max-w-lg mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
           >
-            <h3 className="text-2xl font-bold mb-2">Get Early Access</h3>
-            <p className="text-white/70 mb-6">Be the first to know when we launch</p>
+            <Sparkles className="w-12 h-12 mx-auto mb-6 opacity-80" />
+            <h3 className="text-3xl md:text-4xl font-bold mb-4">Get Early Access</h3>
+            <p className="text-white/80 mb-8 text-lg">
+              Be the first to experience the future. Limited spots available.
+            </p>
             
             {isSubscribed ? (
-              <div className="bg-white/20 backdrop-blur rounded-lg p-6">
-                <CheckCircle className="w-12 h-12 text-green-300 mx-auto mb-3" />
-                <p className="text-lg font-medium">You're In!</p>
-                <p className="text-sm text-white/70">We'll notify you as soon as we launch</p>
+              <div className="bg-white/20 backdrop-blur rounded-2xl p-8">
+                <CheckCircle className="w-16 h-16 text-green-300 mx-auto mb-4" />
+                <p className="text-xl font-semibold">You're In!</p>
+                <p className="text-white/70 mt-2">We'll notify you as soon as we launch</p>
               </div>
             ) : isInteractive ? (
-              <div className="flex gap-2 max-w-sm mx-auto">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  className="flex-1 px-4 py-3 rounded-lg bg-white/20 backdrop-blur border border-white/30 placeholder-white/50 text-white focus:outline-none focus:ring-2 focus:ring-white/50"
-                />
-                <Button
-                  onClick={handleSubmitEmail}
-                  disabled={isSubmitting || !email.trim()}
-                  className={cn("px-6", styles.cta.buttonBg, styles.cta.buttonText, "hover:opacity-90")}
-                >
-                  {isSubmitting ? "..." : ctaText || "订阅"}
-                </Button>
+              <div className="space-y-4">
+                <div className="flex gap-3 max-w-md mx-auto">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="flex-1 px-5 py-4 rounded-xl bg-white/20 backdrop-blur border border-white/30 placeholder-white/50 text-white focus:outline-none focus:ring-2 focus:ring-white/50 text-lg"
+                  />
+                  <Button
+                    onClick={handleSubmitEmail}
+                    disabled={isSubmitting || !email.trim()}
+                    className={cn("px-8 py-4 text-lg h-auto", styles.cta.buttonBg, styles.cta.buttonText, "hover:opacity-90")}
+                  >
+                    {isSubmitting ? "..." : ctaText || "Subscribe"}
+                  </Button>
+                </div>
+                <p className="text-white/60 text-sm">
+                  🔒 We respect your privacy. Unsubscribe anytime.
+                </p>
               </div>
             ) : (
-              <div className="flex gap-2 max-w-sm mx-auto">
-                <div className="flex-1 px-4 py-3 rounded-lg bg-white/20 text-white/50 text-left">
-                  your@email.com
+              <div className="space-y-4">
+                <div className="flex gap-3 max-w-md mx-auto">
+                  <div className="flex-1 px-5 py-4 rounded-xl bg-white/20 text-white/50 text-left text-lg">
+                    your@email.com
+                  </div>
+                  <div className={cn("px-8 py-4 rounded-xl font-semibold text-lg", styles.cta.buttonBg, styles.cta.buttonText)}>
+                    {ctaText || "Subscribe"}
+                  </div>
                 </div>
-                <div className={cn("px-6 py-3 rounded-lg font-medium", styles.cta.buttonBg, styles.cta.buttonText)}>
-                  {ctaText || "订阅"}
-                </div>
+                <p className="text-white/60 text-sm">
+                  🔒 We respect your privacy. Unsubscribe anytime.
+                </p>
               </div>
             )}
           </motion.div>
@@ -371,7 +645,7 @@ export function LandingPagePreview({
 
       {/* Footer */}
       <footer className={cn("py-8 px-8 text-center text-sm", styles.footer.bg, "text-gray-400")}>
-        <p>© 2024 {title}. 由开品宝提供技术支持</p>
+        <p>© 2024 {title}. Powered by 开品宝</p>
       </footer>
     </div>
   );

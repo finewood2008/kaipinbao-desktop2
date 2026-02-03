@@ -39,6 +39,24 @@ import { TemplateSelect, type TemplateStyle } from "./LandingPageTemplates";
 import { LandingPageAnalytics } from "./LandingPageAnalytics";
 import { cn } from "@/lib/utils";
 
+interface FaqItem {
+  question: string;
+  answer: string;
+}
+
+interface SocialProofItem {
+  name: string;
+  role: string;
+  content: string;
+}
+
+interface MarketingImageWithCopy {
+  id: string;
+  image_url: string;
+  image_type: string;
+  marketing_copy?: string;
+}
+
 interface LandingPageData {
   id: string;
   title: string;
@@ -53,14 +71,21 @@ interface LandingPageData {
   cta_text?: string | null;
   video_url?: string | null;
   marketing_images?: Record<string, string | string[]> | null;
+  marketing_images_with_copy?: MarketingImageWithCopy[] | null;
   product_images?: string[] | null;
   template_style?: string | null;
+  faq_items?: FaqItem[] | null;
+  specifications?: string[] | null;
+  usage_scenarios?: string[] | null;
+  social_proof_items?: SocialProofItem[] | null;
+  urgency_message?: string | null;
 }
 
 interface MarketingImage {
   id: string;
   image_url: string;
   image_type: string;
+  marketing_copy?: string;
 }
 
 interface PrdDataInput {
@@ -208,16 +233,27 @@ export function LandingPageBuilder({
           slug,
           hero_image_url: selectedImageUrl || null,
           subheadline: strategy?.subheadline || null,
-          cta_text: strategy?.ctaText || "立即订阅",
+          cta_text: strategy?.ctaText || "Get Early Access",
           pain_points: strategy?.painPoints || prdData?.pain_points || [],
           selling_points: strategy?.sellingPoints || prdData?.selling_points || [],
-          trust_badges: strategy?.trustBadges || ["✓ 30天无理由退款", "✓ 专业团队研发", "✓ 全球用户信赖"],
+          trust_badges: strategy?.trustBadges || ["✓ 30-Day Money Back", "✓ Expert Designed", "✓ Trusted Worldwide"],
           marketing_images: generatedImages || {},
+          marketing_images_with_copy: marketingImages.map(img => ({
+            id: img.id,
+            image_url: img.image_url,
+            image_type: img.image_type,
+            marketing_copy: img.marketing_copy || null,
+          })),
           product_images: productImages || [],
           video_url: respVideoUrl || videoUrl || null,
           generated_images: newlyGenerated || {},
           color_scheme: strategy?.colorScheme || null,
           template_style: selectedTemplate,
+          faq_items: data.faqItems || [],
+          specifications: data.specifications || [],
+          usage_scenarios: data.usageScenarios || [],
+          social_proof_items: data.socialProofItems || [],
+          urgency_message: data.urgencyMessage || null,
           is_published: false,
         })
         .select()
@@ -600,11 +636,17 @@ export function LandingPageBuilder({
             sellingPoints={landingPage.selling_points}
             trustBadges={landingPage.trust_badges}
             marketingImages={landingPage.marketing_images || generatedMarketingImages}
+            marketingImagesWithCopy={landingPage.marketing_images_with_copy}
             videoUrl={landingPage.video_url}
             ctaText={landingPage.cta_text}
             landingPageId={landingPage.id}
             isInteractive={false}
             templateStyle={(landingPage.template_style as TemplateStyle) || selectedTemplate}
+            faqItems={landingPage.faq_items}
+            specifications={landingPage.specifications}
+            usageScenarios={landingPage.usage_scenarios}
+            socialProofItems={landingPage.social_proof_items}
+            urgencyMessage={landingPage.urgency_message}
           />
         </CardContent>
       </Card>
