@@ -1,26 +1,30 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Check, MessageSquare, Palette, Rocket } from "lucide-react";
+import { Check, MessageSquare, Palette, Rocket, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface StageIndicatorProps {
   currentStage: number;
   className?: string;
   onStageClick?: (stageId: number) => void;
+  isProjectCompleted?: boolean;
 }
 
 const stages = [
   { id: 1, name: "市场调研", icon: MessageSquare, description: "市场分析与竞品研究" },
   { id: 2, name: "产品定义", icon: MessageSquare, description: "AI产品经理与PRD" },
   { id: 3, name: "产品设计", icon: Palette, description: "AI图像生成与迭代" },
-  { id: 4, name: "落地页", icon: Rocket, description: "营销页面与发布" },
+  { id: 4, name: "落地页", icon: Rocket, description: "营销页面生成" },
+  { id: 5, name: "数据分析", icon: BarChart3, description: "市场验证与数据监控" },
 ];
 
-export function StageIndicator({ currentStage, className, onStageClick }: StageIndicatorProps) {
+export function StageIndicator({ currentStage, className, onStageClick, isProjectCompleted }: StageIndicatorProps) {
   const [hoveredStage, setHoveredStage] = useState<number | null>(null);
 
   const handleStageClick = (stageId: number) => {
-    if (stageId <= currentStage && onStageClick) {
+    // When project is completed, all stages are clickable for viewing
+    const maxClickableStage = isProjectCompleted ? 5 : currentStage;
+    if (stageId <= maxClickableStage && onStageClick) {
       onStageClick(stageId);
     }
   };
@@ -28,9 +32,10 @@ export function StageIndicator({ currentStage, className, onStageClick }: StageI
   return (
     <div className={cn("flex items-center justify-center gap-6 py-2", className)}>
       {stages.map((stage, index) => {
-        const isCompleted = currentStage > stage.id;
-        const isCurrent = currentStage === stage.id;
-        const isClickable = stage.id <= currentStage;
+        // When project is completed, all stages show as completed
+        const isCompleted = isProjectCompleted || currentStage > stage.id;
+        const isCurrent = currentStage === stage.id && !isProjectCompleted;
+        const isClickable = isProjectCompleted || stage.id <= currentStage;
         const isHovered = hoveredStage === stage.id;
         const Icon = stage.icon;
 

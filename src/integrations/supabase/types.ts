@@ -307,6 +307,7 @@ export type Database = {
           generated_images: Json | null
           hero_image_url: string | null
           id: string
+          is_active: boolean | null
           is_published: boolean
           marketing_images: Json | null
           marketing_images_with_copy: Json
@@ -325,6 +326,7 @@ export type Database = {
           updated_at: string
           urgency_message: string | null
           usage_scenarios: Json
+          version: number | null
           video_url: string | null
           view_count: number
         }
@@ -336,6 +338,7 @@ export type Database = {
           generated_images?: Json | null
           hero_image_url?: string | null
           id?: string
+          is_active?: boolean | null
           is_published?: boolean
           marketing_images?: Json | null
           marketing_images_with_copy?: Json
@@ -354,6 +357,7 @@ export type Database = {
           updated_at?: string
           urgency_message?: string | null
           usage_scenarios?: Json
+          version?: number | null
           video_url?: string | null
           view_count?: number
         }
@@ -365,6 +369,7 @@ export type Database = {
           generated_images?: Json | null
           hero_image_url?: string | null
           id?: string
+          is_active?: boolean | null
           is_published?: boolean
           marketing_images?: Json | null
           marketing_images_with_copy?: Json
@@ -383,6 +388,7 @@ export type Database = {
           updated_at?: string
           urgency_message?: string | null
           usage_scenarios?: Json
+          version?: number | null
           video_url?: string | null
           view_count?: number
         }

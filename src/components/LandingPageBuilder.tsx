@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,12 +32,13 @@ import {
   Palette,
   BarChart3,
   Edit,
+  History,
+  CheckCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { LandingPagePreview } from "./LandingPagePreview";
 import { TemplateSelect, type TemplateStyle } from "./LandingPageTemplates";
-import { LandingPageAnalytics } from "./LandingPageAnalytics";
 import { InlineAssetGenerator } from "./InlineAssetGenerator";
 import { LandingPageEmptyState } from "./LandingPageEmptyState";
 import { cn } from "@/lib/utils";
@@ -81,6 +83,8 @@ interface LandingPageData {
   usage_scenarios?: string[] | null;
   social_proof_items?: SocialProofItem[] | null;
   urgency_message?: string | null;
+  version?: number;
+  is_active?: boolean;
 }
 
 interface MarketingImage {
@@ -132,6 +136,8 @@ interface LandingPageBuilderProps {
   onMarketingImagesChange?: (images: MarketingImage[]) => void;
   onVideosChange?: (videos: GeneratedVideo[]) => void;
   onBackToVisual?: () => void;
+  onStageAdvance?: (stage: number) => void;
+  isReadOnly?: boolean;
 }
 
 type GenerationStep = "idle" | "analyzing" | "designing" | "generating-images" | "finalizing" | "complete";
@@ -178,6 +184,8 @@ export function LandingPageBuilder({
   onMarketingImagesChange,
   onVideosChange,
   onBackToVisual,
+  onStageAdvance,
+  isReadOnly = false,
 }: LandingPageBuilderProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<GenerationStep>("idle");
@@ -185,10 +193,27 @@ export function LandingPageBuilder({
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [generatedMarketingImages, setGeneratedMarketingImages] = useState<Record<string, string | string[]>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateStyle>("modern");
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [allVersions, setAllVersions] = useState<LandingPageData[]>([]);
+  const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
 
-  // Auto-show analytics if page is already published
-  const shouldShowAnalytics = showAnalytics || (landingPage?.is_published && !isRegenerating);
+  // Fetch all versions when component mounts or projectId changes
+  useEffect(() => {
+    if (projectId) {
+      fetchAllVersions();
+    }
+  }, [projectId]);
+
+  const fetchAllVersions = async () => {
+    const { data, error } = await supabase
+      .from("landing_pages")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("version", { ascending: true });
+
+    if (!error && data) {
+      setAllVersions(data as unknown as LandingPageData[]);
+    }
+  };
 
   const handleAIGenerateLandingPage = async () => {
     setIsGenerating(true);
@@ -243,6 +268,16 @@ export function LandingPageBuilder({
       setGeneratedMarketingImages(generatedImages || {});
       setGenerationStep("finalizing");
 
+      // Get next version number
+      const { data: existingVersions } = await supabase
+        .from("landing_pages")
+        .select("version")
+        .eq("project_id", projectId)
+        .order("version", { ascending: false })
+        .limit(1);
+
+      const nextVersion = (existingVersions?.[0]?.version || 0) + 1;
+
       // Save to database with new fields
       const slug = generateSlug();
       
@@ -276,6 +311,8 @@ export function LandingPageBuilder({
           social_proof_items: data.socialProofItems || [],
           urgency_message: data.urgencyMessage || null,
           is_published: false,
+          version: nextVersion,
+          is_active: true,
         })
         .select()
         .single();
@@ -305,6 +342,7 @@ export function LandingPageBuilder({
     
     setIsPublishing(true);
     try {
+      // 1. Update landing page to published
       const { error } = await supabase
         .from("landing_pages")
         .update({ is_published: true })
@@ -312,9 +350,15 @@ export function LandingPageBuilder({
 
       if (error) throw error;
 
+      // 2. Advance project to stage 5 (Data Analytics)
+      await supabase
+        .from("projects")
+        .update({ current_stage: 5 })
+        .eq("id", projectId);
+
       onLandingPageChange({ ...landingPage, is_published: true });
-      setShowAnalytics(true); // Switch to analytics view after publishing
-      toast.success("🚀 落地页发布成功！");
+      onStageAdvance?.(5); // Notify parent to switch to analytics tab
+      toast.success("🚀 落地页发布成功！进入数据监控阶段");
     } catch (error) {
       toast.error("发布失败");
     } finally {
@@ -333,16 +377,21 @@ export function LandingPageBuilder({
   };
 
   const handleRegenerate = async () => {
-    if (!landingPage) return;
+    if (!landingPage || isReadOnly) return;
     
     setIsRegenerating(true);
     try {
+      // 1. Set current version to inactive
       await supabase
         .from("landing_pages")
-        .delete()
+        .update({ is_active: false })
         .eq("id", landingPage.id);
 
+      // 2. Generate new version (handleAIGenerateLandingPage will create new record)
       await handleAIGenerateLandingPage();
+      
+      // 3. Refresh versions list
+      await fetchAllVersions();
     } catch (error) {
       console.error(error);
       toast.error("重新生成失败");
@@ -351,18 +400,35 @@ export function LandingPageBuilder({
     }
   };
 
-  // If analytics view is active, show analytics
-  if (landingPage && shouldShowAnalytics) {
-    return (
-      <LandingPageAnalytics
-        landingPageId={landingPage.id}
-        landingPageSlug={landingPage.slug}
-        landingPageTitle={landingPage.title}
-        viewCount={landingPage.view_count}
-        onBackToEdit={() => setShowAnalytics(false)}
-      />
-    );
-  }
+  const handleSwitchVersion = async (targetVersion: LandingPageData) => {
+    if (isSwitchingVersion) return;
+    
+    setIsSwitchingVersion(true);
+    try {
+      // 1. Set all versions to inactive
+      await supabase
+        .from("landing_pages")
+        .update({ is_active: false })
+        .eq("project_id", projectId);
+
+      // 2. Set target version to active
+      await supabase
+        .from("landing_pages")
+        .update({ is_active: true })
+        .eq("id", targetVersion.id);
+
+      // 3. Update local state
+      onLandingPageChange({ ...targetVersion, is_active: true });
+      await fetchAllVersions();
+      
+      toast.success(`已切换到版本 ${targetVersion.version || 1}`);
+    } catch (error) {
+      console.error(error);
+      toast.error("版本切换失败");
+    } finally {
+      setIsSwitchingVersion(false);
+    }
+  };
 
   // No landing page yet - show generation UI
   if (!landingPage) {
@@ -573,6 +639,45 @@ export function LandingPageBuilder({
 
   return (
     <div className="space-y-6">
+      {/* Version History Card - Only show if multiple versions exist and not read-only */}
+      {allVersions.length > 1 && !isReadOnly && (
+        <Card className="glass border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <History className="w-5 h-5 text-primary" />
+              版本历史
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2 flex-wrap">
+              {allVersions.map((version) => (
+                <Button
+                  key={version.id}
+                  variant={version.id === landingPage.id ? "default" : "outline"}
+                  size="sm"
+                  disabled={isSwitchingVersion}
+                  onClick={() => version.id !== landingPage.id && handleSwitchVersion(version)}
+                  className={cn(
+                    "transition-all",
+                    version.id === landingPage.id && "ring-2 ring-primary ring-offset-2"
+                  )}
+                >
+                  {isSwitchingVersion ? (
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  ) : version.id === landingPage.id ? (
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                  ) : null}
+                  版本 {version.version || 1}
+                  {version.is_published && (
+                    <Badge variant="secondary" className="ml-2 text-xs">已发布</Badge>
+                  )}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Status Card */}
       <Card className={cn(
         "glass transition-all",
@@ -592,6 +697,7 @@ export function LandingPageBuilder({
               <div>
                 <p className="font-medium">
                   {landingPage.is_published ? "已发布" : "草稿"}
+                  {landingPage.version && ` · 版本 ${landingPage.version}`}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {landingPage.title}
@@ -601,54 +707,47 @@ export function LandingPageBuilder({
             
             <div className="flex items-center gap-3">
               {landingPage.is_published && (
-                <>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-4 h-4" />
-                      {landingPage.view_count} 次访问
-                    </span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAnalytics(true)}
-                  >
-                    <BarChart3 className="w-4 h-4 mr-2" />
-                    查看数据
-                  </Button>
-                </>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-4 h-4" />
+                    {landingPage.view_count} 次访问
+                  </span>
+                </div>
               )}
               
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isRegenerating}
-                  >
-                    {isRegenerating ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                    )}
-                    重新生成
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>确认重新生成？</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      这将删除当前的落地页并生成一个新的。如果落地页已发布，之前的链接将失效。此操作无法撤销。
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>取消</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleRegenerate}>
-                      确认重新生成
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {/* Only show regenerate button if not read-only */}
+              {!isReadOnly && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isRegenerating}
+                    >
+                      {isRegenerating ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                      )}
+                      重新生成
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>生成新版本？</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        这将基于当前素材生成一个新版本的落地页。原有版本将被保留，您可以在版本历史中切换查看。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>取消</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleRegenerate}>
+                        确认生成新版本
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </div>
         </CardContent>
