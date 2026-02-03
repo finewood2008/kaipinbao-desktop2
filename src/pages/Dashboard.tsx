@@ -28,7 +28,8 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LogOut, Plus, Search, Sparkles, Loader2, Globe, Eye, Mail, Filter, Trash2, Archive, X, CheckSquare } from "lucide-react";
+import { LogOut, Plus, Search, Sparkles, Loader2, Globe, Eye, Mail, Filter, Trash2, Archive, X, CheckSquare, RefreshCw, AlertCircle, FolderOpen } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import logoImage from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +63,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -82,6 +84,7 @@ export default function Dashboard() {
 
   const fetchProjects = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       // NOTE: Avoid heavy nested selects (can trigger DB statement timeout).
       // Fetch projects first, then fetch landing pages / images in separate queries.
@@ -97,42 +100,50 @@ export default function Dashboard() {
       const projectIds = (projectsData || []).map((p) => p.id);
 
       // Fetch active landing page per project
-      const { data: landingPagesData, error: landingPagesError } = await supabase
-        .from("landing_pages")
-        .select(
-          "id,project_id,slug,is_published,hero_image_url,screenshot_url,view_count,is_active"
-        )
-        .in("project_id", projectIds)
-        .eq("is_active", true);
+      let landingPagesData: any[] = [];
+      if (projectIds.length > 0) {
+        const { data, error: landingPagesError } = await supabase
+          .from("landing_pages")
+          .select(
+            "id,project_id,slug,is_published,hero_image_url,screenshot_url,view_count,is_active"
+          )
+          .in("project_id", projectIds)
+          .eq("is_active", true);
 
-      if (landingPagesError) throw landingPagesError;
+        if (landingPagesError) throw landingPagesError;
+        landingPagesData = data || [];
+      }
 
       const activeLandingPageByProjectId = new Map<string, any>();
-      (landingPagesData || []).forEach((lp: any) => {
+      landingPagesData.forEach((lp: any) => {
         if (!activeLandingPageByProjectId.has(lp.project_id)) {
           activeLandingPageByProjectId.set(lp.project_id, lp);
         }
       });
 
       // Fetch product images for all projects
-      const { data: imagesData, error: imagesError } = await supabase
-        .from("generated_images")
-        .select("project_id,image_url,image_type,is_selected,created_at")
-        .in("project_id", projectIds)
-        .eq("image_type", "product")
-        .order("created_at", { ascending: false });
+      let imagesData: any[] = [];
+      if (projectIds.length > 0) {
+        const { data, error: imagesError } = await supabase
+          .from("generated_images")
+          .select("project_id,image_url,image_type,is_selected,created_at")
+          .in("project_id", projectIds)
+          .eq("image_type", "product")
+          .order("created_at", { ascending: false });
 
-      if (imagesError) throw imagesError;
+        if (imagesError) throw imagesError;
+        imagesData = data || [];
+      }
 
       const imagesByProjectId = new Map<string, any[]>();
-      (imagesData || []).forEach((img: any) => {
+      imagesData.forEach((img: any) => {
         const arr = imagesByProjectId.get(img.project_id) || [];
         arr.push(img);
         imagesByProjectId.set(img.project_id, arr);
       });
 
       // Fetch email counts for all active landing pages
-      const landingPageIds = (landingPagesData || []).map((lp: any) => lp.id);
+      const landingPageIds = landingPagesData.map((lp: any) => lp.id);
       let emailCounts: Record<string, number> = {};
       if (landingPageIds.length > 0) {
         const { data: emailData, error: emailError } = await supabase
@@ -177,9 +188,9 @@ export default function Dashboard() {
       });
 
       setProjects(projectsWithData);
-    } catch (error) {
-      toast.error("获取项目失败");
+    } catch (error: any) {
       console.error(error);
+      setLoadError(error?.message || "获取项目失败，请稀后重试");
     } finally {
       setIsLoading(false);
     }
@@ -727,17 +738,63 @@ export default function Dashboard() {
 
         {/* Projects List - Single Column */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          /* Skeleton Loading State */
+          <div className="flex flex-col gap-6">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl glass p-4">
+                <div className="flex gap-4">
+                  <Skeleton className="w-32 h-24 rounded-lg flex-shrink-0" />
+                  <div className="flex-1 space-y-3">
+                    <Skeleton className="h-5 w-1/3" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <div className="flex gap-2 mt-2">
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 items-end">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-8 w-20 rounded-md" />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
+        ) : loadError ? (
+          /* Error State with Retry */
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-20"
+          >
+            <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-10 h-10 text-destructive" />
+            </div>
+            <h3 className="text-xl font-semibold mb-2">加载失败</h3>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              {loadError}
+            </p>
+            <Button 
+              onClick={() => fetchProjects()} 
+              variant="outline"
+              className="gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              重新加载
+            </Button>
+          </motion.div>
         ) : filteredProjects.length === 0 ? (
+          /* Empty State */
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center py-20"
           >
             <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <Sparkles className="w-10 h-10 text-muted-foreground" />
+              {searchQuery || stageFilter !== "all" || statusFilter !== "all" 
+                ? <Search className="w-10 h-10 text-muted-foreground" />
+                : <FolderOpen className="w-10 h-10 text-muted-foreground" />
+              }
             </div>
             <h3 className="text-xl font-semibold mb-2">
               {searchQuery || stageFilter !== "all" || statusFilter !== "all" 
@@ -749,6 +806,15 @@ export default function Dashboard() {
                 ? "尝试调整筛选条件" 
                 : "点击「新建项目」开始您的产品研发之旅"}
             </p>
+            {!(searchQuery || stageFilter !== "all" || statusFilter !== "all") && (
+              <Button 
+                onClick={() => setIsDialogOpen(true)}
+                className="bg-gradient-primary glow-primary"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                新建项目
+              </Button>
+            )}
           </motion.div>
         ) : (
           <div className="flex flex-col gap-6">
