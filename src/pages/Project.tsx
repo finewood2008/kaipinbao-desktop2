@@ -535,7 +535,7 @@ export default function ProjectPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
 
           {/* Market Research Tab */}
-          <TabsContent value="research" className="flex-1 flex min-h-0 overflow-hidden m-0">
+          <TabsContent value="research" className="flex-1 flex w-full min-h-0 overflow-hidden m-0">
             <MarketResearchPhase
               projectId={id || ""}
               onComplete={handleMarketResearchComplete}
@@ -544,7 +544,7 @@ export default function ProjectPage() {
           </TabsContent>
 
           {/* PRD Tab - Using new PrdPhase component */}
-          <TabsContent value="prd" className="flex-1 flex min-h-0 overflow-hidden m-0">
+          <TabsContent value="prd" className="flex-1 flex w-full min-h-0 overflow-hidden m-0">
             <PrdPhase
               projectId={id || ""}
               onComplete={handlePrdPhaseComplete}

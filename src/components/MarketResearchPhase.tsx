@@ -153,7 +153,7 @@ export function MarketResearchPhase({
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0 overflow-hidden bg-gradient-to-b from-background via-background to-muted/20">
+    <div className="h-full w-full flex flex-col min-h-0 overflow-hidden bg-gradient-to-b from-background via-background to-muted/20">
       {/* Read-only Banner */}
       {isReadOnly && (
         <motion.div 
