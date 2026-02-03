@@ -2,6 +2,8 @@ import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,7 +30,10 @@ import {
   TrendingUp,
   Trash2,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Pencil,
+  X,
+  Camera
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -40,6 +45,7 @@ interface LandingPageInfo {
   slug: string;
   isPublished: boolean;
   heroImageUrl?: string;
+  screenshotUrl?: string;
   viewCount: number;
   emailCount: number;
 }
@@ -56,6 +62,8 @@ interface ProjectCardProps {
   landingPage?: LandingPageInfo;
   onClick: () => void;
   onDelete?: () => Promise<void>;
+  onUpdate?: (updates: { name?: string; description?: string }) => Promise<void>;
+  onCaptureScreenshot?: () => Promise<void>;
 }
 
 const stageInfo = [
@@ -76,9 +84,16 @@ export function ProjectCard({
   landingPage,
   onClick,
   onDelete,
+  onUpdate,
+  onCaptureScreenshot,
 }: ProjectCardProps) {
   const [copied, setCopied] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(name);
+  const [editDescription, setEditDescription] = useState(description || "");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
   
   // Get initials for placeholder
   const initials = name.slice(0, 2).toUpperCase();
@@ -122,10 +137,66 @@ export function ProjectCard({
     }
   };
 
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditName(name);
+    setEditDescription(description || "");
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(false);
+    setEditName(name);
+    setEditDescription(description || "");
+  };
+
+  const handleSaveEdit = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onUpdate) return;
+    
+    if (!editName.trim()) {
+      toast.error("项目名称不能为空");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onUpdate({
+        name: editName.trim(),
+        description: editDescription.trim() || undefined,
+      });
+      setIsEditing(false);
+      toast.success("项目信息已更新");
+    } catch (error) {
+      toast.error("更新失败");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCaptureScreenshot = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onCaptureScreenshot) return;
+    
+    setIsCapturing(true);
+    try {
+      await onCaptureScreenshot();
+      toast.success("截图已更新");
+    } catch (error) {
+      toast.error("截图失败");
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
   // Calculate conversion rate
   const conversionRate = landingPage && landingPage.viewCount > 0 
     ? ((landingPage.emailCount / landingPage.viewCount) * 100).toFixed(1)
     : null;
+
+  // Determine which image to show for landing page preview
+  const landingPagePreviewImage = landingPage?.screenshotUrl || landingPage?.heroImageUrl;
 
   return (
     <motion.div
@@ -136,7 +207,7 @@ export function ProjectCard({
     >
       <Card
         className="glass cursor-pointer transition-all duration-300 hover:glow-card group overflow-hidden"
-        onClick={onClick}
+        onClick={isEditing ? undefined : onClick}
       >
         <CardContent className="p-4">
           <div className="flex flex-col lg:flex-row gap-4">
@@ -175,20 +246,25 @@ export function ProjectCard({
                   ))
                 )}
               </div>
-              {/* Fill remaining slots if less than 4 images */}
-              {displayImages.length > 0 && displayImages.length < 4 && (
-                <div className="hidden">
-                  {/* Images already displayed above */}
-                </div>
-              )}
             </div>
 
             {/* Center: Project Info */}
             <div className="flex-1 flex flex-col min-w-0">
-              {/* Header with Title, Status and Delete */}
+              {/* Header with Title, Status and Actions */}
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-xl font-semibold line-clamp-1">{name}</h3>
+                  {isEditing ? (
+                    <Input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-lg font-semibold h-9"
+                      placeholder="项目名称"
+                      autoFocus
+                    />
+                  ) : (
+                    <h3 className="text-xl font-semibold line-clamp-1">{name}</h3>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Badge
@@ -202,7 +278,47 @@ export function ProjectCard({
                     {status === "completed" ? "已完成" : status === "active" ? "进行中" : "已归档"}
                   </Badge>
                   
-                  {onDelete && (
+                  {/* Edit Button */}
+                  {onUpdate && !isEditing && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={handleStartEdit}
+                    >
+                      <Pencil className="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                  )}
+
+                  {/* Save/Cancel when editing */}
+                  {isEditing && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={handleCancelEdit}
+                        disabled={isSaving}
+                      >
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={handleSaveEdit}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Check className="w-4 h-4 text-primary" />
+                        )}
+                      </Button>
+                    </>
+                  )}
+                  
+                  {onDelete && !isEditing && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
@@ -241,11 +357,20 @@ export function ProjectCard({
               </div>
 
               {/* Description */}
-              {description && (
+              {isEditing ? (
+                <Textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-sm mb-3 min-h-[60px]"
+                  placeholder="项目描述（可选）"
+                  rows={2}
+                />
+              ) : description ? (
                 <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
                   {description}
                 </p>
-              )}
+              ) : null}
 
               {/* Stage Indicator */}
               <div className="flex items-center gap-2 mb-3 py-2 px-3 rounded-lg bg-muted/30">
@@ -270,7 +395,7 @@ export function ProjectCard({
               </div>
 
               {/* Landing Page Actions */}
-              {landingPage?.isPublished && landingPageUrl && (
+              {landingPage?.isPublished && landingPageUrl && !isEditing && (
                 <div className="flex gap-2 mt-auto">
                   <Button
                     variant="outline"
@@ -297,27 +422,29 @@ export function ProjectCard({
               )}
 
               {/* Footer */}
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Calendar className="w-3 h-3" />
-                  <span>
-                    {format(new Date(createdAt), "yyyy年MM月dd日", { locale: zhCN })}
-                  </span>
+              {!isEditing && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Calendar className="w-3 h-3" />
+                    <span>
+                      {format(new Date(createdAt), "yyyy年MM月dd日", { locale: zhCN })}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity h-8"
+                  >
+                    继续 <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity h-8"
-                >
-                  继续 <ArrowRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
+              )}
             </div>
 
             {/* Right: Landing Page Preview */}
             <div className="w-full lg:w-1/4 flex-shrink-0">
               {/* Browser Frame Style Preview */}
-              <div className="rounded-lg border border-border/50 shadow-lg overflow-hidden bg-background/50">
+              <div className="rounded-lg border border-border/50 shadow-lg overflow-hidden bg-background/50 relative group/preview">
                 {/* Browser Toolbar */}
                 <div className="h-6 bg-muted/50 flex items-center px-2 gap-1.5 border-b border-border/30">
                   <div className="w-2 h-2 rounded-full bg-destructive/60" />
@@ -334,9 +461,9 @@ export function ProjectCard({
                 
                 {/* Page Preview */}
                 <div className="aspect-[9/16] max-h-[200px] overflow-hidden relative">
-                  {landingPage?.heroImageUrl ? (
+                  {landingPagePreviewImage ? (
                     <img 
-                      src={landingPage.heroImageUrl} 
+                      src={landingPagePreviewImage} 
                       alt="落地页预览"
                       className="w-full h-full object-cover object-top"
                     />
@@ -346,6 +473,16 @@ export function ProjectCard({
                       <span className="text-xs text-muted-foreground/50 mt-2">
                         {landingPage ? "待添加封面" : "待生成"}
                       </span>
+                    </div>
+                  )}
+                  
+                  {/* Screenshot indicator */}
+                  {landingPage?.screenshotUrl && (
+                    <div className="absolute bottom-1 left-1">
+                      <Badge className="bg-background/80 text-foreground text-[10px] px-1.5 py-0.5 backdrop-blur-sm">
+                        <Camera className="w-2.5 h-2.5 mr-0.5" />
+                        实时截图
+                      </Badge>
                     </div>
                   )}
                   
@@ -362,6 +499,26 @@ export function ProjectCard({
                           草稿
                         </Badge>
                       )}
+                    </div>
+                  )}
+
+                  {/* Capture Screenshot Button */}
+                  {landingPage?.isPublished && onCaptureScreenshot && !isEditing && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/60 opacity-0 group-hover/preview:opacity-100 transition-opacity">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={handleCaptureScreenshot}
+                        disabled={isCapturing}
+                      >
+                        {isCapturing ? (
+                          <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                        ) : (
+                          <Camera className="w-3 h-3 mr-1" />
+                        )}
+                        {isCapturing ? "截图中..." : "更新截图"}
+                      </Button>
                     </div>
                   )}
                 </div>

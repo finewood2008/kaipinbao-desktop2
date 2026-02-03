@@ -313,6 +313,7 @@ export type Database = {
           pain_points: Json | null
           product_images: Json | null
           project_id: string
+          screenshot_url: string | null
           selling_points: Json | null
           slug: string
           social_proof_items: Json
@@ -341,6 +342,7 @@ export type Database = {
           pain_points?: Json | null
           product_images?: Json | null
           project_id: string
+          screenshot_url?: string | null
           selling_points?: Json | null
           slug: string
           social_proof_items?: Json
@@ -369,6 +371,7 @@ export type Database = {
           pain_points?: Json | null
           product_images?: Json | null
           project_id?: string
+          screenshot_url?: string | null
           selling_points?: Json | null
           slug?: string
           social_proof_items?: Json
