@@ -44,6 +44,7 @@ interface ProductDesignGalleryProps {
   images: GeneratedImage[];
   onImagesChange: (images: GeneratedImage[]) => void;
   onSelectImage: (image: GeneratedImage) => void;
+  onDesignChange?: (oldImageId: string, newImageId: string) => Promise<boolean>;
   prdSummary?: string;
   prdData?: {
     usageScenarios?: string[];
@@ -60,6 +61,7 @@ export function ProductDesignGallery({
   images,
   onImagesChange,
   onSelectImage,
+  onDesignChange,
   prdSummary,
   prdData,
   competitorProducts = [],
@@ -137,6 +139,17 @@ export function ProductDesignGallery({
   };
 
   const handleSelectImage = async (image: GeneratedImage) => {
+    // Find currently selected design
+    const currentSelected = images.find(img => img.is_selected);
+    
+    // If changing design (not first selection and not same image), notify parent
+    if (currentSelected && currentSelected.id !== image.id && onDesignChange) {
+      const shouldProceed = await onDesignChange(currentSelected.id, image.id);
+      if (!shouldProceed) {
+        return; // User cancelled the design change
+      }
+    }
+    
     // Update all images - only the selected one is marked
     const updatedImages = images.map((img) => ({
       ...img,
