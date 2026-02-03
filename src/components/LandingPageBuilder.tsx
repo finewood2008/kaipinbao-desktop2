@@ -167,6 +167,7 @@ export function LandingPageBuilder({
   const [generatedMarketingImages, setGeneratedMarketingImages] = useState<Record<string, string | string[]>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateStyle>("modern");
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(true);
 
   // Auto-show analytics if page is already published
   const shouldShowAnalytics = showAnalytics || (landingPage?.is_published && !isRegenerating);
@@ -348,17 +349,97 @@ export function LandingPageBuilder({
   // No landing page yet - show generation UI
   if (!landingPage) {
     return (
-      <Card className="glass border-border/50 overflow-hidden">
-        <CardContent className="p-8">
-          <AnimatePresence mode="wait">
-            {!isGenerating ? (
-              <motion.div
-                key="idle"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="text-center"
-              >
+      <div className="space-y-6">
+        {/* Onboarding Guide */}
+        <AnimatePresence>
+          {showOnboarding && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: -20, height: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="glass border-primary/30 bg-primary/5 overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-primary" />
+                      <h4 className="font-semibold">落地页阶段流程</h4>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setShowOnboarding(false)}
+                      className="text-muted-foreground hover:text-foreground -mt-1 -mr-2"
+                    >
+                      知道了
+                    </Button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { 
+                        step: 1, 
+                        title: "选择模板", 
+                        desc: "挑选适合产品的页面风格",
+                        icon: Palette,
+                        color: "text-stage-1"
+                      },
+                      { 
+                        step: 2, 
+                        title: "AI 生成页面", 
+                        desc: "结合 PRD 与素材自动生成",
+                        icon: Wand2,
+                        color: "text-stage-2"
+                      },
+                      { 
+                        step: 3, 
+                        title: "发布 & 看数据", 
+                        desc: "一键发布并追踪转化效果",
+                        icon: BarChart3,
+                        color: "text-stage-3"
+                      },
+                    ].map((item, index) => (
+                      <motion.div
+                        key={item.step}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="flex items-start gap-3 p-3 rounded-lg bg-background/50"
+                      >
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                          "bg-gradient-to-br from-primary/20 to-accent/20"
+                        )}>
+                          <item.icon className={cn("w-4 h-4", item.color)} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">步骤 {item.step}</span>
+                          </div>
+                          <p className="font-medium text-sm">{item.title}</p>
+                          <p className="text-xs text-muted-foreground">{item.desc}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <Card className="glass border-border/50 overflow-hidden">
+          <CardContent className="p-8">
+            <AnimatePresence mode="wait">
+              {!isGenerating ? (
+                <motion.div
+                  key="idle"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="text-center"
+                >
                 <motion.div
                   className="w-20 h-20 rounded-2xl bg-gradient-to-br from-stage-3 to-accent flex items-center justify-center mx-auto mb-6"
                   animate={{ 
@@ -537,6 +618,7 @@ export function LandingPageBuilder({
           </AnimatePresence>
         </CardContent>
       </Card>
+      </div>
     );
   }
 
