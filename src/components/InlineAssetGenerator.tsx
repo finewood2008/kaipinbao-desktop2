@@ -2,7 +2,6 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { 
   ImagePlus, 
   Loader2, 
@@ -15,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { IMAGE_TYPES } from "./ImageTypeSelector";
+import { ImageGenerationProgress } from "./ImageGenerationProgress";
 
 interface GeneratedImage {
   id: string;
@@ -59,6 +59,7 @@ export function InlineAssetGenerator({
   const [selectedTypeIds, setSelectedTypeIds] = useState<string[]>(["scene", "structure"]);
   const [generatingTypeIds, setGeneratingTypeIds] = useState<string[]>([]);
   const [generatedCount, setGeneratedCount] = useState(0);
+  const [currentGeneratingType, setCurrentGeneratingType] = useState("");
 
   const toggleType = (typeId: string) => {
     setSelectedTypeIds(prev => 
@@ -86,8 +87,9 @@ export function InlineAssetGenerator({
     const newImages: GeneratedImage[] = [];
 
     for (const imageType of selectedTypeIds) {
+      const typeInfo = IMAGE_TYPES.find(t => t.id === imageType);
+      setCurrentGeneratingType(typeInfo?.label || imageType);
       try {
-        const typeInfo = IMAGE_TYPES.find(t => t.id === imageType);
         
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`,
@@ -155,6 +157,7 @@ export function InlineAssetGenerator({
 
     setIsGeneratingImages(false);
     setGeneratingTypeIds([]);
+    setCurrentGeneratingType("");
   };
 
   const hasProductImage = !!selectedImageUrl && !!selectedImageId;
@@ -238,15 +241,14 @@ export function InlineAssetGenerator({
                 </div>
 
                 {/* Generation Progress */}
-                {isGeneratingImages && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">生成进度</span>
-                      <span className="font-medium">{generatedCount}/{selectedTypeIds.length}</span>
-                    </div>
-                    <Progress value={(generatedCount / selectedTypeIds.length) * 100} className="h-2" />
-                  </div>
-                )}
+                <ImageGenerationProgress
+                  isGenerating={isGeneratingImages}
+                  currentType={currentGeneratingType}
+                  currentStep={`正在生成 ${currentGeneratingType}...`}
+                  totalTypes={selectedTypeIds.length}
+                  completedCount={generatedCount}
+                  estimatedTimeRemaining={isGeneratingImages ? (selectedTypeIds.length - generatedCount) * 30 : undefined}
+                />
 
                 {/* Action Buttons */}
                 <div className="flex gap-3">

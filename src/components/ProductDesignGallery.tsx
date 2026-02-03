@@ -17,6 +17,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImageLightbox } from "./ImageLightbox";
+import { ImageGenerationProgress } from "./ImageGenerationProgress";
 import { cn } from "@/lib/utils";
 
 interface GeneratedImage {
@@ -67,6 +68,7 @@ export function ProductDesignGallery({
   competitorProducts = [],
 }: ProductDesignGalleryProps) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStep, setGenerationStep] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
   const [feedbackImageId, setFeedbackImageId] = useState<string | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
@@ -76,7 +78,9 @@ export function ProductDesignGallery({
 
   const generateImage = async (prompt: string) => {
     setIsGenerating(true);
+    setGenerationStep("正在连接 AI 服务...");
     try {
+      setGenerationStep("AI 正在绘制产品造型...");
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`,
         {
@@ -101,6 +105,7 @@ export function ProductDesignGallery({
 
       const data = await response.json();
 
+      setGenerationStep("正在保存到数据库...");
       // Save to database
       const { data: savedImage, error } = await supabase
         .from("generated_images")
@@ -124,6 +129,7 @@ export function ProductDesignGallery({
       toast.error(error instanceof Error ? error.message : "图像生成失败");
     } finally {
       setIsGenerating(false);
+      setGenerationStep("");
       setCustomPrompt("");
     }
   };
@@ -207,6 +213,15 @@ export function ProductDesignGallery({
 
   return (
     <div className="space-y-6">
+      {/* Generation Progress */}
+      <ImageGenerationProgress
+        isGenerating={isGenerating}
+        currentType="产品造型"
+        currentStep={generationStep}
+        totalTypes={1}
+        completedCount={0}
+        estimatedTimeRemaining={isGenerating ? 30 : undefined}
+      />
       {/* Generation Controls */}
       <Card className="glass border-border/50">
         <CardContent className="p-6">

@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImageLightbox } from "./ImageLightbox";
+import { ImageGenerationProgress } from "./ImageGenerationProgress";
 import { ImageType, IMAGE_TYPES } from "./ImageTypeSelector";
 import { cn } from "@/lib/utils";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
@@ -64,6 +65,8 @@ export function MarketingImageGallery({
 }: MarketingImageGalleryProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingTypes, setGeneratingTypes] = useState<string[]>([]);
+  const [currentGeneratingType, setCurrentGeneratingType] = useState("");
+  const [completedCount, setCompletedCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
@@ -80,9 +83,11 @@ export function MarketingImageGallery({
 
     setIsGenerating(true);
     setGeneratingTypes(selectedTypes.map(t => t.id));
+    setCompletedCount(0);
 
     // Generate images one by one and update UI immediately
     for (const type of selectedTypes) {
+      setCurrentGeneratingType(type.label);
       try {
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-image`,
@@ -132,7 +137,8 @@ export function MarketingImageGallery({
         // Immediately update UI with the new image
         onImagesChange([...images, savedImage as GeneratedImage]);
         
-        // Update generating types to remove completed one
+        // Update progress
+        setCompletedCount(prev => prev + 1);
         setGeneratingTypes(prev => prev.filter(t => t !== type.id));
         
         toast.success(`${type.label}已生成`);
@@ -145,6 +151,7 @@ export function MarketingImageGallery({
     }
 
     setIsGenerating(false);
+    setCurrentGeneratingType("");
   };
 
   const regenerateImage = async (image: GeneratedImage) => {
@@ -245,6 +252,15 @@ export function MarketingImageGallery({
 
   return (
     <div className="space-y-6">
+      {/* Generation Progress */}
+      <ImageGenerationProgress
+        isGenerating={isGenerating}
+        currentType={currentGeneratingType}
+        currentStep={`正在生成 ${currentGeneratingType}...`}
+        totalTypes={selectedTypes.length}
+        completedCount={completedCount}
+        estimatedTimeRemaining={isGenerating ? (selectedTypes.length - completedCount) * 30 : undefined}
+      />
       {/* Generate Button */}
       <Card className="glass border-border/50">
         <CardContent className="p-4">
