@@ -277,6 +277,15 @@ OUTPUT: A high-quality marketing photograph suitable for advertising and promoti
 
 // Fetch image and convert to base64
 async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; mimeType: string }> {
+  // Check if already a data URL (base64)
+  if (imageUrl.startsWith("data:")) {
+    const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) {
+      return { mimeType: match[1], base64: match[2] };
+    }
+    throw new Error("Invalid data URL format");
+  }
+
   const response = await fetch(imageUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status}`);
@@ -284,7 +293,18 @@ async function fetchImageAsBase64(imageUrl: string): Promise<{ base64: string; m
   
   const contentType = response.headers.get("content-type") || "image/png";
   const arrayBuffer = await response.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+  
+  // Use chunked encoding to avoid stack overflow with large arrays
+  const uint8Array = new Uint8Array(arrayBuffer);
+  let base64 = "";
+  const chunkSize = 0x8000; // 32KB chunks
+  
+  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+    const chunk = uint8Array.subarray(i, i + chunkSize);
+    base64 += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  
+  base64 = btoa(base64);
   
   return { base64, mimeType: contentType };
 }
