@@ -64,6 +64,7 @@ interface ProjectCardProps {
   onDelete?: () => Promise<void>;
   onUpdate?: (updates: { name?: string; description?: string }) => Promise<void>;
   onCaptureScreenshot?: () => Promise<void>;
+  isSelected?: boolean;
 }
 
 const stageInfo = [
@@ -86,6 +87,7 @@ export function ProjectCard({
   onDelete,
   onUpdate,
   onCaptureScreenshot,
+  isSelected = false,
 }: ProjectCardProps) {
   const [copied, setCopied] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -206,7 +208,10 @@ export function ProjectCard({
       animate={{ opacity: 1, y: 0 }}
     >
       <Card
-        className="glass cursor-pointer transition-all duration-300 hover:glow-card group overflow-hidden"
+        className={cn(
+          "glass cursor-pointer transition-all duration-300 hover:glow-card group overflow-hidden",
+          isSelected && "ring-2 ring-primary bg-primary/5"
+        )}
         onClick={isEditing ? undefined : onClick}
       >
         <CardContent className="p-4">

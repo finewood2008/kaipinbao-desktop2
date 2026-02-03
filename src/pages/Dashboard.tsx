@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -11,13 +12,23 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectCard } from "@/components/ProjectCard";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LogOut, Plus, Search, Sparkles, Loader2, Globe, Eye, Mail, Filter } from "lucide-react";
+import { LogOut, Plus, Search, Sparkles, Loader2, Globe, Eye, Mail, Filter, Trash2, Archive, X, CheckSquare } from "lucide-react";
 import logoImage from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +67,14 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  
+  // Batch selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [isBatchArchiving, setIsBatchArchiving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -254,7 +273,7 @@ export default function Dashboard() {
     };
   }, [projects]);
 
-  // Filter projects
+  // Filter projects - MUST be before batch operations that depend on it
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
       const matchesSearch = 
@@ -267,6 +286,119 @@ export default function Dashboard() {
       return matchesSearch && matchesStage && matchesStatus;
     });
   }, [projects, searchQuery, stageFilter, statusFilter]);
+
+  // Batch operations
+  const toggleSelectProject = useCallback((projectId: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(projectId)) {
+        newSet.delete(projectId);
+      } else {
+        newSet.add(projectId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === filteredProjects.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredProjects.map(p => p.id)));
+    }
+  }, [filteredProjects, selectedIds.size]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setIsBatchMode(false);
+  }, []);
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    
+    setIsBatchDeleting(true);
+    const idsToDelete = Array.from(selectedIds);
+    
+    const { error } = await supabase
+      .from("projects")
+      .delete()
+      .in("id", idsToDelete);
+
+    if (error) {
+      toast.error("批量删除失败");
+      console.error(error);
+    } else {
+      toast.success(`已删除 ${idsToDelete.length} 个项目`);
+      setProjects(prev => prev.filter(p => !selectedIds.has(p.id)));
+      clearSelection();
+    }
+    
+    setIsBatchDeleting(false);
+    setShowDeleteConfirm(false);
+  };
+
+  const handleBatchArchive = async () => {
+    if (selectedIds.size === 0) return;
+    
+    setIsBatchArchiving(true);
+    const idsToArchive = Array.from(selectedIds);
+    
+    const { error } = await supabase
+      .from("projects")
+      .update({ status: "archived" })
+      .in("id", idsToArchive);
+
+    if (error) {
+      toast.error("批量归档失败");
+      console.error(error);
+    } else {
+      toast.success(`已归档 ${idsToArchive.length} 个项目`);
+      setProjects(prev => prev.map(p => 
+        selectedIds.has(p.id) ? { ...p, status: "archived" } : p
+      ));
+      clearSelection();
+    }
+    
+    setIsBatchArchiving(false);
+    setShowArchiveConfirm(false);
+  };
+
+  const handleBatchUnarchive = async () => {
+    if (selectedIds.size === 0) return;
+    
+    const idsToUnarchive = Array.from(selectedIds);
+    
+    const { error } = await supabase
+      .from("projects")
+      .update({ status: "active" })
+      .in("id", idsToUnarchive);
+
+    if (error) {
+      toast.error("取消归档失败");
+      console.error(error);
+    } else {
+      toast.success(`已恢复 ${idsToUnarchive.length} 个项目`);
+      setProjects(prev => prev.map(p => 
+        selectedIds.has(p.id) ? { ...p, status: "active" } : p
+      ));
+      clearSelection();
+    }
+  };
+
+  // Check if any selected projects are archived
+  const hasArchivedSelected = useMemo(() => {
+    return Array.from(selectedIds).some(id => {
+      const project = projects.find(p => p.id === id);
+      return project?.status === "archived";
+    });
+  }, [selectedIds, projects]);
+
+  const hasActiveSelected = useMemo(() => {
+    return Array.from(selectedIds).some(id => {
+      const project = projects.find(p => p.id === id);
+      return project?.status !== "archived";
+    });
+  }, [selectedIds, projects]);
 
   const stageFilters = [
     { value: "all" as const, label: "全部阶段" },
@@ -441,7 +573,131 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+
+          {/* Batch Mode Toggle */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={isBatchMode ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => {
+                setIsBatchMode(!isBatchMode);
+                if (isBatchMode) clearSelection();
+              }}
+            >
+              <CheckSquare className="w-4 h-4 mr-2" />
+              {isBatchMode ? "取消批量" : "批量操作"}
+            </Button>
+          </div>
         </div>
+
+        {/* Batch Action Toolbar */}
+        <AnimatePresence>
+          {isBatchMode && selectedIds.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
+            >
+              <div className="flex items-center gap-3 px-6 py-3 rounded-full glass border border-border/50 shadow-xl">
+                <span className="text-sm font-medium">
+                  已选择 <span className="text-primary">{selectedIds.size}</span> 个项目
+                </span>
+                <div className="w-px h-6 bg-border" />
+                
+                {hasActiveSelected && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowArchiveConfirm(true)}
+                    disabled={isBatchArchiving}
+                  >
+                    <Archive className="w-4 h-4 mr-2" />
+                    归档
+                  </Button>
+                )}
+                
+                {hasArchivedSelected && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleBatchUnarchive}
+                  >
+                    <Archive className="w-4 h-4 mr-2" />
+                    取消归档
+                  </Button>
+                )}
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={isBatchDeleting}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  删除
+                </Button>
+                
+                <div className="w-px h-6 bg-border" />
+                
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={clearSelection}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Batch Delete Confirmation */}
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>确认批量删除？</AlertDialogTitle>
+              <AlertDialogDescription>
+                此操作将永久删除 {selectedIds.size} 个项目及其所有相关数据（包括落地页、生成的图片等），且无法恢复。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleBatchDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isBatchDeleting}
+              >
+                {isBatchDeleting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                确认删除
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Batch Archive Confirmation */}
+        <AlertDialog open={showArchiveConfirm} onOpenChange={setShowArchiveConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>确认批量归档？</AlertDialogTitle>
+              <AlertDialogDescription>
+                将 {selectedIds.size} 个项目移至归档。归档后的项目不会显示在默认视图中，但可以在"已归档"筛选中找到。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>取消</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleBatchArchive}
+                disabled={isBatchArchiving}
+              >
+                {isBatchArchiving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                确认归档
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Projects List - Single Column */}
         {isLoading ? (
@@ -470,43 +726,78 @@ export default function Dashboard() {
           </motion.div>
         ) : (
           <div className="flex flex-col gap-6">
+            {/* Select All Checkbox when in batch mode */}
+            {isBatchMode && filteredProjects.length > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-muted/30">
+                <Checkbox
+                  checked={selectedIds.size === filteredProjects.length && filteredProjects.length > 0}
+                  onCheckedChange={toggleSelectAll}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {selectedIds.size === filteredProjects.length ? "取消全选" : "全选当前列表"}
+                </span>
+              </div>
+            )}
+            
             {filteredProjects.map((project, i) => (
               <motion.div
                 key={project.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
+                className="flex items-stretch gap-4"
               >
-                <ProjectCard
-                  id={project.id}
-                  name={project.name}
-                  description={project.description || undefined}
-                  currentStage={project.current_stage}
-                  status={project.status}
-                  createdAt={project.created_at}
-                  coverImage={project.cover_image_url || undefined}
-                  productImages={project.product_images}
-                  landingPage={project.landing_page ? {
-                    slug: project.landing_page.slug,
-                    isPublished: project.landing_page.is_published,
-                    heroImageUrl: project.landing_page.hero_image_url || undefined,
-                    screenshotUrl: project.landing_page.screenshot_url || undefined,
-                    viewCount: project.landing_page.view_count,
-                    emailCount: project.email_count,
-                  } : undefined}
-                  onClick={() => navigate(`/project/${project.id}`)}
-                  onDelete={() => handleDeleteProject(project.id)}
-                  onUpdate={(updates) => handleUpdateProject(project.id, updates)}
-                  onCaptureScreenshot={
-                    project.landing_page?.is_published 
-                      ? () => handleCaptureScreenshot(
-                          project.id, 
-                          project.landing_page!.id, 
-                          project.landing_page!.slug
-                        )
-                      : undefined
-                  }
-                />
+                {/* Checkbox for batch selection */}
+                {isBatchMode && (
+                  <div 
+                    className={cn(
+                      "flex items-center justify-center w-12 rounded-lg transition-colors cursor-pointer",
+                      selectedIds.has(project.id) 
+                        ? "bg-primary/10 border-2 border-primary" 
+                        : "bg-muted/30 border-2 border-transparent hover:border-muted"
+                    )}
+                    onClick={() => toggleSelectProject(project.id)}
+                  >
+                    <Checkbox
+                      checked={selectedIds.has(project.id)}
+                      onCheckedChange={() => toggleSelectProject(project.id)}
+                    />
+                  </div>
+                )}
+                
+                <div className="flex-1">
+                  <ProjectCard
+                    id={project.id}
+                    name={project.name}
+                    description={project.description || undefined}
+                    currentStage={project.current_stage}
+                    status={project.status}
+                    createdAt={project.created_at}
+                    coverImage={project.cover_image_url || undefined}
+                    productImages={project.product_images}
+                    landingPage={project.landing_page ? {
+                      slug: project.landing_page.slug,
+                      isPublished: project.landing_page.is_published,
+                      heroImageUrl: project.landing_page.hero_image_url || undefined,
+                      screenshotUrl: project.landing_page.screenshot_url || undefined,
+                      viewCount: project.landing_page.view_count,
+                      emailCount: project.email_count,
+                    } : undefined}
+                    onClick={() => isBatchMode ? toggleSelectProject(project.id) : navigate(`/project/${project.id}`)}
+                    onDelete={isBatchMode ? undefined : () => handleDeleteProject(project.id)}
+                    onUpdate={isBatchMode ? undefined : (updates) => handleUpdateProject(project.id, updates)}
+                    onCaptureScreenshot={
+                      !isBatchMode && project.landing_page?.is_published 
+                        ? () => handleCaptureScreenshot(
+                            project.id, 
+                            project.landing_page!.id, 
+                            project.landing_page!.slug
+                          )
+                        : undefined
+                    }
+                    isSelected={selectedIds.has(project.id)}
+                  />
+                </div>
               </motion.div>
             ))}
           </div>
