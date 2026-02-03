@@ -131,7 +131,7 @@ export function AiProductManagerPanel({
   };
 
   return (
-    <div className="h-full grid grid-cols-1 md:grid-cols-[280px_1fr] overflow-hidden">
+    <div className="h-full grid grid-cols-1 md:grid-cols-[260px_1fr] overflow-hidden">
       {/* Left Sidebar - PRD Extraction */}
       <PrdExtractionSidebar
         prdData={prdData}
@@ -144,20 +144,17 @@ export function AiProductManagerPanel({
 
       {/* Right - Chat Area */}
       <div className="flex flex-col h-full min-h-0 overflow-hidden">
-        {/* Header - Fixed height */}
-        <div className="flex-shrink-0 h-14 flex items-center gap-3 px-4 border-b border-border/50 bg-card/30">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <Bot className="w-5 h-5 text-primary-foreground" />
+        {/* Header - Compact */}
+        <div className="flex-shrink-0 h-12 flex items-center gap-2.5 px-4 border-b border-border/50 bg-card/20">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <Bot className="w-4 h-4 text-primary-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-foreground truncate">AI 产品经理</h3>
-            <p className="text-xs text-muted-foreground truncate">
-              基于竞品分析，帮您定义理想产品
-            </p>
+            <h3 className="text-sm font-semibold text-foreground truncate">AI 产品经理</h3>
           </div>
-          <Badge variant="outline" className="flex-shrink-0 bg-background/50">
+          <Badge variant="outline" className="flex-shrink-0 bg-background/50 text-xs">
             <Sparkles className="w-3 h-3 mr-1" />
-            产品顾问
+            顾问
           </Badge>
         </div>
 
@@ -176,22 +173,22 @@ export function AiProductManagerPanel({
         <div className="flex-1 min-h-0 relative">
           <div className="absolute inset-0 flex flex-col">
             <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-              <div className="p-5 max-w-3xl mx-auto space-y-5">
-                {/* Empty State */}
+              <div className="p-4 max-w-2xl mx-auto space-y-4">
+                {/* Empty State - Compact */}
                 {messages.length === 0 && !isSending && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-center py-12"
+                    className="text-center py-8"
                   >
-                    <div className="w-16 h-16 mx-auto bg-primary/20 rounded-full flex items-center justify-center mb-4">
-                      <Bot className="w-8 h-8 text-primary" />
+                    <div className="w-12 h-12 mx-auto bg-primary/20 rounded-xl flex items-center justify-center mb-3">
+                      <Bot className="w-6 h-6 text-primary" />
                     </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-2">
+                    <h3 className="text-base font-semibold text-foreground mb-1">
                       AI 产品经理已就绪
                     </h3>
-                    <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                      我将分析您的竞品研究数据，通过方向性选择帮您快速定义产品需求。
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                      通过对话帮您定义产品需求
                     </p>
                   </motion.div>
                 )}
@@ -256,37 +253,34 @@ export function AiProductManagerPanel({
           </div>
         </div>
 
-        {/* Input Area - Fixed height */}
+        {/* Input Area - Compact */}
         {!isReadOnly ? (
-          <div className="flex-shrink-0 border-t border-border/50 bg-background/50 backdrop-blur-sm p-4">
-            <div className="max-w-3xl mx-auto">
-              <Card className="flex items-center gap-2 p-2 bg-card/50 border-border/50">
+          <div className="flex-shrink-0 border-t border-border/50 bg-background/50 backdrop-blur-sm p-3">
+            <div className="max-w-2xl mx-auto">
+              <Card className="flex items-center gap-2 p-1.5 bg-card/50 border-border/50">
                 <Input
-                  placeholder="输入您的想法，或点击上方选项快速选择..."
+                  placeholder="输入您的想法..."
                   value={inputValue}
                   onChange={(e) => onInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={isSending}
-                  className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 h-9 text-sm"
                 />
                 <Button
                   size="icon"
                   onClick={onSend}
                   disabled={!inputValue.trim() || isSending}
-                  className="bg-gradient-primary glow-primary flex-shrink-0"
+                  className="bg-gradient-primary glow-primary flex-shrink-0 h-8 w-8"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-3.5 h-3.5" />
                 </Button>
               </Card>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                按 Enter 发送 · AI 产品经理将根据竞品数据给出专业建议
-              </p>
             </div>
           </div>
         ) : (
-          <div className="flex-shrink-0 border-t border-border/50 bg-muted/30 p-4">
-            <div className="max-w-3xl mx-auto text-center">
-              <p className="text-sm text-muted-foreground">
+          <div className="flex-shrink-0 border-t border-border/50 bg-muted/30 p-3">
+            <div className="max-w-2xl mx-auto text-center">
+              <p className="text-xs text-muted-foreground">
                 📖 只读模式 - 产品定义阶段已完成
               </p>
             </div>

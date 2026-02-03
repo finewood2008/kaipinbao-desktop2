@@ -266,63 +266,48 @@ export function PrdExtractionSidebar({
   const currentEditItem = progressItems.find(i => i.key === editingField);
 
   return (
-    <div className={cn("flex flex-col h-full border-r border-border/50 bg-card/30", className)}>
+    <div className={cn("flex flex-col h-full border-r border-border/50 bg-card/20", className)}>
       <ScrollArea className="flex-1">
-        <div className="p-4 space-y-6">
-          {/* Phase Indicator */}
-          <div className="space-y-3">
+        <div className="p-5 space-y-5">
+          {/* Phase Indicator - Compact */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">对话阶段</h3>
+            <Badge className={cn("text-xs", phase.color)}>
+              {phase.label}
+            </Badge>
+          </div>
+          
+          {/* Product Name if available */}
+          {prdData?.productName && (
+            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
+              <div className="flex items-center gap-2 mb-1">
+                <Tag className="w-3 h-3 text-primary" />
+                <span className="text-xs text-muted-foreground">产品名称</span>
+              </div>
+              <p className="text-sm font-medium text-foreground">{prdData.productName}</p>
+              {prdData.productTagline && (
+                <p className="text-xs text-muted-foreground mt-0.5">{prdData.productTagline}</p>
+              )}
+            </div>
+          )}
+
+          {/* Progress Header - Simplified */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">对话阶段</h3>
-              <Badge className={cn("text-xs", phase.color)}>
-                {phase.label}
+              <h3 className="text-sm font-semibold text-foreground">产品定义</h3>
+              <Badge variant="outline" className="text-xs bg-background/50 gap-1">
+                <Asterisk className="w-2.5 h-2.5 text-destructive" />
+                {completedCount}/{progressItems.length}
               </Badge>
             </div>
-            
-            {/* Product Name if available */}
-            {prdData?.productName && (
-              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <Tag className="w-3 h-3 text-primary" />
-                  <span className="text-xs text-muted-foreground">产品名称</span>
-                </div>
-                <p className="text-sm font-medium text-foreground">{prdData.productName}</p>
-                {prdData.productTagline && (
-                  <p className="text-xs text-muted-foreground mt-1">{prdData.productTagline}</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Progress Header */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-foreground">产品定义</h3>
-                <Badge variant="outline" className="text-xs bg-background/50 gap-1">
-                  <Asterisk className="w-2.5 h-2.5 text-destructive" />
-                  {completedCount}/{progressItems.length} 必填项
-                </Badge>
-              </div>
-            </div>
-            <div className="relative">
-              <Progress value={progressPercent} className="h-2.5" />
-              {/* Progress glow effect */}
-              <motion.div 
-                className="absolute top-0 left-0 h-2.5 rounded-full bg-gradient-to-r from-primary/50 to-accent/50 blur-sm"
-                style={{ width: `${progressPercent}%` }}
-                animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              />
-            </div>
+            <Progress value={progressPercent} className="h-1.5" />
             <p className="text-xs text-muted-foreground">
-              {completedCount === 0 ? "开始与 AI 对话收集产品信息" : 
-               isAllCompleted ? "✓ 所有必填项已完成" :
-               `已收集 ${completedCount} 项，继续对话或手动填写`}
+              {isAllCompleted ? "✓ 已完成" : `继续对话或点击编辑`}
             </p>
           </div>
 
-          {/* Progress Items */}
-          <div className="space-y-3">
+          {/* Progress Items - Compact */}
+          <div className="space-y-2">
             {progressItems.map((item, index) => {
               const Icon = item.icon;
               const isCompleted = isItemCompleted(prdData, item.key);
@@ -333,100 +318,52 @@ export function PrdExtractionSidebar({
                   key={item.key}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ scale: 1.02, x: 4 }}
+                  transition={{ delay: index * 0.05 }}
                 >
                   <Card
                     className={cn(
-                      "p-3 transition-all duration-300 group relative",
+                      "p-2.5 transition-all duration-200 group relative",
                       isCompleted
-                        ? "bg-primary/10 border-primary/30 shadow-sm shadow-primary/10"
-                        : "bg-muted/30 border-border/50 hover:bg-muted/50 hover:border-border",
+                        ? "bg-primary/10 border-primary/30"
+                        : "bg-muted/20 border-border/40 hover:bg-muted/40",
                       isEditable && "cursor-pointer"
                     )}
                     onClick={() => handleEditClick(item.key)}
                   >
-                    {/* Required indicator */}
-                    <div className="absolute top-2 right-2 flex items-center gap-1">
-                      <Asterisk className="w-3 h-3 text-destructive" />
-                      {isEditable && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditClick(item.key);
-                          }}
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                      )}
-                    </div>
-
-                    <div className="flex items-start gap-3">
-                      <motion.div
+                    <div className="flex items-center gap-2.5">
+                      <div
                         className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-300",
-                          isCompleted ? "bg-primary/20" : "bg-muted group-hover:bg-muted/80"
+                          "w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0",
+                          isCompleted ? "bg-primary/20" : "bg-muted"
                         )}
-                        animate={isCompleted ? {
-                          boxShadow: [
-                            "0 0 0 0 rgba(var(--primary), 0)",
-                            "0 0 0 4px rgba(var(--primary), 0.15)",
-                            "0 0 0 0 rgba(var(--primary), 0)"
-                          ]
-                        } : {}}
-                        transition={{ duration: 2, repeat: Infinity }}
                       >
                         {isCompleted ? (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 500 }}
-                          >
-                            <Check className="w-4 h-4 text-primary" />
-                          </motion.div>
+                          <Check className="w-3.5 h-3.5 text-primary" />
                         ) : (
-                          <Icon className="w-4 h-4 text-muted-foreground" />
+                          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
                         )}
-                      </motion.div>
-                      <div className="flex-1 min-w-0 pr-8">
-                        <div className="flex items-center gap-2">
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
                           <span
                             className={cn(
-                              "text-sm font-medium transition-colors",
+                              "text-xs font-medium",
                               isCompleted ? "text-foreground" : "text-muted-foreground"
                             )}
                           >
                             {item.label}
                           </span>
-                          {isCompleted ? (
-                            <motion.div
-                              animate={{ scale: [1, 1.3, 1] }}
-                              transition={{ duration: 1.5, repeat: Infinity }}
-                            >
-                              <Circle className="w-2 h-2 fill-primary text-primary" />
-                            </motion.div>
-                          ) : (
-                            <Circle className="w-2 h-2 text-muted-foreground/50" />
-                          )}
+                          <Asterisk className="w-2.5 h-2.5 text-destructive" />
                         </div>
                         {isCompleted && value && (
-                          <motion.p 
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            className="text-xs text-muted-foreground mt-1 line-clamp-2"
-                          >
+                          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
                             {value}
-                          </motion.p>
-                        )}
-                        {!isCompleted && (
-                          <p className="text-xs text-muted-foreground/50 mt-1 italic">
-                            {isEditable ? "点击填写..." : "等待收集..."}
                           </p>
                         )}
                       </div>
+                      {isEditable && (
+                        <Pencil className="w-3 h-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      )}
                     </div>
                   </Card>
                 </motion.div>
@@ -434,56 +371,51 @@ export function PrdExtractionSidebar({
             })}
           </div>
 
-          <Separator />
-
-          {/* Competitor Images Reference */}
+          {/* Competitor Images Reference - Compact */}
           {competitorImages.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <ImageIcon className="w-4 h-4 text-muted-foreground" />
-                <h4 className="text-sm font-medium text-muted-foreground">竞品图片参考</h4>
+            <>
+              <Separator className="my-4" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                  <h4 className="text-xs font-medium text-muted-foreground">竞品参考</h4>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {competitorImages.map((imageUrl, index) => (
+                    <div
+                      key={index}
+                      className="aspect-square rounded-md overflow-hidden border border-border/40"
+                    >
+                      <img
+                        src={imageUrl}
+                        alt={`竞品 ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-2">
-                {competitorImages.map((imageUrl, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="aspect-square rounded-lg overflow-hidden border border-border/50"
-                  >
-                    <img
-                      src={imageUrl}
-                      alt={`竞品 ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+            </>
           )}
 
-          {/* Completion Status & Action */}
+          {/* Completion Status & Action - Compact */}
           {isAllCompleted && onProceedToDesign && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-3"
             >
-              <div className="p-4 rounded-xl bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30">
+              <div className="p-3 rounded-lg bg-gradient-to-r from-primary/15 to-accent/15 border border-primary/30">
                 <div className="flex items-center gap-2 mb-2">
-                  <Check className="w-5 h-5 text-primary" />
-                  <span className="font-semibold text-foreground">所有必填项已完成</span>
+                  <Check className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold text-foreground">已完成</span>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">
-                  您可以进入产品设计阶段，或继续与 AI 对话完善更多细节
-                </p>
                 <Button
-                  className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity"
+                  size="sm"
+                  className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90"
                   onClick={onProceedToDesign}
                 >
-                  进入产品设计阶段
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  进入产品设计
+                  <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                 </Button>
               </div>
             </motion.div>
