@@ -430,7 +430,8 @@ ${prompt}
   return { imageUrl, description };
 }
 
-// Generate image via Lovable AI Gateway (Fallback)
+// Generate image via Lovable AI Gateway - Uses Nano banana pro (google/gemini-3-pro-image-preview)
+// This is now the PRIMARY method for higher quality image generation
 async function generateImageViaLovable(
   prompt: string,
   parentImageUrl?: string
@@ -460,7 +461,7 @@ async function generateImageViaLovable(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-3-pro-image-preview",
+      model: "google/gemini-3-pro-image-preview",  // Nano banana pro - highest quality image model
       messages: [{ role: "user", content }],
       modalities: ["image", "text"],
     }),
@@ -527,25 +528,25 @@ serve(async (req) => {
     let imageResult: { imageUrl: string; description?: string };
     let usedFallback = false;
 
-    // Primary: Google Direct API
+    // Primary: Lovable AI Gateway with Nano banana pro (google/gemini-3-pro-image-preview)
     try {
-      console.log("GenerateImage: Attempting Google Direct API...");
+      console.log("GenerateImage: Attempting Lovable AI (Nano banana pro)...");
+      imageResult = await generateImageViaLovable(
+        enhancedPrompt,
+        useImageEditing ? parentImageUrl : undefined
+      );
+      console.log("GenerateImage: Lovable AI succeeded");
+    } catch (lovableError) {
+      console.warn("GenerateImage: Lovable AI failed, switching to Google Direct API...", lovableError);
+      usedFallback = true;
+      
+      // Fallback: Google Direct API
       imageResult = await generateImageViaGoogle(
         ai,
         enhancedPrompt,
         useImageEditing ? parentImageUrl : undefined
       );
-      console.log("GenerateImage: Google Direct API succeeded");
-    } catch (googleError) {
-      console.warn("GenerateImage: Google API failed, switching to Lovable AI...", googleError);
-      usedFallback = true;
-      
-      // Fallback: Lovable AI Gateway
-      imageResult = await generateImageViaLovable(
-        enhancedPrompt,
-        useImageEditing ? parentImageUrl : undefined
-      );
-      console.log("GenerateImage: Lovable AI fallback succeeded");
+      console.log("GenerateImage: Google Direct API fallback succeeded");
     }
 
     // Generate marketing copy for phase 2 images
