@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,11 +208,11 @@ export default function Dashboard() {
       {/* Header */}
       <header className="border-b border-border/50 glass sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img src={logoImage} alt="开品宝" className="h-10" />
             <span className="text-xl font-bold text-foreground">开品宝</span>
             <span className="text-xs text-muted-foreground hidden md:block">产品研发工作台</span>
-          </div>
+          </Link>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground hidden md:block">
               {user?.email}

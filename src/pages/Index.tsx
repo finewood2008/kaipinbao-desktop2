@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -117,13 +117,13 @@ export default function Index() {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#0a0f1a]/80 backdrop-blur-xl border-b border-white/5">
         <div className="container mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img src={logoImage} alt="开品宝" className="h-9" />
             <div className="flex flex-col">
               <span className="text-xs text-muted-foreground leading-none">半人马AI</span>
               <span className="text-base font-bold text-foreground leading-tight">开品宝</span>
             </div>
-          </div>
+          </Link>
           <Button 
             className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 text-foreground border border-white/10 rounded-full px-5"
             onClick={() => navigate("/auth")}
@@ -464,11 +464,11 @@ export default function Index() {
       <footer className="border-t border-white/5 py-12 bg-[#080c14]">
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
               <img src={logoImage} alt="开品宝" className="h-8" />
               <span className="font-semibold">开品宝</span>
               <span className="text-muted-foreground/60">— AI产品研发平台</span>
-            </div>
+            </Link>
             <p className="text-sm text-muted-foreground/50">
               © 2025 开品宝. All rights reserved.
             </p>

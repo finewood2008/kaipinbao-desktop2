@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,15 +61,17 @@ export default function Auth() {
       >
         {/* Logo */}
         <div className="text-center mb-8">
-          <motion.div
-            initial={{ scale: 0.5 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200 }}
-            className="inline-flex items-center gap-3 mb-4"
-          >
-            <img src={logoImage} alt="开品宝" className="h-12" />
-            <span className="text-2xl font-bold text-foreground">开品宝</span>
-          </motion.div>
+          <Link to="/">
+            <motion.div
+              initial={{ scale: 0.5 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200 }}
+              className="inline-flex items-center gap-3 mb-4 hover:opacity-80 transition-opacity"
+            >
+              <img src={logoImage} alt="开品宝" className="h-12" />
+              <span className="text-2xl font-bold text-foreground">开品宝</span>
+            </motion.div>
+          </Link>
           <p className="text-muted-foreground mt-2">您的第二开发部</p>
         </div>
 
