@@ -301,6 +301,52 @@ serve(async (req) => {
     // Build prompt based on image type, phase, and PRD data
     const enhancedPrompt = buildPromptForImageType(prompt, imageType, phase, parentImageUrl, prdData);
 
+    // Determine if we should use image editing mode (phase 2 with parent image)
+    const useImageEditing = phase === 2 && parentImageUrl && imageType !== "product";
+    
+    let requestBody: any;
+    
+    if (useImageEditing) {
+      // Use image editing mode to maintain product consistency
+      console.log("Using image editing mode with parent image:", parentImageUrl);
+      requestBody = {
+        model: "google/gemini-3-pro-image-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `基于这个产品图片，${enhancedPrompt}
+
+重要要求：
+- 产品的外观、颜色、形状、材质必须与原图完全一致
+- 不要改变产品本身的任何设计细节
+- 只改变产品所在的场景和环境
+- 保持产品的高品质渲染效果`
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: parentImageUrl
+                }
+              }
+            ]
+          }
+        ],
+        modalities: ["image", "text"]
+      };
+    } else {
+      // Use text-to-image mode for product design or when no parent image
+      requestBody = {
+        model: "google/gemini-3-pro-image-preview",
+        messages: [
+          { role: "user", content: enhancedPrompt },
+        ],
+        modalities: ["image", "text"],
+      };
+    }
+
     // Use Lovable AI Gateway with Nano Banana Pro model for high-quality image generation
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -308,13 +354,7 @@ serve(async (req) => {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "google/gemini-3-pro-image-preview",
-        messages: [
-          { role: "user", content: enhancedPrompt },
-        ],
-        modalities: ["image", "text"],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
