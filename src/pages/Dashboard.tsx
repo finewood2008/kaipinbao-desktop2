@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -65,9 +66,7 @@ type StatusFilter = "all" | "active" | "completed" | "archived";
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,124 +88,118 @@ export default function Dashboard() {
     prdData: PrdData;
   } | null>(null);
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
+  const fetchProjectsData = async (): Promise<Project[]> => {
+    // NOTE: Avoid heavy nested selects (can trigger DB statement timeout).
+    // Fetch projects first, then fetch landing pages / images in separate queries.
+    const { data: projectsData, error: projectsError } = await supabase
+      .from("projects")
+      .select(
+        "id,name,description,current_stage,status,created_at,cover_image_url,prd_data"
+      )
+      .order("created_at", { ascending: false });
 
-  const fetchProjects = async () => {
-    setIsLoading(true);
-    setLoadError(null);
-    try {
-      // NOTE: Avoid heavy nested selects (can trigger DB statement timeout).
-      // Fetch projects first, then fetch landing pages / images in separate queries.
-      const { data: projectsData, error: projectsError } = await supabase
-        .from("projects")
+    if (projectsError) throw projectsError;
+
+    const projectIds = (projectsData || []).map((p) => p.id);
+
+    // Fetch active landing page per project
+    let landingPagesData: any[] = [];
+    if (projectIds.length > 0) {
+      const { data, error: landingPagesError } = await supabase
+        .from("landing_pages")
         .select(
-          "id,name,description,current_stage,status,created_at,cover_image_url,prd_data"
+          "id,project_id,slug,is_published,hero_image_url,screenshot_url,view_count,is_active"
         )
+        .in("project_id", projectIds)
+        .eq("is_active", true);
+
+      if (landingPagesError) throw landingPagesError;
+      landingPagesData = data || [];
+    }
+
+    const activeLandingPageByProjectId = new Map<string, any>();
+    landingPagesData.forEach((lp: any) => {
+      if (!activeLandingPageByProjectId.has(lp.project_id)) {
+        activeLandingPageByProjectId.set(lp.project_id, lp);
+      }
+    });
+
+    // Fetch product images for all projects
+    let imagesData: any[] = [];
+    if (projectIds.length > 0) {
+      const { data, error: imagesError } = await supabase
+        .from("generated_images")
+        .select("project_id,image_url,image_type,is_selected,created_at")
+        .in("project_id", projectIds)
+        .eq("image_type", "product")
         .order("created_at", { ascending: false });
 
-      if (projectsError) throw projectsError;
-
-      const projectIds = (projectsData || []).map((p) => p.id);
-
-      // Fetch active landing page per project
-      let landingPagesData: any[] = [];
-      if (projectIds.length > 0) {
-        const { data, error: landingPagesError } = await supabase
-          .from("landing_pages")
-          .select(
-            "id,project_id,slug,is_published,hero_image_url,screenshot_url,view_count,is_active"
-          )
-          .in("project_id", projectIds)
-          .eq("is_active", true);
-
-        if (landingPagesError) throw landingPagesError;
-        landingPagesData = data || [];
-      }
-
-      const activeLandingPageByProjectId = new Map<string, any>();
-      landingPagesData.forEach((lp: any) => {
-        if (!activeLandingPageByProjectId.has(lp.project_id)) {
-          activeLandingPageByProjectId.set(lp.project_id, lp);
-        }
-      });
-
-      // Fetch product images for all projects
-      let imagesData: any[] = [];
-      if (projectIds.length > 0) {
-        const { data, error: imagesError } = await supabase
-          .from("generated_images")
-          .select("project_id,image_url,image_type,is_selected,created_at")
-          .in("project_id", projectIds)
-          .eq("image_type", "product")
-          .order("created_at", { ascending: false });
-
-        if (imagesError) throw imagesError;
-        imagesData = data || [];
-      }
-
-      const imagesByProjectId = new Map<string, any[]>();
-      imagesData.forEach((img: any) => {
-        const arr = imagesByProjectId.get(img.project_id) || [];
-        arr.push(img);
-        imagesByProjectId.set(img.project_id, arr);
-      });
-
-      // Fetch email counts for all active landing pages
-      const landingPageIds = landingPagesData.map((lp: any) => lp.id);
-      let emailCounts: Record<string, number> = {};
-      if (landingPageIds.length > 0) {
-        const { data: emailData, error: emailError } = await supabase
-          .from("email_submissions")
-          .select("landing_page_id")
-          .in("landing_page_id", landingPageIds);
-
-        if (emailError) throw emailError;
-
-        if (emailData) {
-          emailCounts = emailData.reduce((acc: Record<string, number>, item) => {
-            acc[item.landing_page_id] = (acc[item.landing_page_id] || 0) + 1;
-            return acc;
-          }, {});
-        }
-      }
-
-      const projectsWithData: Project[] = (projectsData || []).map((p: any) => {
-        const allImages = imagesByProjectId.get(p.id) || [];
-        const selectedImages = allImages
-          .filter((img: any) => img.is_selected)
-          .map((img: any) => img.image_url);
-        const otherImages = allImages
-          .filter((img: any) => !img.is_selected)
-          .map((img: any) => img.image_url);
-        const productImages = [...selectedImages, ...otherImages].slice(0, 4);
-
-        const activeLandingPage = activeLandingPageByProjectId.get(p.id) || null;
-
-        return {
-          id: p.id,
-          name: p.name,
-          description: p.description,
-          current_stage: p.current_stage,
-          status: p.status,
-          created_at: p.created_at,
-          cover_image_url: p.cover_image_url || productImages[0] || null,
-          product_images: productImages,
-          landing_page: activeLandingPage,
-          email_count: activeLandingPage ? (emailCounts[activeLandingPage.id] || 0) : 0,
-          prd_data: p.prd_data as PrdData | null,
-        };
-      });
-
-      setProjects(projectsWithData);
-    } catch (error: any) {
-      console.error(error);
-      setLoadError(error?.message || "获取项目失败，请稀后重试");
-    } finally {
-      setIsLoading(false);
+      if (imagesError) throw imagesError;
+      imagesData = data || [];
     }
+
+    const imagesByProjectId = new Map<string, any[]>();
+    imagesData.forEach((img: any) => {
+      const arr = imagesByProjectId.get(img.project_id) || [];
+      arr.push(img);
+      imagesByProjectId.set(img.project_id, arr);
+    });
+
+    // Fetch email counts for all active landing pages
+    const landingPageIds = landingPagesData.map((lp: any) => lp.id);
+    let emailCounts: Record<string, number> = {};
+    if (landingPageIds.length > 0) {
+      const { data: emailData, error: emailError } = await supabase
+        .from("email_submissions")
+        .select("landing_page_id")
+        .in("landing_page_id", landingPageIds);
+
+      if (emailError) throw emailError;
+
+      if (emailData) {
+        emailCounts = emailData.reduce((acc: Record<string, number>, item) => {
+          acc[item.landing_page_id] = (acc[item.landing_page_id] || 0) + 1;
+          return acc;
+        }, {});
+      }
+    }
+
+    return (projectsData || []).map((p: any) => {
+      const allImages = imagesByProjectId.get(p.id) || [];
+      const selectedImages = allImages
+        .filter((img: any) => img.is_selected)
+        .map((img: any) => img.image_url);
+      const otherImages = allImages
+        .filter((img: any) => !img.is_selected)
+        .map((img: any) => img.image_url);
+      const productImages = [...selectedImages, ...otherImages].slice(0, 4);
+
+      const activeLandingPage = activeLandingPageByProjectId.get(p.id) || null;
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        current_stage: p.current_stage,
+        status: p.status,
+        created_at: p.created_at,
+        cover_image_url: p.cover_image_url || productImages[0] || null,
+        product_images: productImages,
+        landing_page: activeLandingPage,
+        email_count: activeLandingPage ? (emailCounts[activeLandingPage.id] || 0) : 0,
+        prd_data: p.prd_data as PrdData | null,
+      };
+    });
   };
+
+  const { data: projects = [], isLoading, error: loadErrorObj, refetch } = useQuery({
+    queryKey: ['dashboard-projects'],
+    queryFn: fetchProjectsData,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const loadError = loadErrorObj ? (loadErrorObj as Error).message || "获取项目失败，请稍后重试" : null;
 
   const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -248,8 +241,9 @@ export default function Dashboard() {
       console.error(error);
     } else {
       toast.success("项目已删除");
-      // Remove from local state
-      setProjects(prev => prev.filter(p => p.id !== projectId));
+      queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
+        (old || []).filter(p => p.id !== projectId)
+      );
     }
   };
 
@@ -268,12 +262,13 @@ export default function Dashboard() {
       throw error;
     }
 
-    // Update local state
-    setProjects(prev => prev.map(p => 
-      p.id === projectId 
-        ? { ...p, name: updates.name || p.name, description: updates.description || null }
-        : p
-    ));
+    queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
+      (old || []).map(p => 
+        p.id === projectId 
+          ? { ...p, name: updates.name || p.name, description: updates.description || null }
+          : p
+      )
+    );
   };
 
   const handleCaptureScreenshot = async (projectId: string, landingPageId: string, slug: string) => {
@@ -286,18 +281,13 @@ export default function Dashboard() {
       throw new Error(data?.error || 'Failed to capture screenshot');
     }
 
-    // Update local state with new screenshot URL
-    setProjects(prev => prev.map(p => 
-      p.id === projectId && p.landing_page
-        ? { 
-            ...p, 
-            landing_page: { 
-              ...p.landing_page, 
-              screenshot_url: data.screenshotUrl 
-            } 
-          }
-        : p
-    ));
+    queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
+      (old || []).map(p => 
+        p.id === projectId && p.landing_page
+          ? { ...p, landing_page: { ...p.landing_page, screenshot_url: data.screenshotUrl } }
+          : p
+      )
+    );
   };
 
   const handleSignOut = async () => {
@@ -378,7 +368,9 @@ export default function Dashboard() {
       console.error(error);
     } else {
       toast.success(`已删除 ${idsToDelete.length} 个项目`);
-      setProjects(prev => prev.filter(p => !selectedIds.has(p.id)));
+      queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
+        (old || []).filter(p => !selectedIds.has(p.id))
+      );
       clearSelection();
     }
     
@@ -402,9 +394,9 @@ export default function Dashboard() {
       console.error(error);
     } else {
       toast.success(`已归档 ${idsToArchive.length} 个项目`);
-      setProjects(prev => prev.map(p => 
-        selectedIds.has(p.id) ? { ...p, status: "archived" } : p
-      ));
+      queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
+        (old || []).map(p => selectedIds.has(p.id) ? { ...p, status: "archived" } : p)
+      );
       clearSelection();
     }
     
@@ -427,9 +419,9 @@ export default function Dashboard() {
       console.error(error);
     } else {
       toast.success(`已恢复 ${idsToUnarchive.length} 个项目`);
-      setProjects(prev => prev.map(p => 
-        selectedIds.has(p.id) ? { ...p, status: "active" } : p
-      ));
+      queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
+        (old || []).map(p => selectedIds.has(p.id) ? { ...p, status: "active" } : p)
+      );
       clearSelection();
     }
   };
@@ -803,7 +795,7 @@ export default function Dashboard() {
               {loadError}
             </p>
             <Button 
-              onClick={() => fetchProjects()} 
+              onClick={() => refetch()} 
               variant="outline"
               className="gap-2"
             >

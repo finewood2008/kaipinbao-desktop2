@@ -587,6 +587,13 @@ export default function ProjectPage() {
                 prdSummary={project?.name}
                 prdData={getPrdData()}
                 competitorProducts={competitorProducts}
+                hasLandingPage={!!landingPage}
+                onLandingPageReset={async () => {
+                  if (landingPage) {
+                    await supabase.from("landing_pages").delete().eq("project_id", id);
+                    setLandingPage(null);
+                  }
+                }}
               />
             </div>
           </TabsContent>
