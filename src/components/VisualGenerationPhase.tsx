@@ -77,6 +77,8 @@ interface VisualGenerationPhaseProps {
   prdSummary?: string;
   prdData?: PrdData;
   competitorProducts?: CompetitorProduct[];
+  onLandingPageReset?: () => Promise<void>;
+  hasLandingPage?: boolean;
 }
 
 export function VisualGenerationPhase({
@@ -89,6 +91,8 @@ export function VisualGenerationPhase({
   prdSummary,
   prdData,
   competitorProducts = [],
+  onLandingPageReset,
+  hasLandingPage = false,
 }: VisualGenerationPhaseProps) {
   // 基于已有数据推断初始 phase 状态，确保导航后正确恢复
   const [currentPhase, setCurrentPhase] = useState<1 | 2>(() => {
@@ -192,8 +196,17 @@ export function VisualGenerationPhase({
       
       // Reset image type selection
       setSelectedImageTypes([]);
+
+      // Clear landing page if exists
+      if (onLandingPageReset) {
+        try {
+          await onLandingPageReset();
+        } catch (e) {
+          console.error("Error resetting landing page:", e);
+        }
+      }
       
-      toast.success("已清除旧造型的营销素材，请重新生成");
+      toast.success("已清除旧造型的营销素材和落地页，请重新生成");
       
       resolve(true);
     } catch (error) {
@@ -528,12 +541,13 @@ export function VisualGenerationPhase({
               确认更换产品造型？
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>更换产品造型将清除已生成的关联素材：</p>
+              <p>更换产品造型后，以下关联内容将被清除并需要重新生成：</p>
               <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
-                <li>{marketingImages.length} 张营销图片</li>
+                <li>已生成的 {marketingImages.length} 张营销素材</li>
+                {hasLandingPage && <li>已创建的落地页</li>}
               </ul>
               <p className="text-sm text-muted-foreground pt-2">
-                此操作不可撤销，您需要基于新造型重新生成营销素材。
+                此操作不可撤销，确定要更换吗？
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
