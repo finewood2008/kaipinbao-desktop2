@@ -29,10 +29,9 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { PrdDocumentModal } from "@/components/PrdDocumentModal";
 import { PrdData } from "@/components/PrdExtractionSidebar";
 import { checkAllRequiredFilled } from "@/components/PrdPhase";
-import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { LogOut, Plus, Search, Sparkles, Loader2, Globe, Eye, Mail, Filter, Trash2, Archive, X, CheckSquare, RefreshCw, AlertCircle, FolderOpen } from "lucide-react";
+import { Plus, Search, Sparkles, Loader2, Globe, Eye, Mail, Filter, Trash2, Archive, X, CheckSquare, RefreshCw, AlertCircle, FolderOpen } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import logoImage from "@/assets/logo.png";
 import { cn } from "@/lib/utils";
@@ -64,7 +63,6 @@ type StageFilter = "all" | 1 | 2 | 3 | 4;
 type StatusFilter = "all" | "active" | "completed" | "archived";
 
 export default function Dashboard() {
-  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
@@ -72,7 +70,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<StageFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  
+
   // Batch selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchMode, setIsBatchMode] = useState(false);
@@ -80,7 +78,7 @@ export default function Dashboard() {
   const [isBatchArchiving, setIsBatchArchiving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
-  
+
   // PRD Document Modal state
   const [selectedProjectPrd, setSelectedProjectPrd] = useState<{
     projectId: string;
@@ -213,7 +211,6 @@ export default function Dashboard() {
       .insert({
         name,
         description: description || null,
-        user_id: user?.id,
       })
       .select()
       .single();
@@ -263,8 +260,8 @@ export default function Dashboard() {
     }
 
     queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
-      (old || []).map(p => 
-        p.id === projectId 
+      (old || []).map(p =>
+        p.id === projectId
           ? { ...p, name: updates.name || p.name, description: updates.description || null }
           : p
       )
@@ -282,7 +279,7 @@ export default function Dashboard() {
     }
 
     queryClient.setQueryData(['dashboard-projects'], (old: Project[] | undefined) =>
-      (old || []).map(p => 
+      (old || []).map(p =>
         p.id === projectId && p.landing_page
           ? { ...p, landing_page: { ...p.landing_page, screenshot_url: data.screenshotUrl } }
           : p
@@ -290,17 +287,12 @@ export default function Dashboard() {
     );
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/auth");
-  };
-
   // Calculate stats
   const stats = useMemo(() => {
     const totalViews = projects.reduce((sum, p) => sum + (p.landing_page?.view_count || 0), 0);
     const totalEmails = projects.reduce((sum, p) => sum + p.email_count, 0);
     const publishedPages = projects.filter(p => p.landing_page?.is_published).length;
-    
+
     return {
       total: projects.length,
       active: projects.filter(p => p.status === "active").length,
@@ -315,13 +307,13 @@ export default function Dashboard() {
   // Filter projects - MUST be before batch operations that depend on it
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
-      const matchesSearch = 
+      const matchesSearch =
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.description?.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       const matchesStage = stageFilter === "all" || p.current_stage === stageFilter;
       const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-      
+
       return matchesSearch && matchesStage && matchesStatus;
     });
   }, [projects, searchQuery, stageFilter, statusFilter]);
@@ -354,10 +346,10 @@ export default function Dashboard() {
 
   const handleBatchDelete = async () => {
     if (selectedIds.size === 0) return;
-    
+
     setIsBatchDeleting(true);
     const idsToDelete = Array.from(selectedIds);
-    
+
     const { error } = await supabase
       .from("projects")
       .delete()
@@ -373,17 +365,17 @@ export default function Dashboard() {
       );
       clearSelection();
     }
-    
+
     setIsBatchDeleting(false);
     setShowDeleteConfirm(false);
   };
 
   const handleBatchArchive = async () => {
     if (selectedIds.size === 0) return;
-    
+
     setIsBatchArchiving(true);
     const idsToArchive = Array.from(selectedIds);
-    
+
     const { error } = await supabase
       .from("projects")
       .update({ status: "archived" })
@@ -399,16 +391,16 @@ export default function Dashboard() {
       );
       clearSelection();
     }
-    
+
     setIsBatchArchiving(false);
     setShowArchiveConfirm(false);
   };
 
   const handleBatchUnarchive = async () => {
     if (selectedIds.size === 0) return;
-    
+
     const idsToUnarchive = Array.from(selectedIds);
-    
+
     const { error } = await supabase
       .from("projects")
       .update({ status: "active" })
@@ -483,12 +475,7 @@ export default function Dashboard() {
             <span className="text-xs text-muted-foreground hidden md:block">产品研发工作台</span>
           </Link>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground hidden md:block">
-              {user?.email}
-            </span>
-            <Button variant="ghost" size="icon" onClick={handleSignOut}>
-              <LogOut className="w-5 h-5" />
-            </Button>
+            <span className="text-sm text-muted-foreground hidden md:block">欢迎使用</span>
           </div>
         </div>
       </header>
@@ -587,7 +574,7 @@ export default function Dashboard() {
               <Filter className="w-4 h-4" />
               <span className="text-sm">筛选:</span>
             </div>
-            
+
             {/* Stage Filters */}
             <div className="flex gap-1 p-1 rounded-lg bg-muted/30">
               {stageFilters.map((filter) => (
@@ -597,8 +584,8 @@ export default function Dashboard() {
                   size="sm"
                   className={cn(
                     "h-7 text-xs px-3 rounded-md transition-colors",
-                    stageFilter === filter.value 
-                      ? "bg-primary text-primary-foreground" 
+                    stageFilter === filter.value
+                      ? "bg-primary text-primary-foreground"
                       : "hover:bg-muted"
                   )}
                   onClick={() => setStageFilter(filter.value)}
@@ -619,8 +606,8 @@ export default function Dashboard() {
                   size="sm"
                   className={cn(
                     "h-7 text-xs px-3 rounded-md transition-colors",
-                    statusFilter === filter.value 
-                      ? "bg-primary text-primary-foreground" 
+                    statusFilter === filter.value
+                      ? "bg-primary text-primary-foreground"
                       : "hover:bg-muted"
                   )}
                   onClick={() => setStatusFilter(filter.value)}
@@ -661,7 +648,7 @@ export default function Dashboard() {
                   已选择 <span className="text-primary">{selectedIds.size}</span> 个项目
                 </span>
                 <div className="w-px h-6 bg-border" />
-                
+
                 {hasActiveSelected && (
                   <Button
                     variant="ghost"
@@ -673,7 +660,7 @@ export default function Dashboard() {
                     归档
                   </Button>
                 )}
-                
+
                 {hasArchivedSelected && (
                   <Button
                     variant="ghost"
@@ -684,7 +671,7 @@ export default function Dashboard() {
                     取消归档
                   </Button>
                 )}
-                
+
                 <Button
                   variant="ghost"
                   size="sm"
@@ -695,9 +682,9 @@ export default function Dashboard() {
                   <Trash2 className="w-4 h-4 mr-2" />
                   删除
                 </Button>
-                
+
                 <div className="w-px h-6 bg-border" />
-                
+
                 <Button
                   variant="ghost"
                   size="icon"
@@ -722,7 +709,7 @@ export default function Dashboard() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
-              <AlertDialogAction 
+              <AlertDialogAction
                 onClick={handleBatchDelete}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 disabled={isBatchDeleting}
@@ -745,7 +732,7 @@ export default function Dashboard() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>取消</AlertDialogCancel>
-              <AlertDialogAction 
+              <AlertDialogAction
                 onClick={handleBatchArchive}
                 disabled={isBatchArchiving}
               >
@@ -794,8 +781,8 @@ export default function Dashboard() {
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               {loadError}
             </p>
-            <Button 
-              onClick={() => refetch()} 
+            <Button
+              onClick={() => refetch()}
               variant="outline"
               className="gap-2"
             >
@@ -811,23 +798,23 @@ export default function Dashboard() {
             className="text-center py-20"
           >
             <div className="w-20 h-20 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              {searchQuery || stageFilter !== "all" || statusFilter !== "all" 
+              {searchQuery || stageFilter !== "all" || statusFilter !== "all"
                 ? <Search className="w-10 h-10 text-muted-foreground" />
                 : <FolderOpen className="w-10 h-10 text-muted-foreground" />
               }
             </div>
             <h3 className="text-xl font-semibold mb-2">
-              {searchQuery || stageFilter !== "all" || statusFilter !== "all" 
-                ? "未找到匹配的项目" 
+              {searchQuery || stageFilter !== "all" || statusFilter !== "all"
+                ? "未找到匹配的项目"
                 : "还没有项目"}
             </h3>
             <p className="text-muted-foreground mb-6">
               {searchQuery || stageFilter !== "all" || statusFilter !== "all"
-                ? "尝试调整筛选条件" 
+                ? "尝试调整筛选条件"
                 : "点击「新建项目」开始您的产品研发之旅"}
             </p>
             {!(searchQuery || stageFilter !== "all" || statusFilter !== "all") && (
-              <Button 
+              <Button
                 onClick={() => setIsDialogOpen(true)}
                 className="bg-gradient-primary glow-primary"
               >
@@ -850,7 +837,7 @@ export default function Dashboard() {
                 </span>
               </div>
             )}
-            
+
             {filteredProjects.map((project, i) => (
               <motion.div
                 key={project.id}
@@ -861,11 +848,11 @@ export default function Dashboard() {
               >
                 {/* Checkbox for batch selection */}
                 {isBatchMode && (
-                  <div 
+                  <div
                     className={cn(
                       "flex items-center justify-center w-12 rounded-lg transition-colors cursor-pointer",
-                      selectedIds.has(project.id) 
-                        ? "bg-primary/10 border-2 border-primary" 
+                      selectedIds.has(project.id)
+                        ? "bg-primary/10 border-2 border-primary"
                         : "bg-muted/30 border-2 border-transparent hover:border-muted"
                     )}
                     onClick={() => toggleSelectProject(project.id)}
@@ -876,7 +863,7 @@ export default function Dashboard() {
                     />
                   </div>
                 )}
-                
+
                 <div className="flex-1">
                   <ProjectCard
                     id={project.id}
@@ -900,10 +887,10 @@ export default function Dashboard() {
                     onDelete={isBatchMode ? undefined : () => handleDeleteProject(project.id)}
                     onUpdate={isBatchMode ? undefined : (updates) => handleUpdateProject(project.id, updates)}
                     onCaptureScreenshot={
-                      !isBatchMode && project.landing_page?.is_published 
+                      !isBatchMode && project.landing_page?.is_published
                         ? () => handleCaptureScreenshot(
-                            project.id, 
-                            project.landing_page!.id, 
+                            project.id,
+                            project.landing_page!.id,
                             project.landing_page!.slug
                           )
                         : undefined
