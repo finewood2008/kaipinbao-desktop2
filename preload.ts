@@ -1,0 +1,22 @@
+// preload.ts
+
+// Importing necessary libraries
+const { contextBridge, ipcRenderer } = require('electron');
+
+// Expose a secure API to the renderer process
+contextBridge.exposeInMainWorld('api', {
+    send: (channel, data) => {
+        // whitelist channels
+        let validChannels = ['toMain'];
+        if (validChannels.includes(channel)) {
+            ipcRenderer.send(channel, data);
+        }
+    },
+    receive: (channel, func) => {
+        let validChannels = ['fromMain'];
+        if (validChannels.includes(channel)) {
+            // Strip event and send the arguments to the subscribed function
+            ipcRenderer.on(channel, (event, ...args) => func(...args));
+        }
+    }
+});
