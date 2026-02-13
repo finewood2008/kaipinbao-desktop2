@@ -4,8 +4,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { ActivationProvider, useActivation } from "@/hooks/useActivation";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Activation from "./pages/Activation";
 import Dashboard from "./pages/Dashboard";
 import Project from "./pages/Project";
 import LandingPage from "./pages/LandingPage";
@@ -32,28 +34,72 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ActivationRoute({ children }: { children: React.ReactNode }) {
+  const { status } = useActivation();
+
+  if (status === "checking") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (status === "inactive") {
+    return <Navigate to="/activate" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/auth" element={<Auth />} />
+      <Route path="/activate" element={<Activation />} />
+      <Route
+        path="/"
+        element={
+          <ActivationRoute>
+            <Index />
+          </ActivationRoute>
+        }
+      />
+      <Route
+        path="/auth"
+        element={
+          <ActivationRoute>
+            <Auth />
+          </ActivationRoute>
+        }
+      />
       <Route
         path="/dashboard"
         element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
+          <ActivationRoute>
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          </ActivationRoute>
         }
       />
       <Route
         path="/project/:id"
         element={
-          <ProtectedRoute>
-            <Project />
-          </ProtectedRoute>
+          <ActivationRoute>
+            <ProtectedRoute>
+              <Project />
+            </ProtectedRoute>
+          </ActivationRoute>
         }
       />
-      <Route path="/lp/:slug" element={<LandingPage />} />
+      <Route
+        path="/lp/:slug"
+        element={
+          <ActivationRoute>
+            <LandingPage />
+          </ActivationRoute>
+        }
+      />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -61,15 +107,17 @@ function AppRoutes() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AppRoutes />
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
+    <ActivationProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </ActivationProvider>
   </QueryClientProvider>
 );
 
