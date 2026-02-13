@@ -2,15 +2,13 @@
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/useAuth";
-import { 
-  ArrowRight, 
-  BarChart3, 
-  Search, 
-  Palette, 
-  Image, 
-  FileText, 
-  Loader2,
+import {
+  ArrowRight,
+  BarChart3,
+  Search,
+  Palette,
+  Image,
+  FileText,
   ShoppingCart,
   Factory,
   Zap,
@@ -23,19 +21,8 @@ import featureProductDesign from "@/assets/feature-product-design.jpg";
 import featureIdRender from "@/assets/feature-id-render.jpg";
 
 export default function Index() {
-  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
-
-  // Removed auto-redirect: users can now browse homepage even when logged in
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-dark flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
+  
   const features = [
     {
       icon: BarChart3,
@@ -120,11 +107,11 @@ export default function Index() {
               <span className="text-base font-bold text-foreground leading-tight">开品宝</span>
             </div>
           </Link>
-          <Button 
+          <Button
             className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 text-foreground border border-white/10 rounded-full px-5"
-            onClick={() => navigate(user ? "/dashboard" : "/auth")}
+            onClick={() => navigate("/dashboard")}
           >
-            {user ? "进入工作台" : "登录 / 注册"}
+            进入工作台
           </Button>
         </div>
       </header>
@@ -204,10 +191,10 @@ export default function Index() {
           >
             <Button
               className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-sm px-6 py-5 h-auto rounded-lg shadow-[0_0_30px_rgba(251,146,60,0.25)] hover:shadow-[0_0_40px_rgba(251,146,60,0.35)] transition-all duration-300"
-              onClick={() => navigate(user ? "/dashboard" : "/auth")}
+              onClick={() => navigate("/dashboard")}
             >
               <Sparkles className="w-4 h-4 mr-1.5" />
-              {user ? "进入工作台" : "开始设计"}
+              开始设计
               <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </motion.div>
@@ -277,8 +264,8 @@ export default function Index() {
               >
                 {/* Feature Image */}
                 <div className="relative h-32 overflow-hidden">
-                  <img 
-                    src={feature.image} 
+                  <img
+                    src={feature.image}
                     alt={feature.title}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
@@ -342,8 +329,8 @@ export default function Index() {
                 transition={{ delay: i * 0.05 }}
                 className="group relative rounded-xl overflow-hidden aspect-[4/5] cursor-pointer"
               >
-                <img 
-                  src={product.image} 
+                <img
+                  src={product.image}
                   alt={product.title}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
